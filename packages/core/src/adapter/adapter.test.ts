@@ -173,7 +173,7 @@ describe("SparqlAdapter (M3.E2.T1)", () => {
       | undefined;
     expect(stored).toBeDefined();
     // Never store the object as the "[object Object]" stringification.
-    expect(typeof stored).not.toBe("string");
+    expect(String(stored)).not.toContain("[object Object]");
     expect(stored?.subject).toEqual({ type: "uri", value: subject });
     expect(stored?.predicate).toEqual({
       type: "uri",
