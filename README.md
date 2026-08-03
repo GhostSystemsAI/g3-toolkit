@@ -1,4 +1,4 @@
-# g3-toolkit (v1.0.0-rc.2)
+# g3-toolkit (v1.0.0)
 
 Composable graph visualization components for RDF, LPG, and Holonic architectures.
 
@@ -22,15 +22,36 @@ g3t is a **component library**, not an application framework. You install it, im
 | Package       | What it is                                                        | Peer dependencies           |
 | ------------- | ----------------------------------------------------------------- | --------------------------- |
 | `@g3t/core`   | Data model, adapters, projection pipeline, algorithms, theming    | graphology                  |
-| `@g3t/react`  | 12 view components + 15 controls (canvas, table, map, tree, etc.) | react, @g3t/core, cytoscape |
+| `@g3t/react`  | View components and controls (graph canvas, structural SVG, table, matrix, map, tree, timeline, sankey, schema, stats) | react, @g3t/core, cytoscape |
 | `@g3t/charts` | Linked statistical charts (bar, scatter, line, pie)               | react, @g3t/core, echarts   |
 
-## Minimal Integration (15 lines)
+## Install
+
+```bash
+pnpm add @g3t/core @g3t/react
+```
+
+Peer dependencies are not installed for you; see
+[docs/consuming-g3t.md](docs/consuming-g3t.md) for the full list,
+the relayout and interaction contracts, and the vendored-tarball
+recipe.
+
+**Import the stylesheet.** The packages ship CSS as a separate file
+and the bundle does not import it for you (auto-injection breaks
+strict CSP and server rendering). Without this line every view
+renders unstyled, with no error:
+
+```ts
+import "@g3t/react/style.css";
+```
+
+## Minimal Integration
 
 ```tsx
 import { useEffect, useState } from "react";
 import { UGM, SparqlAdapter } from "@g3t/core";
 import { CytoscapeCanvas, TableView } from "@g3t/react";
+import "@g3t/react/style.css";
 
 function MyGraphPage() {
   const [ugm, setUgm] = useState<UGM | null>(null);
@@ -149,6 +170,15 @@ decision-support components) lives in
 [`docs/wiring-guide.md`](docs/wiring-guide.md); every snippet runs in
 CI at `examples/wiring/`.
 
+Two companions:
+[`docs/consuming-g3t.md`](docs/consuming-g3t.md) covers what host
+applications need and types cannot express (the stylesheet import,
+which props re-run layout, the interaction contracts, the styling
+escape hatch, vendored tarballs), and
+[`docs/structural-patterns.md`](docs/structural-patterns.md) gives
+the five structural rendering recipes with the behaviors each one
+guarantees, every guarantee backed by an executable oracle.
+
 ## Examples & demos
 
 Not sure which one shows your need? The
@@ -177,6 +207,26 @@ The former cinematic flagship demo was retired 2026-07-03: the four
 scenario shells replaced it, and every public API it alone
 demonstrated was folded into the shells, the dashboards, or the
 wiring guide first (`planning/flagship-retirement.md` is the audit).
+
+## Stability and deprecations (v1.0)
+
+The published surface follows semantic versioning from v1.0.0:
+breaking changes to exported components, props, and core types
+require a major bump.
+
+Deprecated in v1.0, still functional, slated for removal in a
+future major:
+
+- `CytoscapeCanvas`'s `structural` prop. Structural scenes should
+  use `StructuralSvgView`, which is ahead of the cytoscape path on
+  routing, dragging, and labels. The deprecated path warns once in
+  development.
+
+Not covered by the stability promise: exact pixel positions from
+layout (deterministic, but constants may be tuned), route SHAPE
+beyond the invariants documented per pattern, and anything under a
+package's `src/` reached by deep import rather than through the
+exports map.
 
 ## Data-paradigm support (honest scope)
 

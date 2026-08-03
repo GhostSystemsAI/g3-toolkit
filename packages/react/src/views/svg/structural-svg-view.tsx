@@ -19,11 +19,12 @@
  * cannot drift apart on relationship semantics.
  */
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { hitTestStructural } from "@g3t/core";
+import { routeStructuralEdges, hitTestStructural } from "@g3t/core";
 import type {
   StructuralGeometry,
   StructuralGraphInput,
   StructuralHit,
+  GlyphSlot,
 } from "@g3t/core";
 import {
   useElementPointerEvents,
@@ -67,20 +68,86 @@ export const STRUCTURAL_SVG_DARK: StructuralSvgTheme = {
   portFill: "#e2e8f0",
 };
 
+/** R-2 (round 17, 2026-07-28): the glyph affordance's box. Drawn in
+ *  the header strip so it reads as a button rather than as part of
+ *  the container's body. */
+const GLYPH_W = 16;
+const GLYPH_H = 14;
+const GLYPH_PAD = 4;
+
+function glyphBox(
+  g: { x: number; y: number; width: number; height: number },
+  headerH: number,
+  slot: GlyphSlot,
+): { x: number; y: number } {
+  const left = g.x + GLYPH_PAD;
+  const right = g.x + g.width - GLYPH_W - GLYPH_PAD;
+  const centerX = g.x + g.width / 2 - GLYPH_W / 2;
+  const topY = g.y + (headerH - GLYPH_H) / 2;
+  const bottomY = g.y + g.height - GLYPH_H - GLYPH_PAD;
+  switch (slot) {
+    case "top-left":
+      return { x: left, y: topY };
+    case "bottom-left":
+      return { x: left, y: bottomY };
+    case "bottom-right":
+      return { x: right, y: bottomY };
+    case "top":
+      return { x: centerX, y: topY };
+    case "bottom":
+      return { x: centerX, y: bottomY };
+    case "top-right":
+    default:
+      return { x: right, y: topY };
+  }
+}
+
 export interface StructuralSvgViewProps extends ElementPointerHandlers<StructuralHit> {
+  /** R-2 (round 17): per-node affordance drawn as a bordered box in
+   *  the header strip, with its own hit zone ("glyph") so consumers
+   *  can act on the glyph alone. Class g3t-ssv-glyph for hover
+   *  styling. */
+  glyphs?: ReadonlyMap<
+    string,
+    { slot: GlyphSlot; text: string; title?: string }
+  >;
+  /** R-3 (round 17): 2 renders the stereotype on its own centred
+   *  line above the name (UML convention). Default 1 leaves
+   *  existing scenes unchanged. */
+  headerLines?: 1 | 2;
   input: StructuralGraphInput;
   geometry: StructuralGeometry;
   width: number;
   height: number;
   theme?: StructuralSvgTheme;
+  /** Flow direction of the layout that produced `geometry`; the
+   *  live drag re-router anchors against it (RTE-011). */
+  direction?: "RIGHT" | "LEFT" | "DOWN" | "UP";
+  /** LR-46 (owner review 2026-07-22): SHACL-style decorations so
+   *  the shapes surface can ride this view. Row ids map to their
+   *  worst validation severity (text tint); closed containers get
+   *  a heavier border. */
+  rowSeverities?: ReadonlyMap<string, "violation" | "warning" | "info">;
+  closedContainers?: ReadonlySet<string>;
   "data-testid"?: string;
 }
+
+const SEVERITY_TINT: Record<"violation" | "warning" | "info", string> = {
+  violation: "#ef4444",
+  warning: "#eab308",
+  info: "#38bdf8",
+};
 
 const FIT_PADDING = 32;
 
 export function StructuralSvgView({
+  glyphs,
+  headerLines = 1,
   input,
   geometry,
+  direction = "RIGHT",
+  rowSeverities,
+  closedContainers,
   width,
   height,
   theme = STRUCTURAL_SVG_DARK,
@@ -136,6 +203,69 @@ export function StructuralSvgView({
   >({});
   const offsetOf = (ownerId: string): { dx: number; dy: number } =>
     dragOffsets[ownerId] ?? { dx: 0, dy: 0 };
+  // RTE-011 (LR-15/22, owner review 2026-07-22): live re-routing.
+  // The offsets are applied to a CLONED geometry (moved tops, their
+  // rows/child entries by the `id::` convention, and their declared
+  // ports), and the pure router runs over it, so dragged elements
+  // keep ORTHOGONAL edges and route-anchored labels instead of
+  // collapsing to center-to-center lines. The straight fallback
+  // below survives only for edges the router skips.
+  const portOwner = useMemo(() => {
+    const own = new Map<string, string>();
+    for (const n of input.nodes) {
+      for (const p of n.ports ?? []) own.set(p.id, n.id);
+    }
+    return own;
+  }, [input.nodes]);
+  // LR-18: port multiplicities from the INPUT (geometry carries
+  // only placement).
+  const portMultiplicity = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of input.nodes) {
+      for (const p of n.ports ?? []) {
+        if (p.multiplicity !== undefined) m.set(p.id, p.multiplicity);
+      }
+    }
+    return m;
+  }, [input.nodes]);
+  const effectiveGeometry = useMemo(() => {
+    const moved = Object.keys(dragOffsets);
+    if (moved.length === 0) return geometry;
+    const shifted = (
+      ownerOf: (id: string) => string | undefined,
+      entries: Record<string, { x: number; y: number }>,
+    ) => {
+      const out: Record<string, { x: number; y: number }> = {};
+      for (const [id, g] of Object.entries(entries)) {
+        const owner = ownerOf(id);
+        const off = owner !== undefined ? dragOffsets[owner] : undefined;
+        out[id] = off ? { ...g, x: g.x + off.dx, y: g.y + off.dy } : g;
+      }
+      return out;
+    };
+    const topOwner = (id: string) => {
+      const head = id.split("::")[0] ?? id;
+      return dragOffsets[head] ? head : undefined;
+    };
+    return {
+      ...geometry,
+      nodes: shifted(topOwner, geometry.nodes) as typeof geometry.nodes,
+      ports: shifted((id) => {
+        const declared = portOwner.get(id);
+        if (declared !== undefined && dragOffsets[declared]) return declared;
+        return topOwner(id);
+      }, geometry.ports ?? {}) as typeof geometry.ports,
+    };
+  }, [geometry, dragOffsets, portOwner]);
+  const liveRoutes = useMemo(() => {
+    if (Object.keys(dragOffsets).length === 0) return null;
+    try {
+      return routeStructuralEdges(input, effectiveGeometry, { direction });
+    } catch {
+      return null; // last-resort fallback below stays honest
+    }
+  }, [dragOffsets, input, effectiveGeometry, direction]);
+
   const draggedEdgeFallback = useMemo(() => {
     const moved = new Set(Object.keys(dragOffsets));
     if (moved.size === 0) return new Set<string>();
@@ -147,9 +277,29 @@ export function StructuralSvgView({
   }, [dragOffsets, input.edges]);
 
   // INT-001: model point = inverse of the view transform.
+  // R-2: the view owns glyph geometry, so it probes for core.
+  const glyphAt = useCallback(
+    (elementId: string, point: { x: number; y: number }) => {
+      const gl = glyphs?.get(elementId);
+      if (gl === undefined) return null;
+      const gRaw = effectiveGeometry.nodes[elementId];
+      if (gRaw === undefined) return null;
+      const box = glyphBox(gRaw, effectiveGeometry.headerHeight, gl.slot);
+      return point.x >= box.x &&
+        point.x <= box.x + GLYPH_W &&
+        point.y >= box.y &&
+        point.y <= box.y + GLYPH_H
+        ? gl.slot
+        : null;
+    },
+    [glyphs, effectiveGeometry],
+  );
+
   const hit = useCallback(
-    (p: { x: number; y: number }) => hitTestStructural(input, geometry, p),
-    [input, geometry],
+    (p: { x: number; y: number }) =>
+      // VR-1: hit against the OFFSET geometry, matching the render.
+      hitTestStructural(input, effectiveGeometry, p, { glyphAt }),
+    [input, effectiveGeometry, glyphAt],
   );
   const toModel = useCallback(
     (client: { x: number; y: number }, el: SVGSVGElement) => {
@@ -205,14 +355,29 @@ export function StructuralSvgView({
       x: (e.clientX - rect.left - view.tx) / view.k,
       y: (e.clientY - rect.top - view.ty) / view.k,
     };
-    const h = hitTestStructural(input, geometry, model);
-    if (
-      h !== null &&
-      h.kind === "node" &&
-      (h.zone === "body" || h.zone === "header")
-    ) {
+    // VR-1: offset geometry here too, or a dragged container can
+    // never be grabbed again (its region stays at the old spot).
+    const h = hitTestStructural(input, effectiveGeometry, model, {
+      glyphAt,
+    });
+    // LR-13 (owner review 2026-07-22): container interiors are
+    // covered by ROW hits, which used to fall through to canvas pan,
+    // leaving only the thin header and the 4px border as container
+    // grab targets ("very difficult to trigger a container move").
+    // A row grab now drags its CONTAINER (the row's geometry parent),
+    // and the border band counts as a grab too.
+    const dragId =
+      h === null
+        ? undefined
+        : h.kind === "node" &&
+            (h.zone === "body" || h.zone === "header" || h.zone === "border")
+          ? h.elementId
+          : h.kind === "row"
+            ? geometry.nodes[h.elementId]?.parent
+            : undefined;
+    if (dragId !== undefined) {
       nodeDrag.current = {
-        id: h.elementId,
+        id: dragId,
         lastX: e.clientX,
         lastY: e.clientY,
       };
@@ -270,6 +435,10 @@ export function StructuralSvgView({
       data-testid={testId}
       role="img"
       style={{
+        // G2 (owner 2026-07-28): dragging swept text into the
+        // browser selection across containers; labels are not
+        // user-selectable content in a diagram.
+        userSelect: "none",
         background: theme.background,
         cursor: "grab",
         touchAction: "none",
@@ -300,9 +469,24 @@ export function StructuralSvgView({
           const off = offsetOf(id);
           const g = { ...gRaw, x: gRaw.x + off.dx, y: gRaw.y + off.dy };
           const header = input.nodes.find((n) => n.id === id)?.header;
+          const closed = closedContainers?.has(id) === true;
+          // VR-27 v2 (owner 2026-07-28): no keyword; OPEN shapes
+          // draw a DASHED border instead (closed stays solid and
+          // heavier). Only where the scene distinguishes at all
+          // (closedContainers provided): MBSE containers unaffected.
+          const distinguishClosed = closedContainers !== undefined;
+          // R-3 (round 17, 2026-07-28): UML convention puts the
+          // stereotype on its OWN line above the name; on one line
+          // it competes with long names for the same horizontal
+          // budget. headerLines=2 opts in; 1 (default) is unchanged.
+          const twoLine =
+            headerLines === 2 &&
+            header?.stereotype !== undefined &&
+            header.name !== undefined;
           const title = header
             ? `${header.stereotype ? `\u00ab${header.stereotype}\u00bb ` : ""}${header.name}`
             : (g.text ?? id);
+          const glyph = glyphs?.get(id);
           return (
             <g key={id} data-ssv-node={id} data-ssv-kind="container">
               <rect
@@ -313,7 +497,12 @@ export function StructuralSvgView({
                 rx={4}
                 fill={theme.containerFill}
                 stroke={theme.containerStroke}
-                strokeWidth={1.2}
+                strokeWidth={closed ? 2.4 : 1.2}
+                strokeDasharray={
+                  distinguishClosed && !closed ? "6 3" : undefined
+                }
+                data-ssv-closed={closed ? "" : undefined}
+                data-ssv-open={distinguishClosed && !closed ? "" : undefined}
               />
               <rect
                 x={g.x}
@@ -323,17 +512,74 @@ export function StructuralSvgView({
                 rx={4}
                 fill={theme.headerFill}
               />
-              <text
-                x={g.x + g.width / 2}
-                y={g.y + headerH / 2 + 4}
-                textAnchor="middle"
-                fontSize={12}
-                fontWeight={700}
-                fill={theme.headerText}
-                data-ssv-header={id}
-              >
-                {title}
-              </text>
+              {twoLine && header ? (
+                <>
+                  <text
+                    x={g.x + g.width / 2}
+                    y={g.y + headerH / 2 - 3}
+                    textAnchor="middle"
+                    fontSize={10}
+                    fontWeight={500}
+                    fill={theme.headerText}
+                    data-ssv-header-stereotype={id}
+                  >
+                    {`\u00ab${header.stereotype ?? ""}\u00bb`}
+                  </text>
+                  <text
+                    x={g.x + g.width / 2}
+                    y={g.y + headerH / 2 + 11}
+                    textAnchor="middle"
+                    fontSize={12}
+                    fontWeight={700}
+                    fill={theme.headerText}
+                    data-ssv-header={id}
+                  >
+                    {header.name}
+                  </text>
+                </>
+              ) : (
+                <text
+                  x={g.x + g.width / 2}
+                  y={g.y + headerH / 2 + 4}
+                  textAnchor="middle"
+                  fontSize={12}
+                  fontWeight={700}
+                  fill={theme.headerText}
+                  data-ssv-header={id}
+                >
+                  {title}
+                </text>
+              )}
+              {glyph !== undefined && (
+                <g
+                  className="g3t-ssv-glyph"
+                  data-ssv-glyph={id}
+                  data-ssv-glyph-slot={glyph.slot}
+                  style={{ cursor: "pointer" }}
+                >
+                  <title>{glyph.title ?? glyph.text}</title>
+                  <rect
+                    x={glyphBox(g, headerH, glyph.slot).x}
+                    y={glyphBox(g, headerH, glyph.slot).y}
+                    width={GLYPH_W}
+                    height={GLYPH_H}
+                    rx={3}
+                    fill={theme.headerFill}
+                    stroke={theme.containerStroke}
+                    strokeWidth={1}
+                  />
+                  <text
+                    x={glyphBox(g, headerH, glyph.slot).x + GLYPH_W / 2}
+                    y={glyphBox(g, headerH, glyph.slot).y + GLYPH_H / 2 + 3.5}
+                    textAnchor="middle"
+                    fontSize={9}
+                    fontWeight={600}
+                    fill={theme.headerText}
+                  >
+                    {glyph.text}
+                  </text>
+                </g>
+              )}
             </g>
           );
         })}
@@ -342,18 +588,46 @@ export function StructuralSvgView({
         {rows.map(([id, gRaw]) => {
           const off = offsetOf(gRaw.parent ?? id);
           const g = { ...gRaw, x: gRaw.x + off.dx, y: gRaw.y + off.dy };
+          const severity = rowSeverities?.get(id);
           return (
-            <text
-              key={id}
-              x={g.x + 8}
-              y={g.y + g.height / 2 + 3.5}
-              fontSize={g.divider ? 9.5 : 10.5}
-              fontStyle={g.divider ? "italic" : undefined}
-              fill={g.divider ? theme.dividerText : theme.rowText}
-              data-ssv-row={id}
-            >
-              {g.text ?? ""}
-            </text>
+            <g key={id}>
+              {/* LR-23 (owner review 2026-07-22): a simple horizontal
+                  separator above each section divider (id vs text,
+                  attribute compartments), the classic UML
+                  compartment line. */}
+              {g.divider === true ? (
+                <line
+                  x1={g.x}
+                  y1={g.y}
+                  x2={g.x + g.width}
+                  y2={g.y}
+                  stroke={theme.containerStroke}
+                  strokeWidth={0.8}
+                  data-ssv-row-divider={id}
+                />
+              ) : null}
+              <text
+                /* LR-14 (owner review 2026-07-22): sections and
+                 attributes CENTER, matching the cytoscape
+                 compartment presentation. */
+                x={g.x + g.width / 2}
+                y={g.y + g.height / 2 + 3.5}
+                textAnchor="middle"
+                fontSize={g.divider ? 9.5 : 10.5}
+                fontStyle={g.divider ? "italic" : undefined}
+                fill={
+                  severity !== undefined
+                    ? SEVERITY_TINT[severity]
+                    : g.divider
+                      ? theme.dividerText
+                      : theme.rowText
+                }
+                data-ssv-row={id}
+                data-ssv-row-severity={severity}
+              >
+                {g.text ?? ""}
+              </text>
+            </g>
           );
         })}
 
@@ -397,7 +671,10 @@ export function StructuralSvgView({
           // edge-fallback marks it for tests and for the eye).
           let eg = egRaw;
           let fallback = false;
-          if (draggedEdgeFallback.has(id)) {
+          const live = liveRoutes?.[id];
+          if (draggedEdgeFallback.has(id) && live) {
+            eg = live; // RTE-011: routed against the offset geometry
+          } else if (draggedEdgeFallback.has(id)) {
             const edge = input.edges.find((x) => x.id === id);
             const sG = edge ? geometry.nodes[edge.source] : undefined;
             const tG = edge ? geometry.nodes[edge.target] : undefined;
@@ -427,7 +704,40 @@ export function StructuralSvgView({
           const d = pts
             .map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`)
             .join(" ");
-          const mid = eg.points[Math.floor(eg.points.length / 2)];
+          // Owner 2026-07-28 (shapes note + the IBD Imagery/Cmd
+          // collision): labels anchor at the TARGET end, backed off
+          // along the final segment and offset perpendicular, not at
+          // the route's middle vertex (which is a bend on most
+          // orthogonal routes and collides where fans converge).
+          const labelAt = (():
+            | { x: number; y: number; anchor: "start" | "middle" | "end" }
+            | undefined => {
+            const pts = eg.points;
+            const b = pts[pts.length - 1];
+            const a = pts[pts.length - 2] ?? b;
+            if (b === undefined || a === undefined) return undefined;
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            // Owner 2026-07-28 v2: port labels own the quadrant
+            // ABOVE E/W ports and RIGHT of N/S ports, so edge
+            // labels take the OPPOSITE quadrant: below the line on
+            // horizontal approaches, left of the line on vertical
+            // ones. Disjoint by construction.
+            if (Math.abs(dx) >= Math.abs(dy)) {
+              const back = Math.min(12, Math.abs(dx) / 2);
+              return {
+                x: b.x - Math.sign(dx || 1) * back,
+                y: b.y + 12,
+                anchor: dx >= 0 ? "end" : "start",
+              };
+            }
+            const back = Math.min(12, Math.abs(dy) / 2);
+            return {
+              x: b.x - 8,
+              y: b.y - Math.sign(dy || 1) * back + 3,
+              anchor: "end",
+            };
+          })();
           return (
             <g key={id} data-ssv-edge={id}>
               <path
@@ -449,11 +759,11 @@ export function StructuralSvgView({
                   data-ssv-arrow={`${id}:${s.end}`}
                 />
               ))}
-              {meta.label !== undefined && mid !== undefined && (
+              {meta.label !== undefined && labelAt !== undefined && (
                 <text
-                  x={mid.x}
-                  y={mid.y - 4}
-                  textAnchor="middle"
+                  x={labelAt.x}
+                  y={labelAt.y}
+                  textAnchor={labelAt.anchor}
                   fontSize={9}
                   fill={theme.edgeLabel}
                   data-ssv-edge-label={id}
@@ -469,18 +779,77 @@ export function StructuralSvgView({
         {Object.entries(geometry.ports).map(([id, pRaw]) => {
           const off = offsetOf(pRaw.node);
           const p = { ...pRaw, x: pRaw.x + off.dx, y: pRaw.y + off.dy };
+          // LR-18 (owner review 2026-07-22): ports carry their OWN
+          // name labels (the local part of the port id), side-aware
+          // anchored beside the port: what read as mis-anchored
+          // "edge labels" in the IBD were edge labels doing double
+          // duty for unlabeled ports. Case passes through as
+          // authored.
+          // VR-26 (owner re-verify 2026-07-28): shapes-scene port
+          // ids are URIs; a "."-split pops the URI tail, not a
+          // name. Cut at the LAST of #, /, or "." instead.
+          const cut = Math.max(
+            id.lastIndexOf("#"),
+            id.lastIndexOf("/"),
+            id.lastIndexOf("."),
+          );
+          const localName = cut >= 0 ? id.slice(cut + 1) : id;
+          const mult = portMultiplicity.get(id);
+          // LR-18: SysML-style multiplicity beside the port name.
+          const name =
+            mult !== undefined ? `${localName} [${mult}]` : localName;
+          // G1 (owner 2026-07-28, v3 of this placement): OUTSIDE
+          // the container beside the port (inside placement sat on
+          // top of container rows), offset PERPENDICULAR to the
+          // port axis so the label clears the wire, which exits at
+          // the port's center line (the VR-10 ask).
+          const labelPos =
+            p.side === "EAST"
+              ? {
+                  x: p.x + p.width + 3,
+                  y: p.y - 3,
+                  anchor: "start" as const,
+                }
+              : p.side === "WEST"
+                ? {
+                    x: p.x - 3,
+                    y: p.y - 3,
+                    anchor: "end" as const,
+                  }
+                : p.side === "SOUTH"
+                  ? {
+                      x: p.x + p.width + 4,
+                      y: p.y + p.height + 10,
+                      anchor: "start" as const,
+                    }
+                  : {
+                      x: p.x + p.width + 4,
+                      y: p.y - 4,
+                      anchor: "start" as const,
+                    };
           return (
-            <rect
-              key={id}
-              x={p.x}
-              y={p.y}
-              width={p.width}
-              height={p.height}
-              fill={theme.portFill}
-              stroke={theme.containerStroke}
-              strokeWidth={0.8}
-              data-ssv-port={id}
-            />
+            <g key={id}>
+              <rect
+                x={p.x}
+                y={p.y}
+                width={p.width}
+                height={p.height}
+                fill={theme.portFill}
+                stroke={theme.containerStroke}
+                strokeWidth={0.8}
+                data-ssv-port={id}
+              />
+              <text
+                x={labelPos.x}
+                y={labelPos.y}
+                textAnchor={labelPos.anchor}
+                fontSize={8.5}
+                fill={theme.rowText}
+                data-ssv-port-label={id}
+              >
+                {name}
+              </text>
+            </g>
           );
         })}
       </g>

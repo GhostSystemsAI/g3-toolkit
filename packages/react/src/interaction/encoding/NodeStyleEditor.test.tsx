@@ -29,7 +29,7 @@ describe("NodeStyleEditor", () => {
     expect(screen.getByTestId("node-style-editor")).toBeInTheDocument();
     expect(screen.getByTestId("scope-node")).toBeInTheDocument();
     expect(screen.getByTestId("scope-type")).toBeInTheDocument();
-    expect(screen.getByTestId("scope-type")).toHaveTextContent("All Person");
+    expect(screen.getByTestId("scope-type")).toHaveTextContent("Any Person"); // LR-43
   });
 
   it("scope toggle switches between node and type", () => {

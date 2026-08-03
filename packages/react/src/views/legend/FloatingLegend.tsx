@@ -23,29 +23,32 @@ export function FloatingLegend({
   spec: EncodingSpec;
   labelFor?: (value: string) => string;
   title?: string;
-  corner?: "bottom-left" | "bottom-right";
+  corner?: "bottom-left" | "bottom-right" | "top-left" | "top-right";
   testId?: string;
 }) {
-  const horizontal =
-    corner === "bottom-left"
-      ? { left: 8, right: "auto" as const }
-      : { right: 8, left: "auto" as const };
+  // LR-26 (owner review 2026-07-22): top corners added so shells can
+  // keep the legend clear of bottom status bars.
+  const horizontal = corner.endsWith("left")
+    ? { left: 8, right: "auto" as const }
+    : { right: 8, left: "auto" as const };
+  const vertical = corner.startsWith("top")
+    ? { top: 8, bottom: "auto" as const }
+    : { bottom: 8, top: "auto" as const };
   return (
     <div
       data-testid={testId}
       style={{
         position: "absolute",
-        bottom: 8,
-        top: "auto",
+        ...vertical,
         ...horizontal,
-        maxWidth: 220,
-        maxHeight: 200,
+        maxWidth: 240,
+        maxHeight: 240,
         overflow: "auto",
         background: "var(--g3t-bg-primary, rgba(255,255,255,0.94))",
         border: "1px solid var(--g3t-border, #dee2e6)",
         borderRadius: 6,
         padding: 6,
-        fontSize: 11,
+        fontSize: 12, // LR-26: legibility bump
         boxShadow: "0 1px 4px rgba(0,0,0,0.12)",
         zIndex: 20,
       }}

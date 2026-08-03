@@ -335,6 +335,10 @@ export function TableView({
       <table
         style={{
           width: "100%",
+          // G3 (owner 2026-07-28): in narrow hosts the 100% width
+          // squeezed columns into clipping; max-content lets the
+          // table take its natural width and the host scroll.
+          minWidth: "max-content",
           borderCollapse: "collapse",
           fontSize: 13,
         }}
@@ -439,6 +443,40 @@ export function TableView({
               </tr>
             );
           })}
+          {/* LR-48 (owner review 2026-07-22): the last page has fewer
+              rows, so the grid (and the Prev/Next controls under it)
+              jumped height on every page change, making the buttons a
+              moving target. Filler rows keep every page the same
+              height; cell padding mirrors the data cells so row
+              heights match. */}
+          {Array.from(
+            {
+              // Fillers only when the data actually paginates: a
+              // single-page table has no jump to prevent (and a huge
+              // pageSize would otherwise render thousands of fillers).
+              length:
+                table.getPageCount() > 1
+                  ? Math.max(0, pageSize - table.getRowModel().rows.length)
+                  : 0,
+            },
+            (_, i) => (
+              <tr
+                key={`filler-${i}`}
+                aria-hidden
+                data-testid="table-filler-row"
+              >
+                <td
+                  colSpan={table.getAllLeafColumns().length}
+                  style={{
+                    padding: density === "compact" ? "2px 6px" : "6px 8px",
+                    border: "none",
+                  }}
+                >
+                  {"\u00A0"}
+                </td>
+              </tr>
+            ),
+          )}
         </tbody>
       </table>
 

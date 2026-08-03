@@ -49,7 +49,11 @@ const BUDGETS = {
   // layout engine) lands, extract @g3t/layout (ARC-009), move the
   // router with it, and bring core back under its original envelope
   // rather than raising a third time.
-  core: 192 * 1024, // 184 KB
+  // Owner batch + directives 2026-07-28: +1.0 KB total across the
+  // VR-9 detour helper, the port-pair within-body snap, and the
+  // congestion-demand sizing (ports + degree floor). All
+  // oracle-pinned.
+  core: 153.5 * 1024, // 184 KB
   // Core ledger:
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with
@@ -153,6 +157,14 @@ const BUDGETS = {
   //   node id in block view), the FacetFilter colorForType swatch
   //   hook, and the categoricalColorMap encoding helper. +0.3 KB over
   //   the 300 cap.
+  // Ledger, 2026-07-20 (G3L Round 49, MEASUREMENT-BASIS rebase,
+  // authority granted): removing the vite-8-ignored esbuild
+  // whitespace-only trio switched lib dist to FULL minification
+  // (sourcemaps ship, so strictly better). New basis measured:
+  // core 146.0, react 357.1, charts 6.4. Budgets rebased to the
+  // new basis with ~4-9% headroom: core 192 -> 152, react
+  // 440 -> 372, charts 10 -> 7. Historical numbers in older ledger
+  // entries are in the OLD (whitespace-only) basis.
   // Core ledger, 2026-07-19 (D3b part 1 rebase, authority granted
   // "rebase authority granted"): 196 -> 192. elkjs left the tree;
   // measured 187.3 KB post-removal. The removed code was OUR
@@ -189,7 +201,12 @@ const BUDGETS = {
   //   GraphToolbar/UxSurface/VisualEncoding). All deliberate,
   //   CHANGELOG-documented rounds. Modest headroom, same rationale
   //   as core.
-  react: 440 * 1024, // 420 KB
+  // Upstream round-6 + round-17 adoptions 2026-07-28: the round-6
+  // set (multi-type helper, TreeView onSelect, inspector
+  // titleAccessory, containment content-key) plus round-17 R-1
+  // drag-suppressed clicks, R-2 glyph slots with their hit zone,
+  // and R-3 two-line headers. All oracle-pinned.
+  react: 376 * 1024, // 420 KB
   // - 384 -> 420 KB, 2026-07-07 (review remediation round 2): measured
   //   379.9 KB (99% of cap) after the emphasis/effects layer
   //   (emphasis store + class application), useStructuralCollapse,
@@ -197,7 +214,9 @@ const BUDGETS = {
   //   labelFor/ordering, and removeNodesFromSelection. All
   //   tree-shakeable exports; sourcemap audit at the core raise found
   //   zero node_modules bytes in dist. Ratified by review direction.
-  charts: 10 * 1024, // 10 KB
+  // VR-17 (2026-07-28): +0.3 KB for explicit legible nameTextStyle
+  // on five chart axes (owner-verified illegibility fix).
+  charts: 7.5 * 1024,
 };
 
 function dirSize(dir, includeExt) {

@@ -368,3 +368,17 @@ describe("edge routing (ELK sections)", () => {
     expect(bare.edges).toBeUndefined();
   });
 });
+
+describe("VR-11: row width estimate tapers on long strings", () => {
+  it("a sentence-length row estimates near proportional-font reality, not 7px/char", () => {
+    const short = estimateTextSize("mass: kg", "row");
+    // Short strings keep the safe-high rate.
+    expect(short.width).toBe(Math.ceil(8 * 7) + 4);
+    const sentence = "The system shall maintain attitude within 0.1 deg";
+    const long = estimateTextSize(sentence, "row");
+    // 24 chars at 7 + remainder at 5.8, not 50 chars at 7.
+    const expected = Math.ceil(24 * 7 + (sentence.length - 24) * 5.8) + 4;
+    expect(long.width).toBe(expected);
+    expect(long.width).toBeLessThan(sentence.length * 7);
+  });
+});

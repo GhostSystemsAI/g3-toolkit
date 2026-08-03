@@ -135,7 +135,9 @@ export function NodeStyleEditor({
         border: "1px solid var(--g3t-border)",
         borderRadius: "var(--g3t-radius-lg, 8px)",
         boxShadow: "var(--g3t-shadow-lg)",
-        width: 280,
+        width: "100%",
+        boxSizing: "border-box",
+        minWidth: 240,
         fontSize: "var(--g3t-font-sm, 12px)",
         color: "var(--g3t-text-primary)",
       }}
@@ -176,7 +178,8 @@ export function NodeStyleEditor({
           onClick={() => setScope("type")}
           style={{ fontSize: 11, flex: 1 }}
         >
-          All {nodeType}
+          Any {nodeType}{" "}
+          {/* LR-43: "Any Part" reads right where "All Part" did not */}
         </button>
       </div>
 
@@ -202,6 +205,42 @@ export function NodeStyleEditor({
               }}
             />
           ))}
+          {/* LR-42 (owner review 2026-07-22): a custom color wheel
+              beside the presets: the native picker, styled as a
+              swatch-sized well showing the current custom choice. */}
+          <label
+            data-testid="color-custom"
+            title="Custom color"
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 4,
+              border:
+                color !== "" && !COLOR_PRESETS.includes(color)
+                  ? "2px solid var(--g3t-text-primary)"
+                  : "1px dashed var(--g3t-border)",
+              cursor: "pointer",
+              overflow: "hidden",
+              position: "relative",
+              background:
+                color !== "" && !COLOR_PRESETS.includes(color)
+                  ? color
+                  : "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+            }}
+          >
+            <input
+              type="color"
+              value={color !== "" && color.startsWith("#") ? color : "#888888"}
+              onChange={(e) => setColor(e.target.value)}
+              style={{
+                position: "absolute",
+                inset: 0,
+                opacity: 0,
+                cursor: "pointer",
+              }}
+              aria-label="Custom color"
+            />
+          </label>
         </div>
       </div>
 

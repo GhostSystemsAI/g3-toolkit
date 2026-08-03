@@ -177,6 +177,7 @@ export {
   HierarchyLayout,
   DagreLayout,
   G3tLayeredLayout,
+  routeStructuralEdges,
 } from "./layout";
 export type {
   LayoutEngine,
@@ -352,6 +353,7 @@ export { hitTestScene, hitTestStructural, distToSegment } from "./hit/hit-test";
 export type {
   SceneHit,
   StructuralHit,
+  GlyphSlot,
   HitPoint,
   HitSceneNode,
   HitSceneEdge,

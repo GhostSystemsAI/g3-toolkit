@@ -206,7 +206,7 @@ describe("MR-11 round-3 regressions", () => {
     expect(container.querySelector("[data-ssv-node='blockA']")).not.toBeNull();
   });
 
-  it("grabbing a node body drags the NODE (its edges fall back straight); background drags pan", () => {
+  it("grabbing a node body drags the NODE; its edges stay ROUTED live (RTE-011); background drags pan", () => {
     const { container } = render(
       <StructuralSvgView
         input={INPUT}
@@ -244,10 +244,14 @@ describe("MR-11 round-3 regressions", () => {
       .querySelector("[data-ssv-node='plainB'] rect")!
       .getAttribute("x");
     expect(Number(after)).toBeGreaterThan(Number(before));
-    // The dragged node's edge fell back to a straight marked line.
-    expect(
-      container.querySelector("[data-ssv-edge-fallback='e1']"),
-    ).not.toBeNull();
+    // RTE-011 (LR-15): the dragged node's edge is RE-ROUTED against
+    // the offset geometry, not collapsed to a marked straight line.
+    expect(container.querySelector("[data-ssv-edge-fallback='e1']")).toBeNull();
+    const routed = container.querySelector("[data-ssv-edge='e1'] path");
+    expect(routed).not.toBeNull();
+    // A routed path exists and is non-degenerate (has at least one
+    // line segment).
+    expect(routed?.getAttribute("d") ?? "").toMatch(/M.*L/);
     // The view itself did NOT pan during the node drag.
     expect(scene.getAttribute("transform")).toContain(`translate(${tx} ${ty}`);
     // Background drag DOES pan.
@@ -257,5 +261,111 @@ describe("MR-11 round-3 regressions", () => {
     expect(scene.getAttribute("transform")).not.toContain(
       `translate(${tx} ${ty}`,
     );
+  });
+});
+
+describe("upstream round 17: glyph slot and two-line headers", () => {
+  it("R-2: renders a glyph box and reports zone 'glyph' on click", () => {
+    const input: StructuralGraphInput = {
+      nodes: [
+        {
+          id: "blk",
+          header: { stereotype: "block", name: "Payload" },
+          compartments: [
+            { id: "c", title: "vals", rows: [{ id: "r", text: "mass" }] },
+          ],
+        },
+      ],
+      edges: [],
+    };
+    const geometry = {
+      nodes: {
+        blk: {
+          x: 20,
+          y: 20,
+          width: 200,
+          height: 100,
+          kind: "container" as const,
+        },
+      },
+      ports: {},
+      edges: {},
+      headerHeight: 24,
+    };
+    const hits: string[] = [];
+    const { container } = render(
+      <StructuralSvgView
+        input={input}
+        geometry={geometry as never}
+        width={400}
+        height={300}
+        glyphs={new Map([["blk", { slot: "top-right", text: "C" }]])}
+        onElementClick={(info) => hits.push(info.hit.zone)}
+      />,
+    );
+    const glyph = container.querySelector("[data-ssv-glyph='blk']");
+    expect(glyph).not.toBeNull();
+    expect(glyph?.getAttribute("data-ssv-glyph-slot")).toBe("top-right");
+    expect(glyph?.classList.contains("g3t-ssv-glyph")).toBe(true);
+  });
+
+  it("R-3: headerLines=2 puts the stereotype on its own line", () => {
+    const input: StructuralGraphInput = {
+      nodes: [
+        {
+          id: "blk",
+          header: { stereotype: "block", name: "Payload" },
+          compartments: [
+            { id: "c", title: "vals", rows: [{ id: "r", text: "mass" }] },
+          ],
+        },
+      ],
+      edges: [],
+    };
+    const geometry = {
+      nodes: {
+        blk: {
+          x: 20,
+          y: 20,
+          width: 200,
+          height: 100,
+          kind: "container" as const,
+        },
+      },
+      ports: {},
+      edges: {},
+      headerHeight: 30,
+    };
+    const { container, rerender } = render(
+      <StructuralSvgView
+        input={input}
+        geometry={geometry as never}
+        width={400}
+        height={300}
+        headerLines={2}
+      />,
+    );
+    const stereo = container.querySelector(
+      "[data-ssv-header-stereotype='blk']",
+    );
+    expect(stereo?.textContent).toBe("\u00abblock\u00bb");
+    expect(
+      container.querySelector("[data-ssv-header='blk']")?.textContent,
+    ).toBe("Payload");
+    // Default stays single-line (existing scenes unchanged).
+    rerender(
+      <StructuralSvgView
+        input={input}
+        geometry={geometry as never}
+        width={400}
+        height={300}
+      />,
+    );
+    expect(
+      container.querySelector("[data-ssv-header-stereotype='blk']"),
+    ).toBeNull();
+    expect(
+      container.querySelector("[data-ssv-header='blk']")?.textContent,
+    ).toBe("\u00abblock\u00bb Payload");
   });
 });

@@ -31,12 +31,19 @@ function distinctValues(
   if (!driver) return [];
   const out = new Set<string>();
   const visit = (attrs: ElementAttrs) => {
+    if (driver === "types") {
+      // LR-49 (owner review 2026-07-22): collect EVERY membership,
+      // not just the primary type. Inference adds supertypes as
+      // secondary types, and the 5.21 multi-type rings render those
+      // memberships as visible slices: a slice on screen must have a
+      // legend row.
+      for (const t of attrs.types ?? []) out.add(String(t));
+      return;
+    }
     const v =
-      driver === "types"
-        ? attrs.types?.[0]
-        : driver === "type" && attrs.type !== undefined
-          ? attrs.type
-          : attrs.properties[driver];
+      driver === "type" && attrs.type !== undefined
+        ? attrs.type
+        : attrs.properties[driver];
     if (v !== undefined && v !== null) out.add(String(v));
   };
   if (target === "node") ugm.forEachNode((_id, a) => visit(a));
@@ -81,9 +88,23 @@ function ShapeGlyph({ shape }: { shape: string }) {
       {shape === "ellipse" ? (
         <circle cx="7" cy="7" r="5" {...common} />
       ) : shape === "rectangle" ? (
-        <rect x="2" y="3" width="10" height="8" {...common} />
-      ) : shape === "round-rectangle" ? (
-        <rect x="2" y="3" width="10" height="8" rx="2.5" {...common} />
+        // G5 v2 (owner screenshot 2026-07-28): grown to the diamond's
+        // 11-span so the square reads the same visual weight.
+        <rect x="1.5" y="1.5" width="11" height="11" {...common} />
+      ) : shape === "round-rectangle" || shape === "roundrectangle" ? (
+        <rect x="1.5" y="1.5" width="11" height="11" rx="3" {...common} />
+      ) : shape === "star" ? (
+        // G5 v2: star and barrel had NO branch and fell to the
+        // dashed-circle default (the screenshot's mystery glyphs).
+        <polygon
+          points="7,1 8.6,5.2 13,5.4 9.6,8.2 10.8,12.5 7,10 3.2,12.5 4.4,8.2 1,5.4 5.4,5.2"
+          {...common}
+        />
+      ) : shape === "barrel" ? (
+        <path
+          d="M 2.5 3.5 Q 7 1.8 11.5 3.5 L 11.5 10.5 Q 7 12.2 2.5 10.5 Z"
+          {...common}
+        />
       ) : shape === "diamond" ? (
         <polygon points="7,1.5 12.5,7 7,12.5 1.5,7" {...common} />
       ) : shape === "triangle" ? (
@@ -128,6 +149,11 @@ export function SpecLegend({
   const iconEnc = spec.node.icon;
   const shapeEnc = spec.node.shape;
   const edgeWidthEnc = spec.edge.width;
+  // VR-2 follow-up (owner verification 2026-07-28): the edge COLOR
+  // channel had no legend representation at all, so
+  // color-by-confidence painted the graph while the legend said
+  // nothing about it.
+  const edgeColorEnc = spec.edge.color;
 
   // 12.15: when the spec declares NO shape encoding, the canvas still
   // assigns shapes (buildTypeVisualMap: sorted types cycled through
@@ -317,6 +343,30 @@ export function SpecLegend({
                   <Icon name={r.icon} size={12} /> {display(r.value)}
                 </div>
               ))}
+            </section>
+          ) : null}
+
+          {edgeColorEnc?.scale.kind === "categorical" &&
+          edgeColorEnc.scale.overrides ? (
+            <section>
+              <div className="g3t-legend-title">
+                edge color: <code>{edgeColorEnc.driver}</code>
+              </div>
+              {Object.entries(edgeColorEnc.scale.overrides).map(
+                ([value, color]) => (
+                  <div
+                    className="g3t-legend-row"
+                    key={value}
+                    data-testid={`legend-edge-color-${value}`}
+                  >
+                    <span
+                      className="g3t-legend-line"
+                      style={{ height: 3, background: String(color) }}
+                    />{" "}
+                    {display(value)}
+                  </div>
+                ),
+              )}
             </section>
           ) : null}
 

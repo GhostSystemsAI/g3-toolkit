@@ -6,11 +6,6 @@ import { externalsFromPackageJson } from "../../scripts/vite-externals.mjs";
 const external = externalsFromPackageJson(resolve(__dirname, "package.json"));
 
 export default defineConfig({
-  esbuild: {
-    minifyIdentifiers: false,
-    minifySyntax: false,
-    minifyWhitespace: true,
-  },
   plugins: [react()],
   resolve: {
     alias: {

@@ -9,4 +9,6 @@ packages:
 
 # pnpm 9+: allow esbuild's postinstall to run (it builds a native binary).
 allowBuilds:
+  canvas: set this to true or false
   esbuild: true
+

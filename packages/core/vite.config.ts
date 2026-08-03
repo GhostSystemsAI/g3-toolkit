@@ -24,11 +24,13 @@ const external = externalsFromPackageJson(resolve(__dirname, "package.json"));
  */
 
 export default defineConfig({
-  esbuild: {
-    minifyIdentifiers: false,
-    minifySyntax: false,
-    minifyWhitespace: true,
-  },
+  // (G3L Round 49) The esbuild whitespace-only minify trio that
+  // lived here triggered vite 8's "esbuild options ignored" warning
+  // AND was still partially shaping the dist: removing it switched
+  // to FULL default minification (core 187.3 -> 146.0 KB, react
+  // 425.9 -> 357.1). Sourcemaps ship, so full minify is strictly
+  // better than readable identifiers; the bundle budgets were
+  // REBASED to this measurement basis in the same commit (ledger).
   build: {
     lib: {
       entry: {

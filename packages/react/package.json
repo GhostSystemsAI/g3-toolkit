@@ -1,6 +1,6 @@
 {
   "name": "@g3t/react",
-  "version": "1.0.0-rc.2",
+  "version": "1.0.0",
   "description": "React components for graph visualization: canvas, table, tree, map, schema, charts. Pairs with @g3t/core.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -42,14 +42,18 @@
       "import": "./dist/icons.mjs",
       "require": "./dist/icons.cjs"
     },
-    "./style.css": "./dist/style.css",
+    "./style.css": {
+      "types": "./style.css.d.ts",
+      "default": "./dist/style.css"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
     "README.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "style.css.d.ts"
   ],
   "keywords": [
     "graph",
@@ -99,7 +103,7 @@
     }
   },
   "sideEffects": [
-    "*.css"
+    "**/*.css"
   ],
   "devDependencies": {
     "vitest": "^4.1.7",

@@ -11,13 +11,13 @@ the code cannot rot silently.
 archived export lists are reproduced below verbatim) and note the
 restoration here. Nothing else is required; no files moved.
 
-| Cluster | Symbols |
-| --- | --- |
-| T2a Gremlin/REST adapters + HTTP middleware | GremlinAdapter, RestAdapter, composeMiddleware, defaultFetch, bearerAuth, apiKeyHeader, retryOnError, requestLogger |
-| T2b SHACL report tooling | parseShaclReport, resultsForShape, resultTargets, resultsForFocusNode |
-| T2c PROV-O extraction + RDF collapse transforms | extractProvOProperties, PROVO_MAPPINGS, literalCollapse, blankNodeCollapse, listCollapse, reificationCollapse, overlayFromDocument |
-| T2d Pipeline registry + chart pipeline creators | PipelineRegistry, createCountByProperty, createEdgeTypeBreakdown, createActivityTimeline, createCommunityBreakdown |
-| T2e Incremental layout suite | IncrementalLayout, applyIncrementalLayout, computeIncrementalUpdate, ingestEdgeAlgorithmResults |
+| Cluster                                              | Symbols                                                                                                                                                                                              |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2a Gremlin/REST adapters + HTTP middleware          | GremlinAdapter, RestAdapter, composeMiddleware, defaultFetch, bearerAuth, apiKeyHeader, retryOnError, requestLogger                                                                                  |
+| T2b SHACL report tooling                             | parseShaclReport, resultsForShape, resultTargets, resultsForFocusNode                                                                                                                                |
+| T2c PROV-O extraction + RDF collapse transforms      | extractProvOProperties, PROVO_MAPPINGS, literalCollapse, blankNodeCollapse, listCollapse, reificationCollapse, overlayFromDocument                                                                   |
+| T2d Pipeline registry + chart pipeline creators      | PipelineRegistry, createCountByProperty, createEdgeTypeBreakdown, createActivityTimeline, createCommunityBreakdown                                                                                   |
+| T2e Incremental layout suite                         | IncrementalLayout, applyIncrementalLayout, computeIncrementalUpdate, ingestEdgeAlgorithmResults                                                                                                      |
 | T2f Style-config JSON + overrides + type menu + misc | parseStyleConfig, serializeStyleConfig, STYLE_CONFIG_SCHEMA, serializeOverrides, deserializeOverrides, TypeMenuProvider, createDefaultTypeMenuProvider, checkRenderPermission, unpinAll, DARK_TOKENS |
 
 Context: the analysis that produced the table (methods, byte costs,

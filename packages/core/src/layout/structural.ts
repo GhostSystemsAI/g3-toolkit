@@ -95,6 +95,9 @@ export interface StructuralCompartment {
 /** A boundary port on a container or plain node. */
 export interface StructuralPort {
   id: string;
+  /** LR-18 (owner review 2026-07-22): SysML-style multiplicity
+   *  (e.g. "1", "0..*") rendered beside the port name label. */
+  multiplicity?: string;
   /**
    * Side to fix the port to. Optional: when omitted it defaults to the
    * flow axis (e.g. EAST/WEST for a RIGHT/LEFT layout), so data-flow ports
@@ -173,10 +176,23 @@ export type TextMeasure = (
  *  clipping when this estimate undershoots a proportional font (the
  *  canvas can substitute real measurement for pixel-true sizing). */
 export const estimateTextSize: TextMeasure = (text, role) => {
-  const perChar = role === "header" ? 9 : 7;
   const height = role === "header" ? 16 : 13;
   const margin = role === "header" ? 12 : 4;
-  return { width: Math.ceil(text.length * perChar) + margin, height };
+  if (role === "header") {
+    return { width: Math.ceil(text.length * 9) + margin, height };
+  }
+  // VR-11 (owner verification 2026-07-26): 7px/char is calibrated
+  // safe-high for SHORT strings; on sentence-length rows (the
+  // requirements boxes) the overshoot vs a real proportional font
+  // accumulates ABSOLUTELY with length, which read as padding that
+  // "scales badly": wide boxes got much wider than their text while
+  // short-rowed blocks stayed tight. Long strings trend toward a
+  // lower average (spaces, lowercase), so the estimate tapers:
+  // first 24 chars at 7, the remainder at 5.8.
+  const len = text.length;
+  const width =
+    Math.ceil(Math.min(len, 24) * 7 + Math.max(0, len - 24) * 5.8) + margin;
+  return { width, height };
 };
 
 import type { G3tLayoutOptions as G3tEngineTuning } from "./g3t-engine/g3t-layered";

@@ -3,21 +3,52 @@
  *
  * Default view (npm run dev): landing page with scenario cards.
  * Clicking a card renders the full app with that dataset.
+ *
+ * Shells are CODE-SPLIT (G3L Round 49): eight lazy chunks instead
+ * of one bundle carrying every example, which was the source of the
+ * >500 kB chunk warning. The landing paints from a small chunk; a
+ * shell's code loads on selection (the production-smoke spec's
+ * 15 s mount window covers the fetch).
  */
 
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { DemoLanding, type Scenario } from "./DemoLanding";
-import { MbseShell } from "./mbse/MbseShell";
-import { SupplyThreadShell } from "./supply/ThreadShell";
-import { BioShell } from "./bio/BioShell";
-import { AnalyticsSurface } from "./surfaces/DashboardSurfaces";
-import { ScaleSurface } from "./scale/ScaleSurface";
-import { OntologyShell } from "./ontology/OntologyShell";
-import { StyleLabShell } from "./stylelab/StyleLabShell";
-import { AuditShell } from "./audit/AuditShell";
 import { useThemeStore } from "@g3t/react";
 import { injectDesignTokens } from "@g3t/react";
 import "@g3t/react";
+
+const MbseShell = lazy(() =>
+  import("./mbse/MbseShell").then((m) => ({ default: m.MbseShell })),
+);
+const SupplyThreadShell = lazy(() =>
+  import("./supply/ThreadShell").then((m) => ({
+    default: m.SupplyThreadShell,
+  })),
+);
+const BioShell = lazy(() =>
+  import("./bio/BioShell").then((m) => ({ default: m.BioShell })),
+);
+const AnalyticsSurface = lazy(() =>
+  import("./surfaces/DashboardSurfaces").then((m) => ({
+    default: m.AnalyticsSurface,
+  })),
+);
+const ScaleSurface = lazy(() =>
+  import("./scale/ScaleSurface").then((m) => ({ default: m.ScaleSurface })),
+);
+const OntologyShell = lazy(() =>
+  import("./ontology/OntologyShell").then((m) => ({
+    default: m.OntologyShell,
+  })),
+);
+const StyleLabShell = lazy(() =>
+  import("./stylelab/StyleLabShell").then((m) => ({
+    default: m.StyleLabShell,
+  })),
+);
+const AuditShell = lazy(() =>
+  import("./audit/AuditShell").then((m) => ({ default: m.AuditShell })),
+);
 
 /** Map scenario IDs to dedicated demo shells. */
 const SHELL_MAP: Record<string, React.ComponentType<{ onBack: () => void }>> = {
@@ -47,7 +78,11 @@ export function Demo() {
   if (activeScenario) {
     const Shell = SHELL_MAP[activeScenario.id];
     if (Shell) {
-      return <Shell onBack={() => setActiveScenario(null)} />;
+      return (
+        <Suspense fallback={<p style={{ padding: 24 }}>Loading example…</p>}>
+          <Shell onBack={() => setActiveScenario(null)} />
+        </Suspense>
+      );
     }
     // Every shipped scenario has a dedicated shell; fall back to the
     // landing if an unknown id is somehow active.
