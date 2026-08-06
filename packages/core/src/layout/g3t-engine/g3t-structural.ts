@@ -295,6 +295,11 @@ export function g3tLayoutStructural(
     geometry.edges = routeStructuralEdges(input, geometry, {
       routingBudgetMs: options?.routingBudgetMs,
       direction: options?.direction,
+      // R-6 (upstream register, 2026-08-03): anchor was added for
+      // R-4 but never forwarded here, so the option was unreachable
+      // from the single call most consumers make and they had to
+      // re-route over geometry the layout had just produced.
+      anchor: options?.anchor,
     });
   }
   return geometry;

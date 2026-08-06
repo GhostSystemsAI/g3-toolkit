@@ -66,3 +66,7 @@ export type {
 } from "./workspace/workspace";
 export { AlgorithmPanel } from "./algorithms/AlgorithmPanel";
 export type { AlgorithmPanelProps } from "./algorithms/AlgorithmPanel";
+export {
+  relayoutAroundFixed,
+  type RelayoutAroundFixedOptions,
+} from "./relayout";

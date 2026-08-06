@@ -1,5 +1,48 @@
 # g3-toolkit Status
 
+**As of:** 2026-08-06 (active: register R-15/R-16/R-17 answered:
+capability-gated editor controls (and the same over-promise fixed
+in StructuralNodeStyle itself), FloatingLegend elements
+descriptor, and a new verify:typeref gate that found three
+unreachable public types beyond the one reported. 1,433 tests
+exit-0. v1.0.0 still UNTAGGED. REMAINING: the owner's review
+walk.)
+
+## PRIOR SNAPSHOT (round 21)
+
+**As of:** 2026-08-05 (active: round 21 full text answered: R-12
+all four parts (structural applier with stated precedence,
+renderer-neutral editor target, size REPORTED per their option 2
+rather than my provisional option 3, controlled drag offsets) and
+R-13.3 (one legend serving both renderers). 1,428 tests exit-0.
+v1.0.0 still UNTAGGED. REMAINING: the owner's review walk.)
+
+## PRIOR SNAPSHOT (2026-08-05 register)
+
+**As of:** 2026-08-05 (active: the 2026-08-05 register: R-10
+(affordance presses no longer pan; screen-space slop reversing my
+model-unit error), R-9 (pinch zoom + controlled view transform +
+proportional wheel), R-11 (row glyphs), R-13 correctness half
+(override selectors + legend disclosure). R-12 SCOPED, not
+started, pending its full text. Their re-measurement confirms the
+R-4 fix: 34/34 views differ, 900 to 826 bends. 1,419 tests
+exit-0. v1.0.0 still UNTAGGED; all of this is release content.
+REMAINING: the owner's review walk.)
+
+## PRIOR SNAPSHOT (2026-08-03 register)
+
+**As of:** 2026-08-03 (active: consolidated upstream register
+answered: R-4 as shipped in 1.0.0 was a MEASURED NO-OP (consumer
+found it; my oracle did not discriminate) and is now real and
+oracle-pinned; a latent CI flake in the determinism test fixed
+(anytime layout vs wall-clock budget); R-5 plain-node glyphs and
+two-line headers, R-6 anchor forwarding, R-7 relayoutAroundFixed,
+R-8 pie shape suppression. 1,406 tests exit-0. NOTE: 1.0.0 has
+NOT been tagged; these fixes fold into the release rather than
+following it. REMAINING: the owner's review walk.)
+
+## PRIOR SNAPSHOT (v1.0.0 release prep)
+
 **As of:** 2026-08-03 (active: v1.0.0 RELEASE PREP executed: the
 consumer-facing gaps closed (typed CSS entry point, Install
 section, docs/consuming-g3t.md), verify:package gate added (77

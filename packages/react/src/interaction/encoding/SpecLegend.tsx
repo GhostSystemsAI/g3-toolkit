@@ -23,10 +23,21 @@ import {
 } from "./encoding-spec";
 import { SEQUENTIAL_SCALE, DIVERGING_SCALE } from "./palette-bridge";
 
+/** R-13.3: an element descriptor, the same shape NodeStyleTarget
+ *  uses, so one legend can serve a UGM-backed canvas and a
+ *  structural scene. */
+export interface LegendElement {
+  id: string;
+  type?: string;
+  label?: string;
+  properties?: Record<string, unknown>;
+}
+
 function distinctValues(
-  ugm: UGM,
+  ugm: UGM | undefined,
   driver: string | undefined,
   target: "node" | "edge",
+  elements?: readonly LegendElement[],
 ): string[] {
   if (!driver) return [];
   const out = new Set<string>();
@@ -46,8 +57,21 @@ function distinctValues(
         : attrs.properties[driver];
     if (v !== undefined && v !== null) out.add(String(v));
   };
-  if (target === "node") ugm.forEachNode((_id, a) => visit(a));
-  else ugm.forEachEdge((_id, a) => visit(a as ElementAttrs));
+  if (ugm !== undefined) {
+    if (target === "node") ugm.forEachNode((_id, a) => visit(a));
+    else ugm.forEachEdge((_id, a) => visit(a as ElementAttrs));
+  } else if (target === "node") {
+    // R-13.3 (round 21, 2026-08-05): a structural scene has no UGM,
+    // so one legend serves both renderers from the same descriptor
+    // list R-12b introduced. Hand-writing a second legend is the
+    // answer every previous round established as wrong.
+    for (const el of elements ?? []) {
+      visit({
+        ...(el.type !== undefined ? { types: [el.type], type: el.type } : {}),
+        properties: el.properties ?? {},
+      } as ElementAttrs);
+    }
+  }
   return [...out];
 }
 
@@ -64,7 +88,19 @@ function sampleFor(driver: string | undefined, v: string): ElementAttrs {
 }
 
 export interface SpecLegendProps {
-  ugm: UGM;
+  /** R-13 (register, 2026-08-05): the manual style overrides in
+   *  scope. The legend asserts that a colour means a class; a
+   *  reader repainting one node makes that assertion FALSE, and
+   *  the legend had no way to know. Passing them lets it disclose
+   *  rather than mislead. */
+  overrides?: readonly { scope: { nodeId: string } | { type: string } }[];
+  /** Shown as a reset control beside the disclosure. */
+  onResetOverrides?: () => void;
+  /** Omit when rendering for a structural scene and pass
+   *  `elements` instead (R-13.3). */
+  ugm?: UGM;
+  /** R-13.3: element descriptors for renderers without a UGM. */
+  elements?: readonly LegendElement[];
   spec: EncodingSpec;
   /** When true, render a header with a collapse/expand toggle so the
    *  legend can be tucked away (it can otherwise cover the canvas). */
@@ -134,6 +170,9 @@ function orderByDomain(
 }
 
 export function SpecLegend({
+  elements,
+  overrides,
+  onResetOverrides,
   ugm,
   spec,
   collapsible = false,
@@ -164,10 +203,16 @@ export function SpecLegend({
   const defaultShapeRows = useMemo(() => {
     if (shapeEnc !== undefined) return [];
     const types = new Set<string>();
-    ugm.forEachNode((_id, attrs) => {
-      const t = attrs.types[0];
-      if (t) types.add(t);
-    });
+    if (ugm !== undefined) {
+      ugm.forEachNode((_id, attrs) => {
+        const t = attrs.types[0];
+        if (t) types.add(t);
+      });
+    } else {
+      for (const el of elements ?? []) {
+        if (el.type !== undefined) types.add(el.type);
+      }
+    }
     if (types.size < 2) return [];
     return [...types]
       .sort()
@@ -178,7 +223,7 @@ export function SpecLegend({
     if (shapeEnc?.scale.kind !== "categorical") return [];
     const resolve = makeShapeResolver(shapeEnc);
     return orderByDomain(
-      distinctValues(ugm, shapeEnc.driver, "node"),
+      distinctValues(ugm, shapeEnc.driver, "node", elements),
       shapeEnc.scale.domain,
     )
       .map((v) => ({ value: v, shape: resolve(sampleFor(shapeEnc.driver, v)) }))
@@ -189,9 +234,12 @@ export function SpecLegend({
 
   const colorRows = useMemo(() => {
     if (colorEnc?.scale.kind !== "categorical") return [];
-    const resolve = makeColorResolver(colorEnc, { ugm });
+    const resolve = makeColorResolver(
+      colorEnc,
+      ugm !== undefined ? { ugm } : {},
+    );
     return orderByDomain(
-      distinctValues(ugm, colorEnc.driver, "node"),
+      distinctValues(ugm, colorEnc.driver, "node", elements),
       colorEnc.scale.domain,
     ).map((v) => ({
       value: v,
@@ -203,7 +251,7 @@ export function SpecLegend({
     if (iconEnc?.scale.kind !== "categorical") return [];
     const resolve = makeIconResolver(iconEnc);
     return orderByDomain(
-      distinctValues(ugm, iconEnc.driver, "node"),
+      distinctValues(ugm, iconEnc.driver, "node", elements),
       iconEnc.scale.domain,
     )
       .map((v) => ({ value: v, icon: resolve(sampleFor(iconEnc.driver, v)) }))
@@ -220,8 +268,41 @@ export function SpecLegend({
     return { lo, hi, domain: dom, driver: sizeEnc.driver, resolve };
   }, [sizeEnc, ugm]);
 
+  // R-13: the disclosure. A legend that keeps asserting a rule the
+  // reader has locally broken is worse than one that admits it.
+  const overrideCount = overrides?.length ?? 0;
   return (
     <div className={className} data-testid="g3t-spec-legend">
+      {overrideCount > 0 && (
+        <div
+          data-testid="legend-override-notice"
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: 6,
+            marginBottom: 6,
+            fontSize: 11,
+            color: "var(--g3t-text-muted, #868e96)",
+          }}
+        >
+          <span>
+            {overrideCount === 1
+              ? "1 manual style override is active; the key below does not describe it."
+              : `${overrideCount} manual style overrides are active; the key below does not describe them.`}
+          </span>
+          {onResetOverrides !== undefined && (
+            <button
+              type="button"
+              data-testid="legend-override-reset"
+              className="g3t-btn"
+              onClick={onResetOverrides}
+              style={{ fontSize: 11, padding: "1px 6px" }}
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      )}
       {collapsible && (
         <button
           type="button"

@@ -119,6 +119,13 @@ export type {
 
 // ── Style override (models only; React store is in @g3t/react/state) ──
 export {
+  overridesToStructuralStyles,
+  STRUCTURAL_STYLE_CHANNELS,
+  CANVAS_STYLE_CHANNELS,
+  type StructuralNodeStyle,
+  type StyleChannel,
+} from "./style-override/structural-style";
+export {
   overridesToCytoscapeStyles,
   ICONS,
   ICON_NAMES,

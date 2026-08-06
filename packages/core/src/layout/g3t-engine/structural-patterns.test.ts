@@ -212,3 +212,38 @@ describe("pattern 5: mixed port/box bindings", () => {
     expect(pts.length).toBeLessThanOrEqual(6);
   });
 });
+
+describe("R-6: layout forwards the anchor option to its router", () => {
+  it("g3tLayoutStructural(anchor: 'target') routes like the router called directly", () => {
+    const srcs = ["a", "b", "c"];
+    const dsts = ["x", "y", "z"];
+    const input: StructuralGraphInput = {
+      nodes: [...srcs, ...dsts].map((id) => ({
+        id,
+        width: 120,
+        height: 160,
+      })),
+      edges: srcs.flatMap((s) =>
+        dsts.map((d) => ({ id: `${s}${d}`, source: s, target: d })),
+      ),
+    };
+    const viaLayoutDefault = g3tLayoutStructural(input, {
+      direction: "RIGHT",
+    });
+    const viaLayoutTarget = g3tLayoutStructural(input, {
+      direction: "RIGHT",
+      anchor: "target",
+    });
+    // The option must REACH the router: geometry.edges differ.
+    expect(JSON.stringify(viaLayoutTarget.edges)).not.toBe(
+      JSON.stringify(viaLayoutDefault.edges),
+    );
+    // ...and match a direct re-route with the same option, which is
+    // the workaround this closes.
+    const direct = routeStructuralEdges(input, viaLayoutTarget, {
+      direction: "RIGHT",
+      anchor: "target",
+    });
+    expect(JSON.stringify(viaLayoutTarget.edges)).toBe(JSON.stringify(direct));
+  });
+});

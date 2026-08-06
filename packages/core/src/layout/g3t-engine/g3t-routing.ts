@@ -220,7 +220,7 @@ export function routeStructuralEdges(
   // how much to spread" property they asked for.
   const anchorFirst = options?.anchor ?? "source";
   const fanOffset = new Map<string, number>(); // `${edge}@${node}` -> tangent coord
-  const collect = (ends: "source" | "target"): void => {
+  const collect = (ends: "source" | "target", align = false): void => {
     fans.clear();
     for (const e of edges) {
       const isSrc = ends === "source";
@@ -249,19 +249,61 @@ export function routeStructuralEdges(
       const sorted = [...list].sort(
         (a, b) => a.otherX - b.otherX || (a.edge < b.edge ? -1 : 1),
       );
+      const lo = ew ? g.y : g.x;
+      const extent = ew ? g.height : g.width;
+      if (align) {
+        // R-4 v2 (consumer measurement 2026-08-03): sorting by the
+        // other end's assigned coordinate is NOT enough. In a
+        // layered scene the far boxes never overlap on the cross
+        // axis, so that sort always reproduces the plain center
+        // order and the two modes coincide exactly (measured: 0 of
+        // 9 routes differ in a complete bipartite fixture, and 0 of
+        // 34 real consumer views). The second pass now ALIGNS each
+        // departure with the arrival already fixed at the other
+        // end, clamped into this side's span and separated so
+        // anchors never coincide. That is what actually removes the
+        // late bends the request was about.
+        const MARGIN = 8;
+        const min = lo + MARGIN;
+        const max = lo + extent - MARGIN;
+        const gap = Math.min(
+          16,
+          Math.max(2, (max - min) / Math.max(1, sorted.length)),
+        );
+        // Desired positions are the far end's fixed anchors. A
+        // forward pass enforces the minimum separation, then a
+        // backward pass pulls the tail back inside the span; a
+        // single clamp would collapse every saturated anchor onto
+        // the boundary (two departures at the same point).
+        const placed = sorted.map((a) =>
+          Math.min(max, Math.max(min, a.otherX)),
+        );
+        for (let i = 1; i < placed.length; i++) {
+          const prev = placed[i - 1] ?? min;
+          if ((placed[i] ?? min) < prev + gap) placed[i] = prev + gap;
+        }
+        for (let i = placed.length - 1; i >= 0; i--) {
+          const limit =
+            i === placed.length - 1 ? max : (placed[i + 1] ?? max) - gap;
+          if ((placed[i] ?? min) > limit) placed[i] = limit;
+        }
+        sorted.forEach((a, i) => {
+          fanOffset.set(`${a.edge}@${node}`, placed[i] ?? min);
+        });
+        continue;
+      }
       sorted.forEach((a, i) => {
         const frac = (i + 1) / (sorted.length + 1);
-        fanOffset.set(
-          `${a.edge}@${node}`,
-          ew ? g.y + frac * g.height : g.x + frac * g.width,
-        );
+        fanOffset.set(`${a.edge}@${node}`, lo + frac * extent);
       });
     }
   };
   if (anchorFirst === "target") {
+    // Arrivals first (even spread), then departures ALIGNED to them.
     collect("target");
-    collect("source");
+    collect("source", true);
   } else {
+    // Default: unchanged from v1.0.0, byte for byte.
     collect("source");
     collect("target");
   }

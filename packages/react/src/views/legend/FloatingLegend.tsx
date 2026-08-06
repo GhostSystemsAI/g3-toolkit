@@ -10,8 +10,12 @@
 import type { UGM } from "@g3t/core";
 import { SpecLegend } from "../../interaction/encoding/SpecLegend";
 import type { EncodingSpec } from "../../interaction/encoding/encoding-spec";
+import type { LegendElement } from "../../interaction/encoding/SpecLegend";
 
 export function FloatingLegend({
+  elements,
+  overrides,
+  onResetOverrides,
   ugm,
   spec,
   labelFor,
@@ -19,8 +23,15 @@ export function FloatingLegend({
   corner = "bottom-left",
   testId = "g3t-floating-legend",
 }: {
-  ugm: UGM;
+  /** R-17 (register, 2026-08-06): optional, matching SpecLegend.
+   *  A floating legend over a structural scene passes `elements`
+   *  instead; the two components stay in step. */
+  ugm?: UGM;
+  elements?: readonly LegendElement[];
   spec: EncodingSpec;
+  /** R-13: forwarded to the legend for override disclosure. */
+  overrides?: readonly { scope: { nodeId: string } | { type: string } }[];
+  onResetOverrides?: () => void;
   labelFor?: (value: string) => string;
   title?: string;
   corner?: "bottom-left" | "bottom-right" | "top-left" | "top-right";
@@ -55,7 +66,10 @@ export function FloatingLegend({
     >
       <SpecLegend
         ugm={ugm}
+        elements={elements}
         spec={spec}
+        overrides={overrides}
+        onResetOverrides={onResetOverrides}
         collapsible
         title={title}
         labelFor={labelFor}

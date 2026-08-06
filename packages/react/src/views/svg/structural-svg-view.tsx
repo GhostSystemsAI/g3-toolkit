@@ -25,6 +25,7 @@ import type {
   StructuralGraphInput,
   StructuralHit,
   GlyphSlot,
+  StructuralNodeStyle,
 } from "@g3t/core";
 import {
   useElementPointerEvents,
@@ -74,6 +75,58 @@ export const STRUCTURAL_SVG_DARK: StructuralSvgTheme = {
 const GLYPH_W = 16;
 const GLYPH_H = 14;
 const GLYPH_PAD = 4;
+/** R-5: a plain node has no header strip, so the glyph rides a
+ *  synthetic band that lands it inside the box's own corner.
+ *  Render and hit test MUST use the same value. */
+const PLAIN_GLYPH_BAND = GLYPH_H + 2 * GLYPH_PAD;
+
+/** R-10: zones that are AFFORDANCES rather than scene surface. A
+ *  press on one is an intent to act on that element, so it starts
+ *  neither a node drag nor a canvas pan. Future affordance zones
+ *  belong here rather than in the pointer handler. */
+/** Pointer capture is optional API: jsdom omits it entirely and
+ *  some engines omit it on SVG elements, where an unguarded call
+ *  throws mid-gesture and leaves the interaction half-started. */
+function capturePointer(e: React.PointerEvent<SVGSVGElement>): void {
+  const el = e.currentTarget;
+  if (typeof el.setPointerCapture === "function") {
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      // A capture refused (pointer already released) is not fatal.
+    }
+  }
+}
+
+/** R-9 (register, 2026-08-05): the view transform, exported so a
+ *  consumer can control it, persist it, or restore a saved
+ *  viewport. */
+export interface SvgViewTransform {
+  k: number;
+  tx: number;
+  ty: number;
+}
+
+/** R-9: the one zoom transform, shared by wheel and pinch. Scales
+ *  about a client-relative point, keeping the model point under it
+ *  fixed. */
+function zoomAbout(
+  v: SvgViewTransform,
+  factor: number,
+  px: number,
+  py: number,
+): SvgViewTransform {
+  const k = Math.min(4, Math.max(0.05, v.k * factor));
+  return {
+    k,
+    tx: px - ((px - v.tx) / v.k) * k,
+    ty: py - ((py - v.ty) / v.k) * k,
+  };
+}
+
+function isAffordanceZone(hit: StructuralHit | null): boolean {
+  return hit !== null && hit.zone === "glyph";
+}
 
 function glyphBox(
   g: { x: number; y: number; width: number; height: number },
@@ -115,6 +168,52 @@ export interface StructuralSvgViewProps extends ElementPointerHandlers<Structura
    *  line above the name (UML convention). Default 1 leaves
    *  existing scenes unchanged. */
   headerLines?: 1 | 2;
+  /** R-10 (register, 2026-08-05): screen-pixel tap slop before a
+   *  click is treated as the end of a pan and suppressed. Defaults
+   *  to the pointer's own slop (4px fine, 12px coarse); 0 disables
+   *  suppression. */
+  clickDragThreshold?: number;
+  /** R-9 (register, 2026-08-05): the view transform, CONTROLLED.
+   *  Pass it with onViewChange to drive zoom and pan from the host
+   *  (custom gestures, a restored viewport, a minimap). Omit both
+   *  and the view manages its own transform as before. */
+  view?: SvgViewTransform;
+  /** Fires on every internal transform change (wheel, pinch, pan,
+   *  initial fit), whether or not `view` is controlled. */
+  onViewChange?: (view: SvgViewTransform) => void;
+  /** R-9: two-pointer pinch zoom. Default true; the gesture scales
+   *  about its own midpoint using the same transform as the wheel. */
+  pinchZoom?: boolean;
+  /** R-12d (round 21): node drag offsets, CONTROLLED. Pass with
+   *  onDragOffsetsChange to persist and restore a reader's
+   *  arrangement. Omit both and the view keeps them internally as
+   *  before. */
+  dragOffsets?: Record<string, { dx: number; dy: number }>;
+  /** Fires with the complete offset map after every drag step. */
+  onDragOffsetsChange?: (
+    offsets: Record<string, { dx: number; dy: number }>,
+  ) => void;
+  /** R-12d: the per-move delta in MODEL units, for hosts that
+   *  mutate their own geometry document instead of storing
+   *  offsets. */
+  onNodeMove?: (nodeId: string, dx: number, dy: number) => void;
+  /** R-12a (round 21): per-element presentational overrides, as a
+   *  PROP rather than a store subscription, so the view stays pure
+   *  and a consumer can scope overrides per surface (the same
+   *  element often appears in several views). Build it with
+   *  overridesToStructuralStyles.
+   *
+   *  PRECEDENCE: rowSeverities beats these, and these beat the
+   *  theme. A violation tint is a correctness signal; an override
+   *  is a preference; the theme is the default. */
+  nodeStyles?: ReadonlyMap<string, StructuralNodeStyle>;
+  /** R-12c (round 21): a size override is LAYOUT INPUT, not
+   *  presentation, so the view reports the request instead of
+   *  silently overlapping neighbours and invalidating the routes
+   *  computed around the old box. Wire this to mutate the geometry
+   *  document and re-run the layout. Unwired, the editor suppresses
+   *  the size control rather than offering an inert one. */
+  onNodeStyleGeometryChange?: (nodeId: string, size: number) => void;
   input: StructuralGraphInput;
   geometry: StructuralGeometry;
   width: number;
@@ -141,6 +240,14 @@ const SEVERITY_TINT: Record<"violation" | "warning" | "info", string> = {
 const FIT_PADDING = 32;
 
 export function StructuralSvgView({
+  nodeStyles,
+  dragOffsets: dragOffsetsProp,
+  onDragOffsetsChange,
+  onNodeMove,
+  view: viewProp,
+  onViewChange,
+  pinchZoom = true,
+  clickDragThreshold,
   glyphs,
   headerLines = 1,
   input,
@@ -180,7 +287,28 @@ export function StructuralSvgView({
     };
   }, [geometry, width, height]);
 
-  const [view, setView] = useState<{ k: number; tx: number; ty: number }>(fit);
+  const [internalView, setInternalView] = useState<SvgViewTransform>(fit);
+  // R-9: controlled when `view` is supplied; otherwise internal.
+  const view = viewProp ?? internalView;
+  // Resolved through the functional updater so no ref is read
+  // during render; the controlled prop wins as the base when the
+  // host supplies one.
+  const setView = useCallback(
+    (next: SvgViewTransform | ((v: SvgViewTransform) => SvgViewTransform)) => {
+      setInternalView((prev) => {
+        const base = viewProp ?? prev;
+        return typeof next === "function" ? next(base) : next;
+      });
+    },
+    [viewProp],
+  );
+  // One notification path for every transform change, internal or
+  // from the initial fit.
+  React.useEffect(() => {
+    onViewChange?.(view);
+    // Fires on transform identity, not on handler identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.k, view.tx, view.ty]);
   const [lastFit, setLastFit] = useState(fit);
   if (lastFit !== fit) {
     // New geometry/viewport: reset to the fresh fit (the documented
@@ -198,9 +326,26 @@ export function StructuralSvgView({
   const nodeDrag = useRef<{ id: string; lastX: number; lastY: number } | null>(
     null,
   );
-  const [dragOffsets, setDragOffsets] = useState<
+  // R-12d (round 21, 2026-08-05): a reader's arrangement was
+  // trapped in internal state, so styling could persist while the
+  // layout reset on every reload, which reads as the feature being
+  // half-broken. Offsets follow the R-9 view precedent exactly:
+  // controlled when supplied, internal otherwise, and always
+  // reported.
+  const [internalOffsets, setInternalOffsets] = useState<
     Record<string, { dx: number; dy: number }>
   >({});
+  const dragOffsets = dragOffsetsProp ?? internalOffsets;
+  const setDragOffsets = useCallback(
+    (
+      next: (
+        m: Record<string, { dx: number; dy: number }>,
+      ) => Record<string, { dx: number; dy: number }>,
+    ) => {
+      setInternalOffsets((prev) => next(dragOffsetsProp ?? prev));
+    },
+    [dragOffsetsProp],
+  );
   const offsetOf = (ownerId: string): { dx: number; dy: number } =>
     dragOffsets[ownerId] ?? { dx: 0, dy: 0 };
   // RTE-011 (LR-15/22, owner review 2026-07-22): live re-routing.
@@ -284,7 +429,22 @@ export function StructuralSvgView({
       if (gl === undefined) return null;
       const gRaw = effectiveGeometry.nodes[elementId];
       if (gRaw === undefined) return null;
-      const box = glyphBox(gRaw, effectiveGeometry.headerHeight, gl.slot);
+      // R-11: a row's glyph is right-aligned in the row band, so it
+      // is probed against the row's own geometry rather than a
+      // header strip.
+      const box =
+        gRaw.kind === "row"
+          ? {
+              x: gRaw.x + gRaw.width - GLYPH_W - GLYPH_PAD,
+              y: gRaw.y + (gRaw.height - GLYPH_H) / 2,
+            }
+          : glyphBox(
+              gRaw,
+              gRaw.kind === "container"
+                ? effectiveGeometry.headerHeight
+                : PLAIN_GLYPH_BAND,
+              gl.slot,
+            );
       return point.x >= box.x &&
         point.x <= box.x + GLYPH_W &&
         point.y >= box.y &&
@@ -315,6 +475,10 @@ export function StructuralSvgView({
     hit,
     toModel,
     pointerHandlers,
+    // R-10 (register, 2026-08-05): forwarded so a consumer can tune
+    // tap slop per surface. Undefined keeps the device-derived
+    // default (4px fine, 12px coarse).
+    { clickDragThreshold },
   );
 
   // MR-11 round-4 (owner: wheel "zooms the overall application
@@ -331,25 +495,49 @@ export function StructuralSvgView({
     if (!el) return;
     const onWheelNative = (e: WheelEvent) => {
       e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      // R-9 (register, 2026-08-05): read deltaY's MAGNITUDE instead
+      // of stepping by a fixed 1.1. A trackpad pinch and a synthetic
+      // wheel are both continuous inputs; quantising them made zoom
+      // feel notched and forced consumers to express a smooth pinch
+      // as a whole number of steps. Clamped so one chunky mouse
+      // notch still lands near the old factor.
+      const magnitude = Math.min(Math.abs(e.deltaY) || 100, 400) / 100;
+      const factor =
+        e.deltaY < 0 ? Math.pow(1.1, magnitude) : Math.pow(1 / 1.1, magnitude);
       const rect = el.getBoundingClientRect();
-      const px = e.clientX - rect.left;
-      const py = e.clientY - rect.top;
-      setView((v) => {
-        const k = Math.min(4, Math.max(0.05, v.k * factor));
-        // Zoom about the pointer: keep the model point under it
-        // fixed.
-        return {
-          k,
-          tx: px - ((px - v.tx) / v.k) * k,
-          ty: py - ((py - v.ty) / v.k) * k,
-        };
-      });
+      setView((v) =>
+        zoomAbout(v, factor, e.clientX - rect.left, e.clientY - rect.top),
+      );
     };
     el.addEventListener("wheel", onWheelNative, { passive: false });
     return () => el.removeEventListener("wheel", onWheelNative);
   }, []);
+  // R-9 (register, 2026-08-05): pointers tracked BY ID so a second
+  // finger can start a pinch. Previously only one pointer was
+  // tracked and touchAction:none suppressed the browser's own
+  // pinch, so a touch device could pan but never scale: on a dense
+  // diagram most of the scene was unreachable.
+  const onDragOffsetsChangeRef = useRef(onDragOffsetsChange);
+  const onNodeMoveRef = useRef(onNodeMove);
+  React.useEffect(() => {
+    onDragOffsetsChangeRef.current = onDragOffsetsChange;
+    onNodeMoveRef.current = onNodeMove;
+  }, [onDragOffsetsChange, onNodeMove]);
+  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinch = useRef<{ dist: number } | null>(null);
+
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinchZoom && pointers.current.size === 2) {
+      // The second finger cancels any pan or node drag the first
+      // started, so the scene does not slide underneath the scale.
+      drag.current = null;
+      nodeDrag.current = null;
+      const [a, b] = [...pointers.current.values()];
+      if (a && b) pinch.current = { dist: Math.hypot(b.x - a.x, b.y - a.y) };
+      capturePointer(e);
+      return;
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     const model = {
       x: (e.clientX - rect.left - view.tx) / view.k,
@@ -381,12 +569,42 @@ export function StructuralSvgView({
         lastX: e.clientX,
         lastY: e.clientY,
       };
-    } else {
+    } else if (!isAffordanceZone(h)) {
+      // R-10 (upstream register, 2026-08-05): a press on an
+      // AFFORDANCE must not start a canvas pan. Pressing a glyph is
+      // an intent to act on that element; with a mouse the pan was
+      // invisible because a click does not wobble, but a finger
+      // dragged the whole scene out from under every tap. Affordance
+      // zones neither drag their node nor pan the canvas.
       drag.current = { x: e.clientX, y: e.clientY };
     }
-    e.currentTarget.setPointerCapture(e.pointerId);
+    capturePointer(e);
   };
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (pointers.current.has(e.pointerId)) {
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+    if (pinch.current !== null && pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()];
+      if (!a || !b) return;
+      const dist = Math.hypot(b.x - a.x, b.y - a.y);
+      const prev = pinch.current.dist;
+      if (prev > 0 && dist > 0) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        // Scale about the gesture MIDPOINT, the same transform the
+        // wheel applies about the cursor.
+        setView((v) =>
+          zoomAbout(
+            v,
+            dist / prev,
+            (a.x + b.x) / 2 - rect.left,
+            (a.y + b.y) / 2 - rect.top,
+          ),
+        );
+        pinch.current = { dist };
+      }
+      return;
+    }
     const nd = nodeDrag.current;
     if (nd) {
       const dx = (e.clientX - nd.lastX) / view.k;
@@ -395,8 +613,16 @@ export function StructuralSvgView({
       nd.lastY = e.clientY;
       setDragOffsets((m) => {
         const cur = m[nd.id] ?? { dx: 0, dy: 0 };
-        return { ...m, [nd.id]: { dx: cur.dx + dx, dy: cur.dy + dy } };
+        const nextOffsets = {
+          ...m,
+          [nd.id]: { dx: cur.dx + dx, dy: cur.dy + dy },
+        };
+        onDragOffsetsChangeRef.current?.(nextOffsets);
+        return nextOffsets;
       });
+      // R-12d: the per-move delta, for hosts that mutate their own
+      // geometry document rather than storing offsets.
+      onNodeMoveRef.current?.(nd.id, dx, dy);
       return;
     }
     if (!drag.current) return;
@@ -405,7 +631,13 @@ export function StructuralSvgView({
     drag.current = { x: e.clientX, y: e.clientY };
     setView((v) => ({ ...v, tx: v.tx + dx, ty: v.ty + dy }));
   };
-  const onPointerUp = () => {
+  const onPointerUp = (e?: React.PointerEvent<SVGSVGElement>) => {
+    if (e !== undefined) pointers.current.delete(e.pointerId);
+    else pointers.current.clear();
+    // R-9: lifting one finger ends the pinch; the remaining finger
+    // does NOT silently become a pan, or the scene lurches from the
+    // stale down-point.
+    if (pointers.current.size < 2) pinch.current = null;
     drag.current = null;
     nodeDrag.current = null;
   };
@@ -457,7 +689,13 @@ export function StructuralSvgView({
       }}
       onPointerUp={(e) => {
         pointerProps.onPointerUp(e);
-        onPointerUp();
+        onPointerUp(e);
+      }}
+      onPointerCancel={(e) => {
+        // R-9: a cancelled touch (scroll takeover, call, palm) must
+        // release its slot or the registry keeps a phantom finger
+        // and the next tap looks like a pinch.
+        onPointerUp(e);
       }}
     >
       <g
@@ -495,9 +733,12 @@ export function StructuralSvgView({
                 width={g.width}
                 height={g.height}
                 rx={4}
-                fill={theme.containerFill}
-                stroke={theme.containerStroke}
-                strokeWidth={closed ? 2.4 : 1.2}
+                fill={nodeStyles?.get(id)?.fill ?? theme.containerFill}
+                stroke={nodeStyles?.get(id)?.stroke ?? theme.containerStroke}
+                opacity={nodeStyles?.get(id)?.opacity}
+                strokeWidth={
+                  nodeStyles?.get(id)?.strokeWidth ?? (closed ? 2.4 : 1.2)
+                }
                 strokeDasharray={
                   distinguishClosed && !closed ? "6 3" : undefined
                 }
@@ -627,6 +868,50 @@ export function StructuralSvgView({
               >
                 {g.text ?? ""}
               </text>
+              {/* R-11 (register, 2026-08-05): a row can carry the
+                  same affordance as a node. Without it a reader
+                  learns that the icon is the button and then meets
+                  rows where the whole line is the button instead;
+                  with navigation bound to zone "glyph" as the
+                  interaction contract advises, a container's
+                  contents were readable and unreachable. The row
+                  glyph is right-aligned inside the row band. */}
+              {(() => {
+                const rg = glyphs?.get(id);
+                if (rg === undefined) return null;
+                const bx = g.x + g.width - GLYPH_W - GLYPH_PAD;
+                const by = g.y + (g.height - GLYPH_H) / 2;
+                return (
+                  <g
+                    className="g3t-ssv-glyph"
+                    data-ssv-glyph={id}
+                    data-ssv-glyph-slot="row"
+                    style={{ cursor: "pointer" }}
+                  >
+                    <title>{rg.title ?? rg.text}</title>
+                    <rect
+                      x={bx}
+                      y={by}
+                      width={GLYPH_W}
+                      height={GLYPH_H}
+                      rx={3}
+                      fill={theme.headerFill}
+                      stroke={theme.containerStroke}
+                      strokeWidth={1}
+                    />
+                    <text
+                      x={bx + GLYPH_W / 2}
+                      y={by + GLYPH_H / 2 + 3.5}
+                      textAnchor="middle"
+                      fontSize={9}
+                      fontWeight={600}
+                      fill={theme.headerText}
+                    >
+                      {rg.text}
+                    </text>
+                  </g>
+                );
+              })()}
             </g>
           );
         })}
@@ -635,6 +920,22 @@ export function StructuralSvgView({
         {plain.map(([id, gRaw]) => {
           const off = offsetOf(id);
           const g = { ...gRaw, x: gRaw.x + off.dx, y: gRaw.y + off.dy };
+          // R-5 (upstream register, 2026-08-03): glyphs and
+          // headerLines were CONTAINER-ONLY, so a scene rendered
+          // inconsistently by node shape rather than by anything the
+          // consumer asked for, and a consumer following our own
+          // guidance to navigate from zone "glyph" silently lost
+          // navigation on every node without compartments. Both
+          // features apply here too; a plain node has no header
+          // strip, so the glyph sits inside the box's own corner and
+          // the two-line form splits the label.
+          const header = input.nodes.find((n) => n.id === id)?.header;
+          const twoLine =
+            headerLines === 2 &&
+            header?.stereotype !== undefined &&
+            header.name !== undefined;
+          const glyph = glyphs?.get(id);
+          const label = g.text ?? header?.name ?? id;
           return (
             <g key={id} data-ssv-node={id} data-ssv-kind="node">
               <rect
@@ -643,20 +944,83 @@ export function StructuralSvgView({
                 width={g.width}
                 height={g.height}
                 rx={6}
-                fill={theme.nodeFill}
-                stroke={theme.containerStroke}
-                strokeWidth={1.2}
+                fill={nodeStyles?.get(id)?.fill ?? theme.nodeFill}
+                stroke={nodeStyles?.get(id)?.stroke ?? theme.containerStroke}
+                opacity={nodeStyles?.get(id)?.opacity}
+                strokeWidth={nodeStyles?.get(id)?.strokeWidth ?? 1.2}
               />
-              <text
-                x={g.x + g.width / 2}
-                y={g.y + g.height / 2 + 4}
-                textAnchor="middle"
-                fontSize={11}
-                fill={theme.nodeText}
-                data-ssv-label={id}
-              >
-                {g.text ?? input.nodes.find((n) => n.id === id)?.header?.name}
-              </text>
+              {twoLine && header ? (
+                <>
+                  <text
+                    x={g.x + g.width / 2}
+                    y={g.y + g.height / 2 - 3}
+                    textAnchor="middle"
+                    fontSize={9.5}
+                    fontWeight={500}
+                    fill={theme.nodeText}
+                    data-ssv-label-stereotype={id}
+                  >
+                    {`\u00ab${header.stereotype ?? ""}\u00bb`}
+                  </text>
+                  <text
+                    x={g.x + g.width / 2}
+                    y={g.y + g.height / 2 + 10}
+                    textAnchor="middle"
+                    fontSize={11}
+                    fill={theme.nodeText}
+                    data-ssv-label={id}
+                  >
+                    {header.name}
+                  </text>
+                </>
+              ) : (
+                <text
+                  x={g.x + g.width / 2}
+                  y={g.y + g.height / 2 + 4}
+                  textAnchor="middle"
+                  fontSize={11}
+                  fill={theme.nodeText}
+                  data-ssv-label={id}
+                >
+                  {label}
+                </text>
+              )}
+              {glyph !== undefined && (
+                <g
+                  className="g3t-ssv-glyph"
+                  data-ssv-glyph={id}
+                  data-ssv-glyph-slot={glyph.slot}
+                  style={{ cursor: "pointer" }}
+                >
+                  <title>{glyph.title ?? glyph.text}</title>
+                  <rect
+                    x={glyphBox(g, PLAIN_GLYPH_BAND, glyph.slot).x}
+                    y={glyphBox(g, PLAIN_GLYPH_BAND, glyph.slot).y}
+                    width={GLYPH_W}
+                    height={GLYPH_H}
+                    rx={3}
+                    fill={theme.headerFill}
+                    stroke={theme.containerStroke}
+                    strokeWidth={1}
+                  />
+                  <text
+                    x={
+                      glyphBox(g, PLAIN_GLYPH_BAND, glyph.slot).x + GLYPH_W / 2
+                    }
+                    y={
+                      glyphBox(g, PLAIN_GLYPH_BAND, glyph.slot).y +
+                      GLYPH_H / 2 +
+                      3.5
+                    }
+                    textAnchor="middle"
+                    fontSize={9}
+                    fontWeight={600}
+                    fill={theme.headerText}
+                  >
+                    {glyph.text}
+                  </text>
+                </g>
+              )}
             </g>
           );
         })}

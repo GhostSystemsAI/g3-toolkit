@@ -143,8 +143,21 @@ describe("g3t engine phases (D1)", () => {
   });
 
   it("emission is deterministic to the byte", () => {
-    const a = JSON.stringify(g3tLayoutFlat(FLAT));
-    const b = JSON.stringify(g3tLayoutFlat(flatFixture(7101, 40, 70)));
+    // The layout is ANYTIME: crossing-minimization and network
+    // simplex both stop on a wall-clock budget, so two runs on a
+    // differently-loaded machine can legitimately stop at different
+    // sweeps and emit different (equally valid) coordinates. This
+    // assertion is about ALGORITHMIC determinism, so the budgets
+    // are pinned generously here; without pinning the test flakes
+    // under CPU pressure, which is exactly how it surfaced (an
+    // unrelated test added to this file shifted the timing).
+    const pinned = {
+      orderingBudgetMs: 60_000,
+      networkSimplexBudgetMs: 60_000,
+      maxSweeps: 8,
+    };
+    const a = JSON.stringify(g3tLayoutFlat(FLAT, pinned));
+    const b = JSON.stringify(g3tLayoutFlat(flatFixture(7101, 40, 70), pinned));
     expect(a).toBe(b);
   });
 });
@@ -995,6 +1008,84 @@ describe("R-4: target-first anchoring (upstream round 17)", () => {
         .sort((a, b) => a - b);
       const unique = new Set(arrivals.map((y) => Math.round(y)));
       expect(unique.size, `${anchor}: arrivals must not stack`).toBe(4);
+    }
+  });
+
+  it("DISCRIMINATES: target-first differs from source-first and cuts bends (dense cross-connection)", async () => {
+    // The v1.0.0 oracle for this option did NOT discriminate: it
+    // passed under both modes, and a consumer measured 0 of 34
+    // real views differing. Root cause: the second pass only
+    // SORTED by the far end's assigned coordinate, and in a layered
+    // scene the far boxes never overlap on the cross axis, so that
+    // sort always reproduces the plain center order. This fixture
+    // is complete-bipartite on purpose (every node degree 3, cross
+    // axis interleaved) and asserts a real behavioral difference,
+    // so the option cannot silently become a no-op again.
+    const { routeStructuralEdges } = await import("./g3t-routing");
+    const srcs = ["a", "b", "c"];
+    const dsts = ["x", "y", "z"];
+    const edges = srcs.flatMap((sid) =>
+      dsts.map((d) => ({ id: `${sid}${d}`, source: sid, target: d })),
+    );
+    const ys: Record<string, number> = {
+      a: 20,
+      b: 400,
+      c: 200,
+      x: 300,
+      y: 40,
+      z: 160,
+    };
+    const input: StructuralGraphInput = {
+      nodes: [...srcs, ...dsts].map((id) => ({
+        id,
+        width: 120,
+        height: 160,
+      })),
+      edges,
+    };
+    const geometry = {
+      nodes: Object.fromEntries(
+        [...srcs, ...dsts].map((id) => [
+          id,
+          {
+            x: srcs.includes(id) ? 40 : 700,
+            y: ys[id] ?? 0,
+            width: 120,
+            height: 160,
+            kind: "node" as const,
+          },
+        ]),
+      ),
+      ports: {},
+      edges: {},
+    };
+    const run = (anchor: "source" | "target") =>
+      routeStructuralEdges(input, geometry as never, {
+        direction: "RIGHT",
+        anchor,
+      });
+    const bySource = run("source");
+    const byTarget = run("target");
+    const differing = edges.filter(
+      (e) =>
+        JSON.stringify(bySource[e.id]?.points) !==
+        JSON.stringify(byTarget[e.id]?.points),
+    ).length;
+    expect(differing, "the option must change routes").toBeGreaterThan(0);
+    const bends = (r: Record<string, { points: unknown[] }>) =>
+      edges.reduce(
+        (n, e) => n + Math.max(0, (r[e.id]?.points.length ?? 2) - 2),
+        0,
+      );
+    expect(bends(byTarget)).toBeLessThan(bends(bySource));
+    // And departures never collide after the alignment spread.
+    for (const node of srcs) {
+      const ysOut = edges
+        .filter((e) => e.source === node)
+        .map((e) => Math.round(byTarget[e.id]?.points[0]?.y ?? 0));
+      expect(new Set(ysOut).size, `${node}: departures must be distinct`).toBe(
+        ysOut.length,
+      );
     }
   });
 

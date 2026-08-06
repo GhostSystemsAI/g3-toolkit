@@ -43,6 +43,7 @@ export {
 export type {
   StructuralSvgTheme,
   StructuralSvgViewProps,
+  SvgViewTransform,
 } from "./views/svg/structural-svg-view";
 export { useStructuralLayout } from "./views/canvas/use-structural-layout";
 export type { StructuralLayoutResult } from "./views/canvas/use-structural-layout";
@@ -68,6 +69,20 @@ export * from "./views/coverage";
 export * from "./views/provenance";
 
 // ── Controls (interaction subdirs) ──────────────────────────────────
+// R-7 / R-1 / R-10: these shipped behind the interaction barrel and
+// were unreachable from the package entry, so a consumer following
+// the documented recipe could not import them. Verified by the
+// export gate now.
+export {
+  relayoutAroundFixed,
+  type RelayoutAroundFixedOptions,
+} from "./interaction/relayout";
+export {
+  useElementPointerEvents,
+  defaultClickDragThreshold,
+  type ElementPointerOptions,
+  type ElementPointerHandlers,
+} from "./interaction/element-pointer-events";
 export * from "./interaction/encoding";
 export { NodeStyleEditor } from "./interaction/encoding/NodeStyleEditor";
 export type { NodeStyleEditorProps } from "./interaction/encoding/NodeStyleEditor";
@@ -156,3 +171,10 @@ export {
   DEFAULT_STYLESHEET,
   themeColorRules,
 } from "./views/canvas/CytoscapeCanvas";
+
+// R-15 (register, 2026-08-06): types a consumer must NAME to use a
+// documented prop. The reported instance (SvgViewTransform) was one
+// of four; the type-reachability gate found the rest.
+export type { NodeStyleTarget } from "./interaction/encoding/NodeStyleEditor";
+export type { LegendElement } from "./interaction/encoding/SpecLegend";
+export type { CanvasInteractionOptions } from "./views/canvas/CytoscapeCanvas";

@@ -1,5 +1,212 @@
 # Changelog
 
+## 1.0.0 (continued): register of 2026-08-06 (R-15, R-16, R-17)
+
+- **R-16, generalised as asked**: the editor gated size and nothing
+  else, so a structural target was offered a shape selector whose
+  every choice did nothing. Both renderers now declare what they
+  can APPLY (`STRUCTURAL_STYLE_CHANNELS`, `CANVAS_STYLE_CHANNELS`),
+  the editor gates every control and every write on that set, and
+  `channels` overrides it per call. Auditing for this found the
+  same over-promise one layer down: `StructuralNodeStyle` declared
+  `icon` and `labelField`, the applier emitted them, and the view
+  applied neither. Both are removed from the type and the applier
+  rather than left as fields nothing reads.
+- **R-17**: `FloatingLegend` takes the `elements` descriptor and an
+  optional `ugm`, matching `SpecLegend`, so a floating legend works
+  over a structural scene without the consumer positioning the
+  inner component itself.
+- **R-15, and the gate they asked for instead of the fix**:
+  `SvgViewTransform` was declared, used as the type of a documented
+  prop, and not re-exported. Their diagnosis (that the export gate
+  checks value exports more thoroughly than type exports) was
+  right, so `verify:typeref` now checks that every type named in a
+  public `*Props` interface is nameable from the entry, following
+  `export *` chains so re-exports do not read as failures. It found
+  three more instances beyond the reported one:
+  `NodeStyleTarget`, `LegendElement`, and
+  `CanvasInteractionOptions`. All four are exported; 52 prop
+  interfaces now pass.
+- Gates: core 431, react 738, charts 20, demo 184, examples 60
+  = 1,433 tests exit-0; verify chain (now including type
+  reachability), spec gate, e2e 68/14, statics green.
+
+## 1.0.0 (continued): R-12 and R-13 in full (round 21)
+
+The full text arrived; all four R-12 parts and the remaining R-13
+item are implemented.
+
+- **12a structural applier**: `overridesToStructuralStyles` is the
+  renderer-neutral counterpart of `overridesToCytoscapeStyles`,
+  and `StructuralSvgView` takes `nodeStyles` as a PROP rather than
+  subscribing to the store, keeping the view pure and letting a
+  consumer scope overrides per surface. Precedence is stated and
+  implemented: rowSeverities beats overrides beats theme, because
+  a violation tint is a correctness signal and an override is a
+  preference. Size is deliberately not resolved by the applier.
+- **12b renderer-neutral editor**: `NodeStyleEditor` takes a
+  `target` descriptor ({ id, type, label, current, isPie }), with
+  the ugm/nodeId form kept as the convenience overload. The editor
+  now works on any graph a host has not loaded into a UGM, which
+  helps the canvas case too.
+- **12c size ownership: THEIR OPTION 2, changing my provisional
+  answer.** The scoping note had proposed option 3 (canvas-only);
+  their argument that they own and rebuild the geometry document
+  on every scene change is better, and option 2 composes with
+  everything. A size change on a structural target is REPORTED via
+  `onGeometryChange` rather than written into a presentational
+  override. Option 3 remains as the fallback: with no handler
+  wired the control is suppressed with an explanation instead of
+  being offered inert.
+- **12d arrangement out of the view**: `dragOffsets` is
+  controllable with `onDragOffsetsChange`, following the R-9 view
+  precedent, plus `onNodeMove(id, dx, dy)` for hosts that mutate
+  their own geometry. Persistence deliberately not built: the
+  model is plain serialisable data, as the request notes.
+- **R-13.3 one legend for both renderers**: `SpecLegend`'s `ugm`
+  is optional and it accepts `elements` descriptors, the same
+  shape as the editor target. `ResolveContext.ugm` became optional
+  with an honest fallback: an auto domain without data yields a
+  neutral unit range rather than a guess, so a structural caller
+  states its domain.
+- **Export defect found while writing the handoff**:
+  relayoutAroundFixed, useElementPointerEvents, and
+  defaultClickDragThreshold were implemented, tested, AND
+  documented, but never re-exported from the package entry, so a
+  consumer following the documented R-7 recipe could not import
+  the function it names. Now exported and covered by the entry
+  gate. Found by verifying every symbol a handoff document was
+  about to cite, which is the check that should have run when
+  each landed.
+- Budgets: core 154 to 155.5 KB, react 384.5 to 386 KB, with
+  rationale.
+- Gates: core 431, react 733, charts 20, demo 184, examples 60
+  = 1,428 tests exit-0; verify chain, spec gate, e2e 68/14,
+  statics green.
+
+## 1.0.0 (continued): the 2026-08-05 register
+
+Four of five open requests closed; R-12 scoped rather than
+started. The consumer's re-measurement confirms the earlier R-4
+fix on real data: 34 of 34 views differ between anchorings, total
+bends 900 to 826, no view worse.
+
+- **R-10 (my defect)**: the glyph affordance added for navigation
+  STARTED A CANVAS PAN, so pressing it dragged the scene. Silent
+  with a mouse, constant with a finger. Affordance zones now start
+  neither a node drag nor a pan, behind a named predicate so
+  future affordance zones extend in one place.
+  `clickDragThreshold` is forwarded from `StructuralSvgView`, and
+  **the model-unit threshold was my design error and is
+  reversed**: tap slop belongs to the input device, so the
+  comparison is in SCREEN pixels. Model units got zoom-invariance
+  backwards (at k = 0.5 a 5px wobble measured 10 units and killed
+  the tap). Defaults resolve per gesture from pointerType: 4px
+  fine, 12px coarse.
+- **R-9**: both offered options implemented. Pointers are tracked
+  by id and two of them pinch about the gesture midpoint through
+  the same `zoomAbout` transform the wheel uses; the second finger
+  cancels any pan or node drag the first began. The transform is
+  exported as `SvgViewTransform` and controllable via `view` and
+  `onViewChange`, which also closes saved-viewport restoration.
+  The wheel now reads deltaY's MAGNITUDE, so zoom is proportional
+  rather than notched. Pointer capture is guarded (jsdom and some
+  engines lack it on SVG: a latent mid-gesture throw).
+- **R-11**: compartment rows carry glyphs from the same map,
+  right-aligned in the row band, reporting `zone: "glyph"` with
+  the row's own id. `GlyphSlot` gains `"row"`. One navigation rule
+  now reaches container contents.
+- **R-13, correctness half**: `overriddenNodeIds` and
+  `overrideScopeSummary` exported (type scopes resolve through the
+  graph); `SpecLegend` accepts `overrides` and `onResetOverrides`
+  and discloses active overrides instead of continuing to assert a
+  rule the reader has locally broken. `FloatingLegend` forwards
+  both. The structural-legend half sequences with R-12.
+- **R-12**: scoped in planning/g3l/r12-scoping.md rather than
+  guessed at; its full text did not arrive with the register. The
+  provisional answer on the size question is that a size override
+  should be REFUSED on structural scenes rather than silently
+  ignored, since geometry is layout input and changing it
+  post-layout either invalidates routes or discards the reader's
+  arrangement.
+- React budget 379.5 to 384.5 KB with rationale.
+- Gates: core 428, react 727, charts 20, demo 184, examples 60
+  = 1,419 tests exit-0; verify chain, spec gate, e2e parse 68/14,
+  statics green.
+
+## 1.0.0 (continued): the consolidated upstream register
+
+Folded into the 1.0.0 entry below rather than filed as 1.0.1: the
+tag has not been cut, so these are release content, not a patch on
+top of a release. The R-4 finding in particular must not ship as
+1.0.0 behavior.
+
+### R-4 as shipped in 1.0.0 was a NO-OP (found from a consumer measurement)
+
+A consumer reported that `anchor: "source"` and `anchor: "target"`
+produced identical routes across 34 real views. Verified here and
+worse than reported: 0 of 9 routes differed even in a dense
+complete-bipartite fixture, so the option did nothing anywhere.
+
+Root cause: the second pass only SORTED by the far end's assigned
+coordinate. In a layered scene the far boxes never overlap on the
+cross axis, so that sort reproduces the plain center order and the
+modes coincide by construction.
+
+Compounding it: the 1.0.0 oracle for this option did not
+discriminate. It passed under `anchor: "source"` too, which is how
+a no-op shipped as a feature. Verified directly rather than
+assumed.
+
+Fixed: target-first now ALIGNS each departure with the arrival
+already fixed at the far end, clamped into the side's span with a
+forward/backward spread pass so saturated anchors cannot collapse
+onto the boundary. The replacement oracle asserts a real
+behavioral difference, a lower bend count, and distinct
+departures, so this cannot silently regress to a no-op. Measured
+on the dense fixture: 18 bends to 14.
+
+### A latent CI flake, surfaced by that work
+
+Adding a test to the layered suite broke the unrelated "emission
+is deterministic to the byte" assertion. That test compares two
+runs of an ANYTIME layout whose crossing-minimization and network
+simplex both stop on a WALL-CLOCK budget, so a differently-loaded
+machine legitimately stops at a different sweep; it would have
+flaked on any busy CI runner. The budgets are pinned in that test
+now, so it asserts algorithmic determinism as intended.
+
+### Register requests, all four closed
+
+- **R-5**: `glyphs` and `headerLines` were CONTAINER-ONLY, so a
+  scene rendered inconsistently by node shape, and a consumer
+  following this project's own guidance to navigate from
+  `zone: "glyph"` silently lost navigation on every node without
+  compartments. Plain nodes now draw glyphs (inside their own
+  corner, having no header strip) and honour `headerLines={2}`,
+  reporting identically to containers. Render and hit test share
+  one band constant so they cannot drift.
+- **R-6**: `g3tLayoutStructural` forwards `anchor` to its router,
+  making the R-4 work reachable from the single call most
+  consumers make.
+- **R-7**: `relayoutAroundFixed(cy, { fixed })` settles neighbours
+  around a moved container: locks the user-placed elements and
+  their descendants, re-runs the layout incrementally, restores
+  the prior lock state including locks the host set itself. The
+  request offered a documentation statement instead; for a toolkit
+  with draggable containers that was the wrong answer.
+- **R-8**: the shape control is suppressed for multi-type (pie)
+  nodes with an inline explanation, and the write path refuses to
+  emit a shape override for them, so the editor can no longer
+  produce two shapes at once.
+- Docs: Pattern 1 states that header features apply to plain
+  nodes; the consumption guide documents the relayout helper.
+- Budgets: core 153.5 to 154 KB, react 376 to 379.5 KB, both with
+  inline rationale.
+- Gates: core 428, react 714, charts 20, demo 184, examples 60
+  = 1,406 tests exit-0; verify chain, spec gate, e2e parse 68/14,
+  statics green.
+
 ## 1.0.0 (release)
 
 First stable release. From this version the published surface

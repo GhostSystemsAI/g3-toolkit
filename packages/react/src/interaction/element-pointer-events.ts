@@ -37,12 +37,31 @@ function hitKey(h: unknown): string {
 
 export interface ElementPointerOptions {
   /** Upstream R-1 (round 17, 2026-07-28): a click that ENDS A PAN
-   *  must not fire onElementClick. The pointer-down model point is
+   *  must not fire onElementClick. The pointer-down point is
    *  recorded and a click is suppressed when the pointer travelled
-   *  further than this many MODEL units (default 4), matching the
-   *  canvas path's didDrag behavior. 0 restores the old
-   *  fire-always behavior. */
+   *  further than this threshold. 0 restores fire-always.
+   *
+   *  R-10 (register, 2026-08-05): the threshold is measured in
+   *  SCREEN pixels, not model units. Model units were chosen for
+   *  zoom-invariance and got it backwards: at k = 0.5 a 5px finger
+   *  wobble became 10 model units and suppressed the tap entirely.
+   *  Tap slop is a property of the input device, so screen space is
+   *  the invariant that matters. Default: 4px for a fine pointer,
+   *  12px for a coarse one (a finger's slop is not a mouse's),
+   *  resolved per gesture so a hybrid device behaves correctly with
+   *  whichever pointer is in use. */
   clickDragThreshold?: number;
+}
+
+/** R-10: the default tap slop for the pointer that produced this
+ *  event. Exported for consumers computing their own thresholds. */
+export function defaultClickDragThreshold(pointerType?: string): number {
+  if (pointerType === "touch" || pointerType === "pen") return 12;
+  if (pointerType === "mouse") return 4;
+  return typeof matchMedia === "function" &&
+    matchMedia("(pointer: coarse)").matches
+    ? 12
+    : 4;
 }
 
 export function useElementPointerEvents<H, E extends Element>(
@@ -67,8 +86,13 @@ export function useElementPointerEvents<H, E extends Element>(
     point: { x: number; y: number };
   } | null>(null);
   // R-1: the pointer-down model point, for the drag-suppression test.
-  const downPoint = useRef<{ x: number; y: number } | null>(null);
-  const dragThreshold = options?.clickDragThreshold ?? 4;
+  // R-10: recorded in SCREEN space, with the slop resolved from the
+  // pointer that started the gesture.
+  const downPoint = useRef<{
+    x: number;
+    y: number;
+    threshold: number;
+  } | null>(null);
 
   const resolve = useCallback(
     (e: React.MouseEvent<E> | React.PointerEvent<E>) => {
@@ -96,21 +120,24 @@ export function useElementPointerEvents<H, E extends Element>(
 
   return {
     onClick: (e) => {
-      // R-1: suppress the click that ends a pan. Compared in MODEL
-      // space so the threshold means the same thing at every zoom.
+      // R-1: suppress the click that ends a pan. R-10: compared in
+      // SCREEN pixels, because tap slop belongs to the device.
       const start = downPoint.current;
       downPoint.current = null;
-      if (start !== null && dragThreshold > 0) {
-        const p = toModel({ x: e.clientX, y: e.clientY }, e.currentTarget);
-        if (Math.hypot(p.x - start.x, p.y - start.y) > dragThreshold) return;
+      if (start !== null && start.threshold > 0) {
+        const dist = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+        if (dist > start.threshold) return;
       }
       dispatch(handlers.onElementClick, e);
     },
     onPointerDown: (e) => {
-      downPoint.current = toModel(
-        { x: e.clientX, y: e.clientY },
-        e.currentTarget,
-      );
+      downPoint.current = {
+        x: e.clientX,
+        y: e.clientY,
+        threshold:
+          options?.clickDragThreshold ??
+          defaultClickDragThreshold(e.pointerType),
+      };
       dispatch(handlers.onElementPointerDown, e);
     },
     onPointerUp: (e) => dispatch(handlers.onElementPointerUp, e),

@@ -35,6 +35,13 @@ a two-bend Z at most; overlapping drops route out the open side
 from an exposed border stretch; edge labels anchor at the target
 end, off the wire, in the opposite quadrant from port labels.
 
+Header features apply here too: `glyphs` draws the affordance
+inside the box's own top corner (a plain node has no header strip)
+and reports `zone: "glyph"` exactly as on containers, and
+`headerLines={2}` splits the stereotype onto its own line above
+the name. The two node kinds render the same features from the
+same props; nothing is container-only.
+
 ## Pattern 2: containment (header + compartments)
 
 Input: nodes with a header and compartments of rows.

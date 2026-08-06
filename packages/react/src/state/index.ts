@@ -6,7 +6,11 @@ export type { SelectionState } from "./selection-store";
 export { UndoRedoStack } from "@g3t/core";
 export type { UndoRedoOptions } from "@g3t/core";
 
-export { useStyleOverrideStore } from "./style-override-store";
+export {
+  useStyleOverrideStore,
+  overriddenNodeIds,
+  overrideScopeSummary,
+} from "./style-override-store";
 export { usePositionPinStore, computeLockedIds } from "./position-pin-store";
 export { useOverlayStore, computeOverlayMembership } from "./overlay-store";
 export type { OverlayMembership } from "./overlay-store";

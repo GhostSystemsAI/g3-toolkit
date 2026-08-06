@@ -59,7 +59,10 @@ export type GlyphSlot =
   | "bottom-left"
   | "bottom-right"
   | "top"
-  | "bottom";
+  | "bottom"
+  /** R-11: a compartment row's own affordance, right-aligned in the
+   *  row band. Rows have no corners to choose between. */
+  | "row";
 
 export interface StructuralHit {
   elementId: string;
@@ -231,6 +234,19 @@ export function hitTestStructural(
       p.y >= g.y &&
       p.y <= g.y + g.height
     ) {
+      // R-11 (register, 2026-08-05): a row can carry an affordance
+      // too; probe it BEFORE falling through to the row zone, so a
+      // single zone: "glyph" navigation rule reaches container
+      // contents as well as nodes.
+      const rowSlot = options?.glyphAt?.(id, p);
+      if (rowSlot !== null && rowSlot !== undefined) {
+        return {
+          elementId: id,
+          kind: "row",
+          zone: "glyph",
+          glyphSlot: rowSlot,
+        };
+      }
       return { elementId: id, kind: "row", zone: "row" };
     }
   }

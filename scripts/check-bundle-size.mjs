@@ -49,11 +49,15 @@ const BUDGETS = {
   // layout engine) lands, extract @g3t/layout (ARC-009), move the
   // router with it, and bring core back under its original envelope
   // rather than raising a third time.
-  // Owner batch + directives 2026-07-28: +1.0 KB total across the
-  // VR-9 detour helper, the port-pair within-body snap, and the
-  // congestion-demand sizing (ports + degree floor). All
+  // Owner batch + directives 2026-07-28: +1.0 KB across the VR-9
+  // detour helper, the port-pair within-body snap, and the
+  // congestion-demand sizing. Register 2026-08-03: +0.3 KB for the
+  // R-4 alignment spread (the option was a measured no-op before
+  // it; the two-pass spread is what makes it real). All
   // oracle-pinned.
-  core: 153.5 * 1024, // 184 KB
+  // Round 21 (2026-08-05): +1 KB for the structural style applier
+  // (R-12a), the renderer-neutral counterpart of the cytoscape one.
+  core: 155.5 * 1024, // 184 KB
   // Core ledger:
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with
@@ -205,8 +209,19 @@ const BUDGETS = {
   // set (multi-type helper, TreeView onSelect, inspector
   // titleAccessory, containment content-key) plus round-17 R-1
   // drag-suppressed clicks, R-2 glyph slots with their hit zone,
-  // and R-3 two-line headers. All oracle-pinned.
-  react: 376 * 1024, // 420 KB
+  // and R-3 two-line headers. Register 2026-08-03: +3 KB for R-5
+  // (glyphs and two-line headers on plain nodes: a second render
+  // branch), R-7 relayoutAroundFixed, and the R-8 suppression
+  // path. All oracle-pinned.
+  // Register 2026-08-05: +4.5 KB for R-9 (pinch zoom + controlled
+  // view transform), R-10 (affordance zones exempt from panning,
+  // screen-space slop resolved per pointer type), R-11 (row
+  // glyphs), and R-13 (override selectors + legend disclosure).
+  // All oracle-pinned.
+  // Round 21 (2026-08-05): +1.5 KB for R-12 (structural node
+  // styles, controlled drag offsets, the renderer-neutral editor
+  // target) and R-13.3 (one legend serving both renderers).
+  react: 386 * 1024, // 420 KB
   // - 384 -> 420 KB, 2026-07-07 (review remediation round 2): measured
   //   379.9 KB (99% of cap) after the emphasis/effects layer
   //   (emphasis store + class application), useStructuralCollapse,

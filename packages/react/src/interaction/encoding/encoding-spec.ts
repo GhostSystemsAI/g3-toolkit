@@ -174,8 +174,11 @@ function categoricalIndexer(seed?: readonly string[]): (v: string) => number {
 }
 
 export interface ResolveContext {
-  /** Auto domains and categorical value order need the data. */
-  ugm: UGM;
+  /** Auto domains and categorical value order need the data.
+   *  R-13.3 (round 21, 2026-08-05): optional, because a structural
+   *  scene has no UGM. Resolvers fall back to explicit domains and
+   *  overrides when it is absent. */
+  ugm?: UGM;
 }
 
 function numericDomain(
@@ -233,7 +236,12 @@ export function makeColorResolver(
   // sequential
   const dom =
     scale.domain === "auto"
-      ? numericDomain(ctx.ugm, driver ?? "", target)
+      ? // R-13.3: an auto domain needs the data; without a UGM the
+        // caller must state the domain, and a neutral unit range is
+        // the honest fallback rather than a guess.
+        ctx.ugm !== undefined
+        ? numericDomain(ctx.ugm, driver ?? "", target)
+        : ([0, 1] as [number, number])
       : scale.domain;
   const ramp = scale.ramp === "diverging" ? DIVERGING_SCALE : SEQUENTIAL_SCALE;
   return (attrs) => {
@@ -300,7 +308,12 @@ export function makeSizeResolver(
   if (scale.kind === "fixed") return () => scale.value;
   const dom =
     scale.domain === "auto"
-      ? numericDomain(ctx.ugm, driver ?? "", target)
+      ? // R-13.3: an auto domain needs the data; without a UGM the
+        // caller must state the domain, and a neutral unit range is
+        // the honest fallback rather than a guess.
+        ctx.ugm !== undefined
+        ? numericDomain(ctx.ugm, driver ?? "", target)
+        : ([0, 1] as [number, number])
       : scale.domain;
   const [outLo, outHi] = scale.range ?? [4, 32];
   return (attrs) => {
