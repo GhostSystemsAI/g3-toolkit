@@ -41,7 +41,8 @@ computation".
   `parseShaclReport`, `severityOverlays`, `shaclResultDrivers`,
   `shaclShapesToStructural`, `shaclRowSeverities`, `closedShapeIds`.
 - Structural (UML/SysML-style) layout: `layoutStructural`,
-  `isChainEdgeId`; rendered by `StructuralSvgView`.
+  `isChainEdgeId`, `routeStructuralEdges` (pure edge router, for live
+  re-route during drags); rendered by `StructuralSvgView`.
 - Algorithms and scale: `parseAlgorithmResult`, `applyAlgorithmResult`,
   `ingestAlgorithmResults`, `findShortestPath`, `allShortestPaths`,
   `collapseByCluster`, `buildSubgraph`, `computeIncrementalUpdate`,
@@ -50,10 +51,12 @@ computation".
 - Events: `G3tEventBus` (context-menu actions emit on it).
 
 React: `CytoscapeCanvas` (props: ugm, encodingSpec, stylesheet, hidden,
-containment, layout, layoutOptions, edgeStyle, animate, menuManager,
-structural, structuralDecorations, onReady which hands you the
-Cytoscape Core),
-`StructuralSvgView` + `useStructuralLayout`, `GraphToolbar`,
+containment, layout, layoutOptions, interactionOptions, edgeStyle,
+animate, menuManager, structural + structuralDecorations +
+structuralEdgeLayer (the structural path is DEPRECATED, see rules
+below), onReady which hands you the Cytoscape Core),
+`StructuralSvgView` + `useStructuralLayout`, `relayoutAroundFixed`,
+`useElementPointerEvents`, `GraphToolbar`,
 `EncodingSpecPanel`, `SpecLegend`, `FloatingLegend`, `AlgorithmPanel`,
 `LayoutManager`, `Minimap`, `ProvenanceTrace`, `NodeStyleEditor`,
 `SearchBar`, `FacetFilter`, `FilterBuilder`, `ContextMenuManager`,
@@ -74,17 +77,18 @@ DiffRenderer. Stores: `useSelectionStore`, `usePositionPinStore`,
   unstyled with no error.
 - `ugm` is compared by IDENTITY. Memoize it in the host; a new instance
   means "different graph" and re-runs layout. Content changes to
-  `containment`, `layout`, `layoutOptions`,
+  `containment`, `layout`, `layoutOptions`, `interactionOptions`,
   `edgeStyle`, `animate` also re-initialize. `stylesheet` and
   `encodingSpec` changes are style refreshes and preserve positions.
 - Filter by HIDING: pass node ids as `hidden` (a batched restyle).
   Never feed a pre-filtered UGM as `ugm`.
 - For a genuinely different scene, use a keyed remount:
   `<CytoscapeCanvas key={sceneId} ugm={ugm} />`.
-- Structural scenes: render with `StructuralSvgView`, or pass the
-  `layoutStructural` geometry to `CytoscapeCanvas` via the
-  `structural` prop (positions come from the document; keep the value
-  referentially stable, like ugm).
+- Structural scenes: render with `StructuralSvgView` (the ruled
+  path). Passing `layoutStructural` geometry to `CytoscapeCanvas` via
+  the `structural` prop is DEPRECATED (owner ruling 2026-07-28; a
+  dev-only warning fires) and will be removed once remaining
+  consumers migrate.
 - Deterministic styling escape hatch: the `_color` / `_shape` data
   channels. Reserved encoding channels reject by owner name.
 - Graphs past ~5k nodes: collapse with `collapseByCluster`, drill in
@@ -113,9 +117,15 @@ Details:
   theming.
 - [Capability index](https://github.com/zwelz3/g3-toolkit/blob/main/docs/capability-index.md):
   intent to demo/recipe/story lookup table.
+- [Consuming g3t](https://github.com/zwelz3/g3-toolkit/blob/main/docs/consuming-g3t.md):
+  adopter-side integration guide.
+- [Structural patterns](https://github.com/zwelz3/g3-toolkit/blob/main/docs/structural-patterns.md):
+  UML/SysML structural-scene recipes.
 - [API reference (typedoc)](https://zwelz3.github.io/g3-toolkit/api/)
-- [Playground](https://zwelz3.github.io/g3-toolkit/playground/): four
-  domain shells + two capability dashboards, live in the browser.
+- [Playground](https://zwelz3.github.io/g3-toolkit/playground/): five
+  domain shells (Ontology, Auditor, MBSE, Supply Chain, Biomedical) +
+  three capability dashboards (Analytics, Scale, Style Lab), live in
+  the browser.
 - [Storybook](https://zwelz3.github.io/g3-toolkit/storybook/)
 
 ## Optional

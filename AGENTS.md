@@ -34,7 +34,8 @@ exposing through one of these three, never a fourth mechanism.
 
 - Package manager: pnpm, ENFORCED. Never npm or yarn.
 - `pnpm install` then `pnpm run dev` (opens the scenario gallery:
-  Auditor, MBSE, Supply Chain, Biomedical).
+  Ontology, Auditor, MBSE, Supply Chain, Biomedical shells plus the
+  Analytics, Scale, and Style Lab dashboards).
 - `pnpm run storybook` for components in isolation.
 - `pnpm run docs:api` generates typedoc into docs-out/api.
 
@@ -42,7 +43,8 @@ exposing through one of these three, never a fourth mechanism.
 
 ```bash
 pnpm run gates
-# = typecheck && lint && verify && test, the exact CI order.
+# = typecheck && lint && verify && test && gates:spec (python spec
+#   lint, spec-status sync, roadmap coverage), the exact CI order.
 # verify builds the packages and runs dist/export/snippet/bundle checks;
 # a change is NOT done on unit tests alone.
 ```
@@ -77,8 +79,8 @@ Rules that have each been paid for at least once:
 ## Writing code that USES the library (adopter tasks)
 
 This is where generated code most often goes wrong. Follow these
-exactly; each rule is documented in README.md (Minimal Integration)
-and docs/wiring-guide.md, and every wiring snippet runs in CI.
+exactly; each rule is documented in docs/consuming-g3t.md and
+docs/wiring-guide.md, and every wiring snippet runs in CI.
 
 1. Install: `pnpm add @g3t/core @g3t/react` (charts optional). Peer
    dependencies are NOT installed for you. `@g3t/react` needs react,
@@ -88,11 +90,11 @@ and docs/wiring-guide.md, and every wiring snippet runs in CI.
    Without it everything renders unstyled, silently.
 3. Memoize `ugm`. It is compared by identity; a fresh instance per
    render re-creates the Cytoscape instance and re-runs layout. The
-   other object props (layout, layoutOptions, encodingSpec, hidden,
-   structuralDecorations) are content-keyed, so inline literals are
-   safe.
+   other object props (layout, layoutOptions, interactionOptions,
+   encodingSpec, hidden, structuralDecorations) are content-keyed, so
+   inline literals are safe.
 4. Only content changes to `ugm` identity, `containment`, `layout`,
-   `layoutOptions`, `edgeStyle`, `animate`
+   `layoutOptions`, `interactionOptions`, `edgeStyle`, `animate`
    re-initialize the canvas. `stylesheet` and `encodingSpec` are style
    refreshes that preserve positions.
 5. Filter by hiding: compute the hidden node-id set and pass it as the
@@ -109,12 +111,12 @@ and docs/wiring-guide.md, and every wiring snippet runs in CI.
 8. Get the Cytoscape `Core` from `onReady`; use it with
    `createCameraController`, `runGraphLayout`, and `<Minimap core={core} />`.
 9. Structural (UML/SysML) scenes render with `StructuralSvgView` fed
-   by `useStructuralLayout` (or `layoutStructural` directly), or by
-   passing the geometry to `CytoscapeCanvas` via the `structural`
-   prop (positions come from the document; keep it referentially
-   stable, like `ugm`). Recipes are in the structural sections of
-   docs/wiring-guide.md. Compartment expand/collapse was REMOVED
-   (2026-07-10 ruling): `useCompartmentCollapseStore`,
+   by `useStructuralLayout` (or `layoutStructural` directly). The
+   `structural` prop on `CytoscapeCanvas` is DEPRECATED (owner ruling
+   2026-07-28; a dev-only warning fires) and will be removed once
+   remaining consumers migrate. The guaranteed patterns are in
+   docs/structural-patterns.md. Compartment expand/collapse was
+   REMOVED (2026-07-10 ruling): `useCompartmentCollapseStore`,
    `registerCompartmentCollapseActions`, `compartmentKey`, and
    `collapsedCompartments` no longer exist, even where older
    wiring-guide sections still show them.
