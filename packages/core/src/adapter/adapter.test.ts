@@ -125,8 +125,7 @@ describe("SparqlAdapter (M3.E2.T1)", () => {
             },
             p: {
               type: "uri" as const,
-              value:
-                "http://www.w3.org/1999/02/22-rdf-syntax-ns#typeAssertion",
+              value: "http://www.w3.org/1999/02/22-rdf-syntax-ns#typeAssertion",
             },
             o: {
               type: "triple" as const,
@@ -173,7 +172,10 @@ describe("SparqlAdapter (M3.E2.T1)", () => {
       | undefined;
     expect(stored).toBeDefined();
     // Never store the object as the "[object Object]" stringification.
-    expect(String(stored)).not.toContain("[object Object]");
+    // Serialize before scanning: String() on any structured object is itself
+    // "[object Object]", so it can only pass the intended check for a value the
+    // code has already flattened. JSON.stringify inspects the stored shape.
+    expect(JSON.stringify(stored)).not.toContain("[object Object]");
     expect(stored?.subject).toEqual({ type: "uri", value: subject });
     expect(stored?.predicate).toEqual({
       type: "uri",
