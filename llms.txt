@@ -41,7 +41,7 @@ computation".
   `parseShaclReport`, `severityOverlays`, `shaclResultDrivers`,
   `shaclShapesToStructural`, `shaclRowSeverities`, `closedShapeIds`.
 - Structural (UML/SysML-style) layout: `layoutStructural`,
-  `compartmentKey`, `isChainEdgeId`; rendered by `StructuralSvgView`.
+  `isChainEdgeId`; rendered by `StructuralSvgView`.
 - Algorithms and scale: `parseAlgorithmResult`, `applyAlgorithmResult`,
   `ingestAlgorithmResults`, `findShortestPath`, `allShortestPaths`,
   `collapseByCluster`, `buildSubgraph`, `computeIncrementalUpdate`,
@@ -50,8 +50,9 @@ computation".
 - Events: `G3tEventBus` (context-menu actions emit on it).
 
 React: `CytoscapeCanvas` (props: ugm, encodingSpec, stylesheet, hidden,
-containment, layout, layoutOptions, interactionOptions, menuManager,
-structuralDecorations, onReady which hands you the Cytoscape Core),
+containment, layout, layoutOptions, edgeStyle, animate, menuManager,
+structural, structuralDecorations, onReady which hands you the
+Cytoscape Core),
 `StructuralSvgView` + `useStructuralLayout`, `GraphToolbar`,
 `EncodingSpecPanel`, `SpecLegend`, `FloatingLegend`, `AlgorithmPanel`,
 `LayoutManager`, `Minimap`, `ProvenanceTrace`, `NodeStyleEditor`,
@@ -62,7 +63,7 @@ structuralDecorations, onReady which hands you the Cytoscape Core),
 components: TableView, TreeView, TimelineView, MapView, MatrixView,
 SankeyView, SchemaView, StatsPanel, QueryEditor, ShaclShapeBrowser,
 DiffRenderer. Stores: `useSelectionStore`, `usePositionPinStore`,
-`useOverlayStore`, `useThemeStore`, `useCompartmentCollapseStore`
+`useOverlayStore`, `useThemeStore`, `useStyleOverrideStore`
 (usable from React via selector or anywhere via `.getState()` /
 `.subscribe()`).
 
@@ -73,15 +74,17 @@ DiffRenderer. Stores: `useSelectionStore`, `usePositionPinStore`,
   unstyled with no error.
 - `ugm` is compared by IDENTITY. Memoize it in the host; a new instance
   means "different graph" and re-runs layout. Content changes to
-  `containment`, `layout`, `layoutOptions`, `interactionOptions`,
+  `containment`, `layout`, `layoutOptions`,
   `edgeStyle`, `animate` also re-initialize. `stylesheet` and
   `encodingSpec` changes are style refreshes and preserve positions.
 - Filter by HIDING: pass node ids as `hidden` (a batched restyle).
   Never feed a pre-filtered UGM as `ugm`.
 - For a genuinely different scene, use a keyed remount:
   `<CytoscapeCanvas key={sceneId} ugm={ugm} />`.
-- Structural scenes: use `StructuralSvgView`; the `structural` prop on
-  `CytoscapeCanvas` is deprecated (warns in development).
+- Structural scenes: render with `StructuralSvgView`, or pass the
+  `layoutStructural` geometry to `CytoscapeCanvas` via the
+  `structural` prop (positions come from the document; keep the value
+  referentially stable, like ugm).
 - Deterministic styling escape hatch: the `_color` / `_shape` data
   channels. Reserved encoding channels reject by owner name.
 - Graphs past ~5k nodes: collapse with `collapseByCluster`, drill in
@@ -93,20 +96,23 @@ SPARQL adapter parses SELECT bindings only (no CONSTRUCT/DESCRIBE, no
 full RDF-term typing). No SHACL-over-arbitrary-RDF shapes parser (the
 validator uses the toolkit's internal shape form). No OWL/RDFS
 reasoning, no named graphs/quads. Adapters are unit-tested against
-mocked responses, not live backends. Details:
+mocked responses, not live backends. Structural compartment
+expand/collapse was REMOVED by ruling (2026-07-10):
+`useCompartmentCollapseStore`, `registerCompartmentCollapseActions`,
+`compartmentKey`, and the `collapsedCompartments` layout input no
+longer exist, even where older wiring-guide sections still show them.
+Details:
 [capabilities-and-limits](https://github.com/zwelz3/g3-toolkit/blob/main/docs/capabilities-and-limits.md).
 
 ## Docs
 
 - [Wiring guide](https://github.com/zwelz3/g3-toolkit/blob/main/docs/wiring-guide.md):
   every integration recipe; each snippet runs in CI (examples/wiring/src/).
-- [Consuming g3t](https://github.com/zwelz3/g3-toolkit/blob/main/docs/consuming-g3t.md):
-  install, peer deps, stylesheet, re-layout rules, interaction
-  contracts, vendored-tarball consumption.
+- [README](https://github.com/zwelz3/g3-toolkit/blob/main/README.md):
+  install, packages, minimal 15-line integration, honest scope,
+  theming.
 - [Capability index](https://github.com/zwelz3/g3-toolkit/blob/main/docs/capability-index.md):
   intent to demo/recipe/story lookup table.
-- [Structural patterns](https://github.com/zwelz3/g3-toolkit/blob/main/docs/structural-patterns.md):
-  the five guaranteed structural recipes (oracle-tested in CI).
 - [API reference (typedoc)](https://zwelz3.github.io/g3-toolkit/api/)
 - [Playground](https://zwelz3.github.io/g3-toolkit/playground/): four
   domain shells + two capability dashboards, live in the browser.

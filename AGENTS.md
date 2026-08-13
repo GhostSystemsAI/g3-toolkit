@@ -77,8 +77,8 @@ Rules that have each been paid for at least once:
 ## Writing code that USES the library (adopter tasks)
 
 This is where generated code most often goes wrong. Follow these
-exactly; each rule is documented in docs/consuming-g3t.md and
-docs/wiring-guide.md, and every wiring snippet runs in CI.
+exactly; each rule is documented in README.md (Minimal Integration)
+and docs/wiring-guide.md, and every wiring snippet runs in CI.
 
 1. Install: `pnpm add @g3t/core @g3t/react` (charts optional). Peer
    dependencies are NOT installed for you. `@g3t/react` needs react,
@@ -92,7 +92,7 @@ docs/wiring-guide.md, and every wiring snippet runs in CI.
    structuralDecorations) are content-keyed, so inline literals are
    safe.
 4. Only content changes to `ugm` identity, `containment`, `layout`,
-   `layoutOptions`, `interactionOptions`, `edgeStyle`, `animate`
+   `layoutOptions`, `edgeStyle`, `animate`
    re-initialize the canvas. `stylesheet` and `encodingSpec` are style
    refreshes that preserve positions.
 5. Filter by hiding: compute the hidden node-id set and pass it as the
@@ -104,14 +104,20 @@ docs/wiring-guide.md, and every wiring snippet runs in CI.
    `useSelectionStore((s) => ...)`. From anywhere (event handlers,
    services, non-React code): `useSelectionStore.getState()` /
    `.subscribe(...)`. Stores: selection, position pins, overlays,
-   theme, compartment collapse. A "custom button" is almost always one
+   theme, style overrides. A "custom button" is almost always one
    store call in an onClick.
 8. Get the Cytoscape `Core` from `onReady`; use it with
    `createCameraController`, `runGraphLayout`, and `<Minimap core={core} />`.
-9. Structural (UML/SysML) scenes render with `StructuralSvgView` fed by
-   `useStructuralLayout` (or `layoutStructural` directly). The
-   `structural` prop on `CytoscapeCanvas` is DEPRECATED. The five
-   guaranteed patterns are in docs/structural-patterns.md.
+9. Structural (UML/SysML) scenes render with `StructuralSvgView` fed
+   by `useStructuralLayout` (or `layoutStructural` directly), or by
+   passing the geometry to `CytoscapeCanvas` via the `structural`
+   prop (positions come from the document; keep it referentially
+   stable, like `ugm`). Recipes are in the structural sections of
+   docs/wiring-guide.md. Compartment expand/collapse was REMOVED
+   (2026-07-10 ruling): `useCompartmentCollapseStore`,
+   `registerCompartmentCollapseActions`, `compartmentKey`, and
+   `collapsedCompartments` no longer exist, even where older
+   wiring-guide sections still show them.
 10. RDF input goes through the projection pipeline:
     `createPresetPipeline("standard").project(rdfGraph)`. The SPARQL
     adapter handles SELECT bindings only; there is no reasoning, no
