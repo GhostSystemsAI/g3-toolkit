@@ -1,0 +1,122 @@
+# g3-toolkit
+
+> Composable graph-visualization component LIBRARY (not a framework) for
+> RDF, labeled-property-graph (LPG), and holonic data: @g3t/core (zero
+> React), @g3t/react (views + controls), @g3t/charts (linked ECharts).
+> Hosts integrate through exactly three channels: exported zustand
+> stores, props/callbacks, and versioned JSON documents. TypeScript,
+> React 19, pnpm (enforced), Cytoscape + Graphology, Zustand.
+
+The native data model is the UGM, a labeled property graph (typed nodes
+and edges with arbitrary properties) over Graphology. Everything else
+(RDF triples, relational rows, holonic datasets) projects into it.
+Reasoning and heavy algorithms run UPSTREAM (triplestore, networkx,
+GraphBLAS) and arrive as validated result documents: "results, not
+computation".
+
+## Packages and entry points
+
+- @g3t/core (no React): subpath exports `.` (UGM, algorithms, export,
+  SHACL, structural layout), `./adapters` , `./middleware`, `./events`,
+  `./projection`, `./pipeline`, `./shacl`, `./diff`, `./layout`,
+  `./algorithms`, `./undo-redo`, `./theme`, `./path-analysis`.
+- @g3t/react: subpath exports `.`, `./views`, `./controls`, `./state`,
+  `./theme`, `./a11y`, `./icons`, and `./style.css` (REQUIRED import,
+  see rules below). Peer deps are NOT auto-installed: react, react-dom,
+  cytoscape, cytoscape-fcose, zustand, echarts, vis-timeline, vis-data
+  (the vis-* pair is statically imported today, install it even if the
+  timeline view is unused).
+- @g3t/charts: `LinkedChart` (bar, scatter, line, pie), auto-links to
+  the shared selection store. Peers: react, echarts.
+
+## Core API surface (the names an agent should reach for)
+
+- Data model: `UGM`, `SerializedUGM`, node/edge input and attribute types.
+- Backends: `SparqlAdapter` (SELECT bindings only), `CypherAdapter`,
+  `GremlinAdapter`, `RestAdapter`, `HolonicAdapter`; `Middleware` on all.
+- RDF to LPG: `createPresetPipeline("standard" | "ontology" |
+  "provenance-preserving").project(rdfGraph)` or compose a
+  `ProjectionPipeline` with steps like `typeCollapse`.
+- SHACL: `validateShacl`, `reportFromValidationResults`,
+  `parseShaclReport`, `severityOverlays`, `shaclResultDrivers`,
+  `shaclShapesToStructural`, `shaclRowSeverities`, `closedShapeIds`.
+- Structural (UML/SysML-style) layout: `layoutStructural`,
+  `compartmentKey`, `isChainEdgeId`; rendered by `StructuralSvgView`.
+- Algorithms and scale: `parseAlgorithmResult`, `applyAlgorithmResult`,
+  `ingestAlgorithmResults`, `findShortestPath`, `allShortestPaths`,
+  `collapseByCluster`, `buildSubgraph`, `computeIncrementalUpdate`,
+  `applyIncrementalLayout`.
+- Export: `exportSubgraphJson`, `exportSubgraphCsv`, `exportSubgraphTurtle`.
+- Events: `G3tEventBus` (context-menu actions emit on it).
+
+React: `CytoscapeCanvas` (props: ugm, encodingSpec, stylesheet, hidden,
+containment, layout, layoutOptions, interactionOptions, menuManager,
+structuralDecorations, onReady which hands you the Cytoscape Core),
+`StructuralSvgView` + `useStructuralLayout`, `GraphToolbar`,
+`EncodingSpecPanel`, `SpecLegend`, `FloatingLegend`, `AlgorithmPanel`,
+`LayoutManager`, `Minimap`, `ProvenanceTrace`, `NodeStyleEditor`,
+`SearchBar`, `FacetFilter`, `FilterBuilder`, `ContextMenuManager`,
+`createDefaultMenuManager`, `registerToolkitActions`, `runGraphLayout`,
+`createCameraController`, `createTheme`, `applyEncodingSpec`,
+`captureWorkspace` / `applyWorkspace` / `serializeWorkspace`, plus view
+components: TableView, TreeView, TimelineView, MapView, MatrixView,
+SankeyView, SchemaView, StatsPanel, QueryEditor, ShaclShapeBrowser,
+DiffRenderer. Stores: `useSelectionStore`, `usePositionPinStore`,
+`useOverlayStore`, `useThemeStore`, `useCompartmentCollapseStore`
+(usable from React via selector or anywhere via `.getState()` /
+`.subscribe()`).
+
+## Correctness rules (types cannot express these; violating them is the
+## most common AI-generated-code failure)
+
+- Import `"@g3t/react/style.css"` FIRST. Without it every view renders
+  unstyled with no error.
+- `ugm` is compared by IDENTITY. Memoize it in the host; a new instance
+  means "different graph" and re-runs layout. Content changes to
+  `containment`, `layout`, `layoutOptions`, `interactionOptions`,
+  `edgeStyle`, `animate` also re-initialize. `stylesheet` and
+  `encodingSpec` changes are style refreshes and preserve positions.
+- Filter by HIDING: pass node ids as `hidden` (a batched restyle).
+  Never feed a pre-filtered UGM as `ugm`.
+- For a genuinely different scene, use a keyed remount:
+  `<CytoscapeCanvas key={sceneId} ugm={ugm} />`.
+- Structural scenes: use `StructuralSvgView`; the `structural` prop on
+  `CytoscapeCanvas` is deprecated (warns in development).
+- Deterministic styling escape hatch: the `_color` / `_shape` data
+  channels. Reserved encoding channels reject by owner name.
+- Graphs past ~5k nodes: collapse with `collapseByCluster`, drill in
+  with `buildSubgraph`. There is no canvas virtualization.
+
+## Honest limits
+
+SPARQL adapter parses SELECT bindings only (no CONSTRUCT/DESCRIBE, no
+full RDF-term typing). No SHACL-over-arbitrary-RDF shapes parser (the
+validator uses the toolkit's internal shape form). No OWL/RDFS
+reasoning, no named graphs/quads. Adapters are unit-tested against
+mocked responses, not live backends. Details:
+[capabilities-and-limits](https://github.com/zwelz3/g3-toolkit/blob/main/docs/capabilities-and-limits.md).
+
+## Docs
+
+- [Wiring guide](https://github.com/zwelz3/g3-toolkit/blob/main/docs/wiring-guide.md):
+  every integration recipe; each snippet runs in CI (examples/wiring/src/).
+- [Consuming g3t](https://github.com/zwelz3/g3-toolkit/blob/main/docs/consuming-g3t.md):
+  install, peer deps, stylesheet, re-layout rules, interaction
+  contracts, vendored-tarball consumption.
+- [Capability index](https://github.com/zwelz3/g3-toolkit/blob/main/docs/capability-index.md):
+  intent to demo/recipe/story lookup table.
+- [Structural patterns](https://github.com/zwelz3/g3-toolkit/blob/main/docs/structural-patterns.md):
+  the five guaranteed structural recipes (oracle-tested in CI).
+- [API reference (typedoc)](https://zwelz3.github.io/g3-toolkit/api/)
+- [Playground](https://zwelz3.github.io/g3-toolkit/playground/): four
+  domain shells + two capability dashboards, live in the browser.
+- [Storybook](https://zwelz3.github.io/g3-toolkit/storybook/)
+
+## Optional
+
+- [ARCHITECTURE.md](https://github.com/zwelz3/g3-toolkit/blob/main/ARCHITECTURE.md):
+  boundaries, adapter integration (Gremlin and Holonic backends).
+- [DEVELOPER.md](https://github.com/zwelz3/g3-toolkit/blob/main/DEVELOPER.md):
+  contributing to the toolkit itself.
+- [AGENTS.md](https://github.com/zwelz3/g3-toolkit/blob/main/AGENTS.md):
+  task-oriented instructions for coding agents (Claude, Codex, Cursor).
