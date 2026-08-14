@@ -525,6 +525,10 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
             }
             layoutOptions={layoutOptions}
             layout={cachedPositions ? "preset" : undefined}
+            // D3: route only in the collapsed clusters view; the raw
+            // 8k-node drill view exceeds the 600-edge cap and would
+            // skip anyway. Explicit here so the intent is legible.
+            routeEdges={view.kind === "clusters"}
             onReady={(c) => {
               markReady(view.kind);
               setCore(c);

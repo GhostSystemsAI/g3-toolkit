@@ -140,7 +140,13 @@ import {
 } from "./structural-to-cytoscape";
 import type { StructuralDecorations } from "./structural-to-cytoscape";
 import type { StructuralGraphInput, StructuralGeometry } from "@g3t/core";
-import { prefersReducedMotion } from "@g3t/core";
+import {
+  prefersReducedMotion,
+  routeSceneEdges,
+  polylineToCytoscapeSegments,
+  type SceneEdgeEndpoints,
+  type SceneNodeBox,
+} from "@g3t/core";
 
 export type CyStylesheet = cytoscape.StylesheetCSS | cytoscape.StylesheetStyle;
 
@@ -486,6 +492,19 @@ export const DEFAULT_STYLESHEET: CyStylesheet[] = [
     } as any,
   },
   {
+    // Post-layout obstacle-aware routing (routeEdges prop, non-structural
+    // scenes). Distinct class from the structural router's routed edges:
+    // structural rules carry SVG-overlay opacity:0 in overlay mode and
+    // per-edge listeners that must not touch force-layout edges. Inert
+    // unless the routing pass stamps _segDist/_segWeight and the class.
+    selector: "edge.g3t-canvas-edge-routed",
+    style: {
+      "curve-style": "segments",
+      "segment-distances": "data(_segDist)",
+      "segment-weights": "data(_segWeight)",
+    } as any,
+  },
+  {
     selector: "edge[_asserted = 0]",
     style: {
       "line-style": "dashed",
@@ -808,6 +827,117 @@ export interface CytoscapeCanvasProps {
    * where it has not changed; rebuild it only when the hidden set does.
    */
   hidden?: ReadonlySet<string>;
+  /**
+   * Post-layout obstacle-aware edge routing for NON-structural scenes.
+   * Structural scenes already carry routed edges from `layoutStructural`;
+   * this prop is a no-op there (detected by the presence of any edge
+   * bearing the `g3t-structural-edge-routed` class).
+   *
+   * `true` enables the pass with defaults; a config object sets
+   * `maxEdges` (default 600 — above this, the pass skips and warns
+   * once) plus optional router tuning (`clearance`, `bendPenalty`,
+   * `minStub`; the router's own defaults are 12, 30, 28). Applied on
+   * every `layoutstop` and on drag-free of incident edges; runs inside
+   * `cy.batch()` so the write is a single restyle, never a re-init.
+   */
+  routeEdges?:
+    | boolean
+    | {
+        maxEdges?: number;
+        clearance?: number;
+        bendPenalty?: number;
+        minStub?: number;
+      };
+}
+
+/** ROUTE_EDGES pass (routeEdges prop). Reads current node bounding boxes
+ *  from the live Cytoscape instance, runs the pure `routeSceneEdges`
+ *  routing pass, and writes `_segDist`/`_segWeight` + the
+ *  `g3t-canvas-edge-routed` class to each edge that routed successfully.
+ *  Edges whose router result is null get any prior routing data CLEARED
+ *  (per-edge graceful degradation, no phantom polylines). The write
+ *  happens inside `cy.batch()` so it is a single restyle, never a re-init.
+ *
+ *  No-op when the scene is structural (any edge carries the
+ *  `g3t-structural-edge-routed` class) — structural scenes already carry
+ *  routes from `layoutStructural`. Skips (and warns once) when the visible
+ *  edge count exceeds `maxEdges`. Filter for edges provided by the caller;
+ *  when omitted, ALL visible edges are routed. */
+export function runCanvasEdgeRouting(
+  cy: Core,
+  opts: {
+    maxEdges: number;
+    clearance?: number;
+    bendPenalty?: number;
+    minStub?: number;
+  },
+  incidentTo?: string,
+): { skipped: boolean; routedCount: number } {
+  // No-op on structural scenes: the structural router already owns them
+  // and shipped opacity:0 rules would apply to shared classes.
+  if (cy.edges(".g3t-structural-edge-routed").length > 0) {
+    return { skipped: true, routedCount: 0 };
+  }
+  const visibleEdges = cy.edges(":visible");
+  if (visibleEdges.length > opts.maxEdges) {
+    return { skipped: true, routedCount: 0 };
+  }
+  const nodeBoxes: SceneNodeBox[] = [];
+  cy.nodes(":visible").forEach((n) => {
+    // Compound parents have no drawn body of their own; their children's
+    // boxes already cover the interior, so excluding them keeps edges
+    // from bending around empty container geometry.
+    if (n.isParent()) return;
+    const bb = n.boundingBox();
+    nodeBoxes.push({
+      id: n.id(),
+      x: bb.x1,
+      y: bb.y1,
+      width: bb.w,
+      height: bb.h,
+    });
+  });
+  const edgePairs: SceneEdgeEndpoints[] = [];
+  const scope = incidentTo
+    ? visibleEdges.filter((e) => {
+        const d = e.data() as { source?: string; target?: string };
+        return d.source === incidentTo || d.target === incidentTo;
+      })
+    : visibleEdges;
+  scope.forEach((e) => {
+    const d = e.data() as { id?: string; source?: string; target?: string };
+    if (d.id && d.source && d.target) {
+      edgePairs.push({ id: d.id, source: d.source, target: d.target });
+    }
+  });
+  const { routed } = routeSceneEdges(nodeBoxes, edgePairs, {
+    clearance: opts.clearance,
+    bendPenalty: opts.bendPenalty,
+    minStub: opts.minStub,
+  });
+  let routedCount = 0;
+  cy.batch(() => {
+    scope.forEach((e) => {
+      const id = e.id();
+      const pts = routed.get(id);
+      const seg = pts ? polylineToCytoscapeSegments(pts) : null;
+      if (seg) {
+        e.data("_segDist", seg.distances.join(" "));
+        e.data("_segWeight", seg.weights.join(" "));
+        e.addClass("g3t-canvas-edge-routed");
+        routedCount++;
+      } else {
+        // Null result OR straight polyline: clear any prior routing data
+        // so the edge reverts to bezier with no phantom polyline.
+        if (e.data("_segDist") !== undefined) e.removeData("_segDist");
+        if (e.data("_segWeight") !== undefined) e.removeData("_segWeight");
+        if (e.hasClass("g3t-canvas-edge-routed")) {
+          e.removeClass("g3t-canvas-edge-routed");
+        }
+      }
+    });
+  });
+  return { skipped: false, routedCount };
 }
 
 /** Apply the visibility filter as a batched class toggle: hidden nodes
@@ -913,6 +1043,7 @@ export function CytoscapeCanvas({
   structuralDecorations,
   structuralEdgeLayer = "cytoscape",
   hidden,
+  routeEdges,
 }: CytoscapeCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -982,6 +1113,9 @@ export function CytoscapeCanvas({
   const hiddenRef = useRef(hidden);
   // eslint-disable-next-line react-hooks/refs
   hiddenRef.current = hidden;
+  const routeEdgesRef = useRef(routeEdges);
+  // eslint-disable-next-line react-hooks/refs
+  routeEdgesRef.current = routeEdges;
 
   /** One stylesheet assembly for init AND live theme restyles.
    *  Order is the precedence story: structural defaults (fallback
@@ -1465,6 +1599,60 @@ export function CytoscapeCanvas({
     setOverlayCy(cy);
     // Re-apply the visibility filter to this (possibly rebuilt) instance.
     applyHiddenClasses(cy, hiddenRef.current);
+
+    // Post-layout obstacle-aware edge routing (routeEdges prop). Skipped
+    // for structural scenes (the structural router already owns them).
+    // Generation counter guards against layoutstop double-fire (some
+    // layout plugins emit twice) and against a deferred callback firing
+    // after a fresher layoutstop has superseded it (rapid successive
+    // relayouts): only the callback whose captured generation matches
+    // the live counter runs.
+    const routeConfig = routeEdgesRef.current;
+    if (routeConfig && !structural) {
+      const cfg =
+        routeConfig === true
+          ? { maxEdges: 600 }
+          : { maxEdges: routeConfig.maxEdges ?? 600, ...routeConfig };
+      let routingGeneration = 0;
+      let warnedScale = false;
+      const runPass = (incidentTo?: string): void => {
+        const r = runCanvasEdgeRouting(cy, cfg, incidentTo);
+        if (
+          r.skipped &&
+          !warnedScale &&
+          cy.edges(".g3t-structural-edge-routed").length === 0 &&
+          typeof process !== "undefined" &&
+          process.env?.NODE_ENV !== "production"
+        ) {
+          warnedScale = true;
+          console.warn(
+            `[g3t] routeEdges skipped: visible edge count exceeds maxEdges=${cfg.maxEdges}. Raise maxEdges to route dense scenes, or leave routing off above the threshold.`,
+          );
+        }
+      };
+      cy.on("layoutstop", () => {
+        routingGeneration++;
+        const gen = routingGeneration;
+        // animate:false makes layoutstop synchronous with settled
+        // positions; run immediately. animate:true defers positions to
+        // the animation frames, so the read must wait until they settle.
+        if (!animate || animationDuration === 0) {
+          runPass();
+        } else {
+          const delay = (animationDuration ?? 400) + 16;
+          setTimeout(() => {
+            // Stale callback (a newer layoutstop superseded): drop.
+            if (gen !== routingGeneration) return;
+            if (cyRef.current !== cy) return;
+            runPass();
+          }, delay);
+        }
+      });
+      // Drag-free incident-edge reroute (subject to the same gate).
+      cy.on("free", "node", (evt) => {
+        runPass(evt.target.id());
+      });
+    }
     // Bugfix 3: read from ref (see comment near onReadyRef above)
     onReadyRef.current?.(cy);
 
@@ -1619,6 +1807,40 @@ export function CytoscapeCanvas({
       });
     });
   }, [encodingSpec, ugm, structural]);
+
+  // routeEdges prop CHANGE handler: when the config flips or is enabled
+  // after mount, run the pass immediately against the current positions.
+  // The init effect wires listeners for FUTURE layoutstops and drag-frees;
+  // this covers "turn routing on for the already-mounted scene". When
+  // routing is disabled (prop is false/undefined) after being on, we
+  // clear the routed data so edges revert to bezier without waiting for
+  // a re-layout.
+  const routeEdgesKey = routeEdges
+    ? typeof routeEdges === "object"
+      ? JSON.stringify(routeEdges)
+      : "true"
+    : "";
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    if (routeEdges) {
+      const cfg =
+        routeEdges === true
+          ? { maxEdges: 600 }
+          : { maxEdges: routeEdges.maxEdges ?? 600, ...routeEdges };
+      runCanvasEdgeRouting(cy, cfg);
+    } else {
+      // Clear any previously stamped routing data so edges revert.
+      cy.batch(() => {
+        cy.edges(".g3t-canvas-edge-routed").forEach((e) => {
+          if (e.data("_segDist") !== undefined) e.removeData("_segDist");
+          if (e.data("_segWeight") !== undefined) e.removeData("_segWeight");
+          e.removeClass("g3t-canvas-edge-routed");
+        });
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeEdgesKey, ugm]);
 
   // Visibility filter (hidden prop): a batched class toggle, applied on
   // every hidden-set change. NOT in the init dep array, so toggling the

@@ -39,6 +39,10 @@ import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
 import { provenanceChainFor } from "./chain";
 import { createDefaultMenuManager } from "@g3t/react";
 
+/** Post-layout obstacle-aware routing on this shell's canvas. Per-shell
+ *  kill-switch (D8): flip to false and re-push to revert. */
+const ROUTE_EDGES = true;
+
 const SPEC: EncodingSpec = {
   version: 1,
   node: {
@@ -376,6 +380,7 @@ export function AuditShell({ onBack }: { onBack: () => void }) {
             hidden={hidden}
             animate={!reducedMotion}
             menuManager={menuManager}
+            routeEdges={ROUTE_EDGES}
           />
         </main>
 

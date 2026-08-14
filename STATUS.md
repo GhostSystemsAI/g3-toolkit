@@ -1,5 +1,17 @@
 # g3-toolkit Status
 
+## QUEUE (2026-08-14): canvas edge routing shipped as `routeEdges` prop
+on `CytoscapeCanvas`; enabled by default in the Auditor/Supply/Bio/
+Analytics/Style-Lab shells (Scale shell in the clusters view only) via
+per-shell `ROUTE_EDGES` kill-switch constants. Pure geometry lives at
+`packages/core/src/route/route-scene-edges.ts` with unit tests; canvas
+harness tests pin the stamp/clear/no-op-on-structural/maxEdges-gate/
+drag-scope contract. AWAITS Zach's visual review across all five
+shells in a single Pages playground session (the orthogonal-on-force
+look is the review target; the ROUTE_EDGES constants revert
+per-shell). See CHANGELOG.
+
+
 **As of:** 2026-08-06 (active: register R-15/R-16/R-17 answered:
 capability-gated editor controls (and the same over-promise fixed
 in StructuralNodeStyle itself), FloatingLegend elements

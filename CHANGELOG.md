@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.0.0 (continued): 2026-08-14 canvas edge routing (routeEdges prop)
+
+- New `CytoscapeCanvas` prop `routeEdges` runs a post-layout
+  obstacle-aware routing pass on any NON-structural scene, using the
+  same A* router that already backs the structural view. Off by
+  default in the library; the demo shells (Auditor, Supply Chain,
+  Biomedical, Analytics dashboard, Style Lab both panes) all set it
+  to `true` via a module-level `ROUTE_EDGES` constant that acts as a
+  per-shell kill-switch. The Scale surface enables it only in the
+  collapsed clusters view.
+- New pure module `@g3t/core` exports: `routeSceneEdges`,
+  `inferTerminalSides`, `polylineToCytoscapeSegments`, and companion
+  types (`SceneNodeBox`, `SceneEdgeEndpoints`, `RouteSceneOptions`,
+  `RouteSceneResult`). Framework-agnostic, unit-tested, and consumable
+  by future SVG renderers without a React dependency.
+- Wiring: routing runs on every `layoutstop` (double-fire and
+  rapid-restart guarded by a generation counter; animate-aware timing:
+  synchronous read for `animate={false}`, deferred to
+  `animationDuration + 16ms` otherwise) and on `drag-free` for the
+  dragged node's incident edges. All writes go through `cy.batch()`;
+  no re-init, camera and positions hold. Structural scenes are
+  detected (any edge with `g3t-structural-edge-routed`) and skipped.
+- Scale cap: `maxEdges` (default 600) checked on `cy.edges(':visible')`;
+  above the cap the pass skips and warns once. Same predicate for both
+  the layoutstop and drag-free paths so filtered scenes behave
+  consistently.
+- Wiring-guide snippet and executable twin in `examples/wiring/`.
+
 ## 1.0.0 (continued): 2026-08-14 Routing Lab engine controls
 
 - The Routing Lab dashboard gained an Engine toolbar row exposing

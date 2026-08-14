@@ -60,6 +60,11 @@ interface HonestyRow {
   unsupported: string;
 }
 
+/** Post-layout obstacle-aware routing on this shell's canvases (both
+ *  panes: legacy + engine). Per-shell kill-switch (D8): flip to false
+ *  and re-push to revert. */
+const ROUTE_EDGES = true;
+
 const LOD_CONTEXTS = [
   { label: "Close-up (zoom 1.0, 40 visible)", zoom: 1.0, visibleElements: 40 },
   { label: "Mid (zoom 0.5, 400 visible)", zoom: 0.5, visibleElements: 400 },
@@ -288,6 +293,7 @@ export function StyleLabShell({
               layout="grid"
               onReady={onLegacyReady}
               animate={false}
+              routeEdges={ROUTE_EDGES}
             />
           </div>
         </section>
@@ -306,6 +312,7 @@ export function StyleLabShell({
               layout="grid"
               onReady={onEngineReady}
               animate={false}
+              routeEdges={ROUTE_EDGES}
             />
           </div>
         </section>

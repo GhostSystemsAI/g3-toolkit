@@ -57,6 +57,10 @@ import { applyConfidenceDim, type ConfidenceCoreLike } from "./confidence-dim";
 
 type Mode = "none" | ClusterMode;
 
+/** Post-layout obstacle-aware routing on this shell's canvas. Per-shell
+ *  kill-switch (D8): flip to false and re-push to revert. */
+const ROUTE_EDGES = true;
+
 // Consumer-readable grouping controls (review 5.8): each mode carries
 // a one-line description rendered beside the radio, and "tier" is
 // DEFINED rather than left as jargon.
@@ -537,6 +541,7 @@ export function SupplyThreadShell({ onBack }: { onBack: () => void }) {
             onReady={handleReady}
             animate={!reducedMotion}
             menuManager={menuManager}
+            routeEdges={ROUTE_EDGES}
           />
           {hiddenIds.size > 0 && (
             <div className="sc-route-status" data-testid="hidden-suppliers">

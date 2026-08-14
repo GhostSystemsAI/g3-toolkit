@@ -38,6 +38,10 @@ import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
  *  ("Epidermal growth factor receptor") overlap neighbors unwrapped;
  *  tune here, toggle live via the "Wrap labels" switch. */
 const LABEL_WRAP_WIDTH = 90;
+/** Post-layout obstacle-aware routing on this shell's canvas. Kill-switch
+ *  per D8: flip to false and re-push to revert the shell if the routed
+ *  look regresses under visual review. */
+const ROUTE_EDGES = true;
 
 const SPEC: EncodingSpec = {
   version: 1,
@@ -205,6 +209,7 @@ export function BioShell({ onBack }: { onBack: () => void }) {
             encodingSpec={SPEC}
             stylesheet={wrapStylesheet}
             animate={!reducedMotion}
+            routeEdges={ROUTE_EDGES}
           />
         </main>
 

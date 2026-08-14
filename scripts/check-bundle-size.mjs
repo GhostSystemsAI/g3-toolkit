@@ -237,7 +237,15 @@ const BUDGETS = {
   // RAISED 386 -> 388 (2026-08-14): measured 386.1 after brief 10's
   // perimeter policy (core routing growth re-bundled through the
   // react dist); no react-side code was added.
-  react: 388 * 1024, // 420 KB
+  // RAISED 388 -> 390 (2026-08-14): measured 389.1 KB (100%) after
+  // the `routeEdges` prop landed on CytoscapeCanvas — new
+  // `runCanvasEdgeRouting` pass (post-layout obstacle-aware routing
+  // for non-structural scenes), plus the g3t-canvas-edge-routed
+  // stylesheet rule and a routeEdges change effect. The pure geometry
+  // (routeSceneEdges / polylineToCytoscapeSegments) is imported from
+  // `@g3t/core`, so the react-side growth is just the wiring, effect,
+  // and prop plumbing.
+  react: 390 * 1024, // 420 KB
   // - 384 -> 420 KB, 2026-07-07 (review remediation round 2): measured
   //   379.9 KB (99% of cap) after the emphasis/effects layer
   //   (emphasis store + class application), useStructuralCollapse,

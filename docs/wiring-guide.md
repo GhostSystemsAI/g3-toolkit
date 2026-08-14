@@ -170,6 +170,36 @@ const hidden = useMemo(() => {
 <CytoscapeCanvas ugm={ugm} hidden={hidden} />
 ```
 
+### Route edges around nodes on any layout
+
+`CytoscapeCanvas` can post-process every non-structural layout to route edges
+ORTHOGONALLY around intervening nodes, using the same A\* obstacle-aware
+router the structural view uses. Pass `routeEdges` (default off in the
+library; the shipped demo shells set it to `true`). Structural scenes are
+detected automatically and the pass is skipped there.
+
+```tsx
+// Simple opt-in: routing on with defaults (clearance 12, bendPenalty 30,
+// minStub 28; maxEdges 600 scale cap).
+<CytoscapeCanvas ugm={ugm} routeEdges />
+
+// Or with tuning:
+<CytoscapeCanvas
+  ugm={ugm}
+  routeEdges={{
+    maxEdges: 400,
+    clearance: 16,       // more breathing room around obstacles
+    bendPenalty: 60,     // straighter routes, fewer corners
+    minStub: 24,         // shorter perpendicular exits before a bend
+  }}
+/>
+```
+
+The pass runs on every `layoutstop` (subject to the `maxEdges` cap) and on
+`drag-free` for the dragged node's incident edges. It is a restyle, never a
+re-init: camera and positions hold. Edges that fail to route (or whose
+polyline is straight) revert to bezier without phantom polylines.
+
 ### Register an algorithm result from your backend
 
 ```tsx

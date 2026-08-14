@@ -322,6 +322,18 @@ export type {
   RouteTerminal,
 } from "./route/orthogonal-router";
 export {
+  routeSceneEdges,
+  inferTerminalSides,
+  polylineToCytoscapeSegments,
+} from "./route/route-scene-edges";
+export type {
+  SceneNodeBox,
+  SceneEdgeEndpoints,
+  RouteSceneOptions,
+  RouteSceneResult,
+  SceneRoutedEdge,
+} from "./route/route-scene-edges";
+export {
   applyChangeSet,
   invertChangeSet,
   affectedRegion,

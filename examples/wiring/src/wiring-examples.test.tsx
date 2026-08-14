@@ -15,6 +15,8 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import type { Core } from "cytoscape";
 import {
   UGM,
+  routeSceneEdges,
+  polylineToCytoscapeSegments,
   parseAlgorithmResult,
   applyAlgorithmResult,
   ingestAlgorithmResults,
@@ -764,5 +766,31 @@ describe("programmatic APIs (guide: Programmatic APIs)", () => {
     expect(fit.mock.calls.length + animate.mock.calls.length).toBeGreaterThan(
       0,
     );
+  });
+});
+
+describe("routeEdges (guide: Route edges around nodes on any layout)", () => {
+  it("routeSceneEdges + polylineToCytoscapeSegments give a canvas-ready detour", () => {
+    // A -> B with an obstacle sitting between them; the pure module
+    // that the CytoscapeCanvas routeEdges pass calls under the hood.
+    const nodes = [
+      { id: "a", x: 0, y: 40, width: 40, height: 40 },
+      { id: "obst", x: 100, y: 0, width: 60, height: 200 },
+      { id: "b", x: 240, y: 40, width: 40, height: 40 },
+    ];
+    const { routed } = routeSceneEdges(nodes, [
+      { id: "e", source: "a", target: "b" },
+    ]);
+    const pts = routed.get("e");
+    expect(pts).toBeDefined();
+    if (!pts) return;
+    const seg = polylineToCytoscapeSegments(pts);
+    expect(seg).not.toBeNull();
+    if (!seg) return;
+    // segment-distances/weights arrays consumable by cytoscape's
+    // "curve-style: segments" — same field names the canvas stamps as
+    // `_segDist` / `_segWeight` under the g3t-canvas-edge-routed class.
+    expect(seg.distances.length).toBe(seg.weights.length);
+    expect(seg.distances.length).toBeGreaterThan(0);
   });
 });
