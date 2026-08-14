@@ -11,18 +11,22 @@
  */
 
 import type { UGM } from "../ugm";
+import { isPseudoNode } from "../projection/pseudo-nodes";
 
 /**
  * Ingest algorithm results into a UGM.
  * Each entry in the results map is merged as additional properties
- * on the corresponding node.
+ * on the corresponding node. Pseudo nodes (Brief 06) are skipped:
+ * external algorithms run on the real graph, never on projection-time
+ * spreading nodes.
  */
 export function ingestAlgorithmResults(
   ugm: UGM,
   results: Map<string, Record<string, unknown>>,
 ): void {
   for (const [nodeId, properties] of results) {
-    if (ugm.hasNode(nodeId)) {
+    const attrs = ugm.getNode(nodeId);
+    if (attrs && !isPseudoNode(attrs)) {
       ugm.updateNodeProperties(nodeId, properties);
     }
   }

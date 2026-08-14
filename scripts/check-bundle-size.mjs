@@ -98,8 +98,18 @@ const BUDGETS = {
   // 17 oracle-pinned unit tests. Measured 180.7; +1.3 KB headroom.
   // 05b flips the flag on, deletes the escalation ladder + brief-10
   // stage-A accept-site + the transient flag (no-legacy), which nets
-  // most of this back; renegotiate here when it lands.
-  core: 182 * 1024,
+  // most of this back; renegotiate here when it lands. UPDATE
+  // 2026-08-14: 05b measured channel-as-default and it regresses
+  // crossings 2-8x, so the flag stays off-by-default and the ladder is
+  // retained (Decision do-not-make-the-prf-003-channel-router-the-default);
+  // no net deletion came back.
+  // RAISED 182 -> 187 (2026-08-14): brief 06 (dense-scene legibility)
+  // landed projection/pseudo-nodes.ts (hubBurst satellite spreading +
+  // busCollapse fan-in junctions, UGM->UGM transforms + SatelliteMap/
+  // JunctionMap reverse maps + shared pseudo-node filter helpers), pure
+  // additive/opt-in; 12 oracle-pinned unit tests. Measured 184.8;
+  // +2.2 KB headroom.
+  core: 187 * 1024,
   // Core ledger:
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with

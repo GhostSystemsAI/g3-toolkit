@@ -151,6 +151,28 @@ export type {
 } from "./projection";
 export { typeCollapse } from "./projection";
 export { createPresetPipeline } from "./projection";
+// Brief 06: projection-level pseudo-node spreading (dense-scene
+// legibility). UGM -> UGM transforms applied after projection.
+export {
+  hubBurst,
+  busCollapse,
+  isPseudoNode,
+  filterPseudoNodes,
+  filterPseudoEdges,
+  PSEUDO_FLAG,
+  PSEUDO_CONNECTOR_TYPE,
+  PSEUDO_TRUNK_TYPE,
+} from "./projection";
+export type {
+  PseudoKind,
+  HubBurstOptions,
+  HubBurstResult,
+  HubBurstEdgeAssignment,
+  SatelliteMap,
+  BusCollapseOptions,
+  BusCollapseResult,
+  JunctionMap,
+} from "./projection";
 export type {
   PresetName,
   HolonicProjectionPipeline,

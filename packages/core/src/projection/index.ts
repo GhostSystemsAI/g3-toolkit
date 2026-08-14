@@ -15,6 +15,27 @@ export {
   reificationCollapse,
 } from "./transforms";
 
+export {
+  hubBurst,
+  busCollapse,
+  isPseudoNode,
+  filterPseudoNodes,
+  filterPseudoEdges,
+  PSEUDO_FLAG,
+  PSEUDO_CONNECTOR_TYPE,
+  PSEUDO_TRUNK_TYPE,
+} from "./pseudo-nodes";
+export type {
+  PseudoKind,
+  HubBurstOptions,
+  HubBurstResult,
+  HubBurstEdgeAssignment,
+  SatelliteMap,
+  BusCollapseOptions,
+  BusCollapseResult,
+  JunctionMap,
+} from "./pseudo-nodes";
+
 export { createPresetPipeline, checkRenderPermission } from "./presets";
 export type {
   PresetName,
