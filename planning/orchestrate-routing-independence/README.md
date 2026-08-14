@@ -19,8 +19,14 @@ dispatch the numbered files):
 | 09 | widget-independence (Tier 3b) | 08 display-list maturity | echarts, vis-timeline/vis-data, tanstack table, fuse.js, demo n3/jsonld replaced and deleted |
 | 10 | long-edge-perimeter | 01 (both touch routeStructuralEdges) | Long skip edges prefer perimeter routes over legal-but-ugly interior corridors (Prune Wall) |
 | 11 | cluster-collapse-counts | — | interiorEdgeCount/boundaryEdgeCount on supernodes + count badge + auto-collapse wiring |
-| 12 | holon-boundary-projection | — (iterating with Jake before dispatch) | Boundary = structural block perimeter, portals = declared ports, projectHolonBoundary drill level |
-| 13 | holon-rdf12-examples | 12 direction settled | Holonic TriG dataset (RDF 1.2 + reified twin) + two worked examples |
+| 12 | holon-boundary-projection | — | Portals stay edges; boundary ring + transit glyphs (Jake ruling A30); projectHolonBoundary drill level |
+| 13 | holon-rdf12-examples | 12 | Holonic TriG dataset (RDF 1.2 + reified twin) + two worked examples |
+| 14 | routing-playback-rewind | 01 (quality.ts overlap) | Deterministic idempotent step playback/rewind in the Routing Lab for per-step routing eval (Jake A30) |
+
+Dispatch mode (Jake ruling A30:q2): ONE AT A TIME — each brief
+dispatches only after its predecessor lands and gates green; no
+orchestrator batch relaunch. Sanity gate demoted per decision
+kb-emit-bb44cd61e3cf (non-converging).
 
 Kept platform (owner-overridable only): react, react-dom, zustand —
 they ARE the adopter contract (CLAUDE.md three channels) — plus the

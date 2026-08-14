@@ -20,25 +20,27 @@ Projection have no data shape and no rendering.** Portals are plain
 edges; nothing represents WHERE on the holon's boundary a portal
 attaches or WHAT the holon exposes versus hides.
 
-## Design direction (negotiable — iterate with Jake before dispatch)
+## Design direction (Jake ruling A30:q1 — portals stay EDGES; boundary
+## is a RING, not structural ports)
 
-The structural view already has the exact machinery a boundary needs:
-declared ports with port-based body-edge attachment and perpendicular
-exit (landed, see CLAUDE.md open threads). Map the holonic model onto
-it:
-
-- **Boundary = the block perimeter.** A holon renders as a structural
-  block; its boundary graph is the ordered set of ports on that
-  perimeter.
-- **Portal = a declared port** (not a bare edge endpoint). Portal
-  edges attach at their port, giving portals a stable, legible
-  location; `_hasConstruct` portals get a distinct port glyph.
+- **Portal = a plain edge**, exactly as `projectToLPG` emits today.
+  No declared-port machinery, no structural-block mapping. Portal
+  identity keeps riding `_portalId`/`_hasConstruct` edge properties.
+- **Boundary = a visible ring** around the holon node: an annulus
+  between the holon's interior representation and the outside,
+  rendered as node styling (border band / concentric outline via the
+  style engine), not as extra graph elements. Portal edges CROSS the
+  ring; where an edge crosses, a small crossing glyph/marker makes
+  the portal's transit point legible. `_hasConstruct` portals get a
+  distinct glyph. Crossing positions are wherever the router puts the
+  edge — no anchor constraint solving in this brief.
 - **Projection space = the exposed subgraph.** New
-  `projectHolonBoundary(holon)`: what the holon PUBLISHES — boundary
-  nodes (port-adjacent interior nodes) + portal stubs — as a UGM,
-  sitting between `projectToLPG` (opaque) and
-  `projectHolonInterior` (fully open). This is the three-level
-  drill: holarchy → boundary/projection → interior.
+  `projectHolonBoundary(holon)`: what the holon PUBLISHES — exposed
+  boundary nodes + portal stubs — as a UGM, sitting between
+  `projectToLPG` (opaque) and `projectHolonInterior` (fully open).
+  In this middle view the ring is drawn as an enclosing boundary
+  (parent compound or background annulus) with exposed nodes inside
+  it and portal edges crossing out.
 - **Context stays out of scope** for this brief (it needs the
   backend-connected adapter; R5.1 is honestly tracked as unmet).
 
@@ -49,10 +51,11 @@ it:
    boundary) and on `Portal`: `boundaryNodeId?: string` (which
    exposed node the portal transits). No breaking change to
    existing datasets.
-2. **Core** — `projectHolonBoundary(holon): UGM` on the adapter;
-   holons-as-structural: a `holonsToStructural(dataset)` mapper
-   producing structural blocks with one declared port per portal
-   (reuse the structural input types from layout/structural.ts).
+2. **Core** — `projectHolonBoundary(holon): UGM` on the adapter.
+   Boundary-ring styling ships as style-engine rules + a
+   `_boundaryRing` marker property the projection sets on holon
+   nodes (data-mapped styles MUST sit on a `[field]`-scoped
+   selector per CLAUDE.md — never a bare `node` rule).
 3. **React** — drill state: holarchy view → double-click/context-menu
    "Open boundary" → boundary view → "Open interior". Wire through
    the existing holonic-portal-menu (R5.4 data side already done).
@@ -63,9 +66,10 @@ it:
 
 ## Acceptance
 
-- Boundary view renders a holon as a structural block with portals as
-  ports; interior/boundary/holarchy round-trip preserves camera per
-  the D15 stability doctrine (same-graph = no refit).
+- Boundary view renders the holon with a visible boundary ring and
+  portal edges crossing it with transit glyphs;
+  interior/boundary/holarchy round-trip preserves camera per the D15
+  stability doctrine (same-graph = no refit).
 - Existing HolonicDataset fixtures (no boundary fields) render
   exactly as today (additive-only proof: adapter tests unchanged).
 - `pnpm run gates` green.
