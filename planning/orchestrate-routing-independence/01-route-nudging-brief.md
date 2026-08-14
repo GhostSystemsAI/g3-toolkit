@@ -69,9 +69,14 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    shared routing-util module) so g3t-nudging.ts can import it — do
    not duplicate the implementation.
 1. **Decompose** each polyline into maximal axis-aligned segments.
-   Interior segments are movable on their perpendicular axis; the
-   first/last segments (anchor stubs) are FIXED — anchors keep their
-   fan positions.
+   Interior segments are movable on their perpendicular axis. Anchor
+   stubs (first/last segments) are FIXED in exactly this sense: the
+   stub's own-axis line (its perpendicular coordinate, i.e. the fan
+   position on the node border) never changes, but its LENGTH may
+   extend or trim along its own axis when an adjacent interior
+   segment moves — that length change is what keeps the polyline
+   connected. "Fixed" constrains the anchor coordinate, never the
+   stub endpoint shared with the moved neighbor.
 2. **Group** parallel interior segments into corridors: same axis,
    perpendicular coordinates within a capture band (2x target gap),
    parallel extents overlapping. Union-find over the overlap relation,
@@ -106,21 +111,37 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    (span / (n + 1)) — reduced but positive spacing, never overlapping a
    box. (c) span <= 0 (corridor fully occluded): TERMINAL FALLBACK —
    the whole group keeps its original positions untouched, and the
-   corridor is recorded in `corridorDemand` with `blocked: true` and
-   its full deficit. No exception, no undefined coordinates.
-5. **Rewrite** with GROUP-ATOMIC commit. For each corridor group,
-   compute all rewritten polylines (move each segment to its track,
-   extend/trim the two perpendicular neighbor segments,
-   `dedupeCollinear`) on COPIES. Validate the whole group: every
+   corridor is recorded in `corridorDemand` with `blocked: true`,
+   `blockedReason: 'occluded'`, and its full deficit. No exception,
+   no undefined coordinates. OPEN CORRIDORS: when one or both sides
+   of a corridor have no bounding obstacle box (edges routed near the
+   scene boundary), the free span is bounded by the layout bounds
+   (the geometry bounding box plus the routing margin) on that side;
+   midline and corridorKey are computed from those substitute bounds,
+   so both are always defined.
+5. **Rewrite** with SNAPSHOT-PLAN / ATOMIC-COMMIT semantics. ALL of
+   steps 2-4 (grouping, sort keys, track placement) are computed from
+   ONE immutable snapshot of the input geometry — no group ever sees
+   another group's moves, so sort keys can never go stale against the
+   geometry they govern. Rewrites for every group are computed on
+   COPIES (move each segment to its track, extend/trim the two
+   perpendicular neighbor segments, `dedupeCollinear`), validated per
+   group, and then committed in ONE final pass. Per-group validity is
+   independent by construction: validation is against the STATIC
+   obstacle boxes (which no group moves), and distinct corridors are
+   separated beyond the capture band (or split by a box), so one
+   group's tracks cannot land on another group's. Validate the whole group: every
    rewritten route must pass `polylineIntersectsBoxes`. SOURCE FACTS
    (checked 2026-08-14; implementing worker re-greps before coding and
    adapts import path/signature if it moved): exported from
    packages/core/src/route/orthogonal-router.ts:389 as
    `(points, boxes) => boolean`, already imported by g3t-routing.ts.
-   If ANY member fails, first retry the group placement once at half
-   gap (re-enter step 4's ladder); if a member still fails, the ENTIRE
-   group reverts to its original polylines and the corridor is
-   recorded in `corridorDemand` as blocked. All-or-nothing per group:
+   If ANY member fails, first retry the group placement once with
+   `trackGap' = trackGap / 2`, RE-RUNNING THE FULL three-branch
+   ladder at the halved gap (not a direct fixed-spacing emit); if a
+   member still fails, the ENTIRE group reverts to its original
+   polylines and the corridor is recorded in `corridorDemand` as
+   blocked with `blockedReason: 'reverted'`. All-or-nothing per group:
    no mixed-nudge states, so the pass can never produce a co-located
    pair that was not already in the input — the un-nudged input is the
    guaranteed worst case. A 2-point straight route is never nudged (a
@@ -128,21 +149,36 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    Rollback granularity is the GROUP (which contains whole routes'
    corridor segments); a route outside any committed group is
    byte-identical to its input.
-6. **Wire in** at the end of `routeStructuralEdges` behind option
-   `nudge?: boolean` (default ON, matching `routeEdges` posture), and
-   thread through `layoutStructural`'s routing options. The SVG view
-   and drag path pick it up for free (they call the same engine).
+6. **Wire in** at the end of `routeStructuralEdges` ITSELF behind
+   option `nudge?: boolean` (default ON, matching `routeEdges`
+   posture), and thread through `layoutStructural`'s routing options.
+   Non-test call sites enumerated (checked 2026-08-14; worker
+   re-greps): g3t-structural.ts:295 (the `layoutStructural` flow) and
+   packages/react/src/views/svg/structural-svg-view.tsx:408 (a DIRECT
+   call bypassing `layoutStructural`). Because the wire-in is inside
+   `routeStructuralEdges`, the direct SVG call and any external
+   caller of the exported function get nudging by default — no call
+   site is silently skipped.
+   DRAG-STABILITY CLAIM, precisely scoped: track ORDER within a
+   corridor group is drag-stable (combinatorial keys). Group
+   MEMBERSHIP is recomputed per pass; a drag that moves a segment
+   across the capture-band boundary legitimately re-corridors it —
+   that is a real geometry change, not flicker. Membership hysteresis
+   is explicitly OUT OF SCOPE for this slice.
    Default-ON changes geometry for every existing structural render:
    the implementing worker MUST re-pin every affected snapshot /
    pixel / geometry assertion in the SAME PR (test churn is expected
    and accepted; a red baseline left for the next brief is not).
    AUDIT RULE: deleting or skipping a test to make the suite pass is
-   FORBIDDEN; the commit message body lists every re-pinned test by
-   file so the re-pin set is reviewable, and the worker reports the
-   count in its outcome summary. ROLLBACK PATH: the `nudge` option is
-   the escape hatch — a rendering regression after merge is recovered
-   by a single-line default flip (`nudge: false`) PR; the owner
-   (Jake/Zach) decides the flip, no config atom or infra involved.
+   FORBIDDEN; baseline re-pins land as ONE SEPARATE commit in the
+   same PR (implementation commit + re-pin commit), the re-pin commit
+   body lists every re-pinned test by file, and the worker reports
+   the count in its outcome summary. ROLLBACK PATH: a rendering
+   regression after merge is recovered by ONE revert PR that flips
+   the default (`nudge: false`) AND reverts the re-pin commit —
+   that's why re-pins are a separate, cleanly revertible commit; the
+   owner (Jake/Zach) decides the flip, no config atom or infra
+   involved.
 
 ### corridorDemand schema (the Phase 2 contract — defined, not opaque)
 
@@ -150,14 +186,24 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
 interface CorridorDemand {
   axis: 'h' | 'v';          // segment orientation in the corridor
   corridorKey: string;       // deterministic id, spec below
-  midline: number;           // cross coordinate of the free-span midline
+  midline: number;           // CLEARANCE-ADJUSTED free-span midline — the
+                             // exact value step 4 centers on (midpoint between
+                             // clearance-adjusted box faces), NOT the raw
+                             // obstacle-face midpoint
   extent: [number, number];  // corridor span along the segment axis
   edgeIds: string[];         // members, in final track order
   tracksRequired: number;    // n = group size
   spanAvailable: number;     // free span between obstacle boxes minus clearance
   spanRequired: number;      // (n + 1) * trackGap — same convention as step 4
   deficit: number;           // max(0, spanRequired - spanAvailable)
-  blocked: boolean;          // true when spanAvailable <= 0 or the group reverted
+  blocked: boolean;          // true for either blockedReason
+  blockedReason?: 'occluded' | 'reverted';
+                             // 'occluded' = spanAvailable <= 0: a GEOMETRY
+                             // deficiency — brief 04 must reserve space here.
+                             // 'reverted' = space existed but validation
+                             // rejected a member: an ALGORITHM edge case —
+                             // brief 04 must NOT treat it as a space request;
+                             // it is diagnostic, surfaced for engine work.
 }
 ```
 
@@ -183,20 +229,37 @@ skip-this-corridor signal.
 - **Oracle metric first:** add `coincidentRuns` to the Routing Lab
   quality oracle (`src/demo/routing/quality.ts`) — pairs of distinct
   edges with parallel overlapping segments closer than 4px. Pin the
-  CURRENT (bad) values for Fan-In Bus and Port Storm in a test, then
-  assert the nudged values reach 0 where corridor width allows.
+  CURRENT values for ALL SIX lab scenarios in a test (Fan-In Bus and
+  Port Storm carry the known-bad counts; the others pin whatever
+  their current value is), then assert the nudged value reaches 0
+  where corridor width allows and never increases on any scenario.
 - Unit tests on the module: order preservation (no new crossings by
   construction — assert crossings metric does not increase on all six
   lab scenarios), box-violation count does not increase, straight
   routes untouched, determinism (two runs byte-identical), drag
   stability (perturb one node 3px, assert track ORDER unchanged).
-- Degradation-ladder unit tests, one per branch: (a) full-gap spacing
-  is exactly `trackGap` and gap-consistent; (b) the ELK-degraded
-  branch (0 < span < n*gap) asserts the emitted spacing equals
-  span/(n+1), is strictly positive, and no track overlaps a box;
-  (c) fully blocked corridor (span <= 0) asserts byte-identical
-  passthrough of the group AND a `corridorDemand` entry with
-  `blocked: true` and the correct deficit.
+- Degradation-ladder unit tests, one per branch, using the SAME
+  boundary convention as step 4: (a) span >= (n+1)*gap asserts
+  full-gap spacing exactly `trackGap`, gap-consistent, and every
+  track at least `clearance` from both bounding box faces; (b) the
+  ELK-degraded branch (0 < span < (n+1)*gap) asserts the emitted
+  spacing equals span/(n+1), is strictly positive, no track overlaps
+  a box, AND the outermost tracks respect the clearance margin from
+  the box faces; plus an explicit boundary case at span exactly
+  (n+1)*gap asserting branch (a) is selected and deficit is 0 (the
+  off-by-one canary); (c) fully blocked corridor (span <= 0) asserts
+  byte-identical passthrough of the group AND a `corridorDemand`
+  entry with `blocked: true`, `blockedReason: 'occluded'`, and the
+  correct deficit.
+- Retry-branch test: a group whose first placement fails validation
+  but succeeds at trackGap/2 asserts the retry re-runs the full
+  ladder at the halved gap and commits; a group that fails both
+  asserts whole-group revert with `blockedReason: 'reverted'`.
+- Split-rule test: two segments within the 16px capture band with an
+  obstacle box between them on the perpendicular axis assert they are
+  NOT grouped (two distinct corridors emitted, neither track set
+  crosses the box); removing the box asserts they ARE grouped — the
+  test fails if the split rule is omitted or inverted.
 - Group-atomicity test: construct a corridor where one member cannot
   move without a box hit; assert the WHOLE group is byte-identical to
   input (no mixed-nudge state) and `coincidentRuns` did not increase.
@@ -215,7 +278,11 @@ skip-this-corridor signal.
 ## Scope guard
 
 No public API widening beyond the `nudge` routing option and the
-exported `corridorDemand` shape. No changes to anchor fans, the
-escalation ladder, or the simple template — this slice ONLY separates
-what they emit. Dummy chains (LAY-005) and the channel router
+exported `corridorDemand` shape. `dedupeCollinear`'s new export is
+ENGINE-INTERNAL only: exported from g3t-routing.ts so g3t-nudging.ts
+can import it, but NOT re-exported from packages/core/src/index.ts —
+it stays out of the package surface and future refactors may still
+treat it as internal. No changes to anchor fans, the escalation
+ladder, or the simple template — this slice ONLY separates what they
+emit. Dummy chains (LAY-005) and the channel router
 (PRF-003) remain later phases; corridorDemand is the bridge to them.
