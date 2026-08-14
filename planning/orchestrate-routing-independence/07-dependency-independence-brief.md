@@ -39,10 +39,26 @@ bundle ledger notes the delta.
   follows when the gate opens. W1 is listed here for ownership
   clarity only.
 
+  Sunset policy: if briefs 03-05 have not opened W1 within 90 days
+  of brief 07's other W-items shipping, W1 ownership transfers to a
+  standalone brief with its own dispatch and explicit timeline, and
+  `@dagrejs/dagre` is flagged for manual triage at that point. The
+  90-day clock starts when the last of W2-W9 ships.
+
 - **W2 d3-hierarchy**: clean-room tidy tree (Reingold-Tilford with
   Walker/Buchheim linear-time improvements, from the papers) inside
   the g3t engine; replaces hierarchy-layout.ts internals; same
-  LayoutResult contract, existing tests are the gate.
+  LayoutResult contract.
+
+  Parity gate (numeric and boolean, pinned as constants in the test
+  file at W2 ship time): (a) node overlap count must equal 0 on all
+  hierarchy-layout test fixtures; (b) sibling ordering (left-to-right
+  child insertion order) must match d3-hierarchy's output exactly on
+  all fixtures; (c) tree depth (count of distinct vertical levels)
+  must match d3-hierarchy's output exactly on all fixtures. These are
+  verified as hard asserts, not tolerances. The existing tests
+  additionally remain green untouched where they gate the LayoutResult
+  contract.
 
 - **W3 d3-force**: clean-room velocity-Verlet force sim (many-body
   via Barnes-Hut quadtree, link + center + collide forces, standard
@@ -50,12 +66,22 @@ bundle ledger notes the delta.
   already in-tree.
 
   Parity gate: on the layout-engine test fixtures, node-overlap
-  count must be less than or equal to ForceLayout's overlap count
-  measured at the same seed; crossings must be within 10% of
-  ForceLayout's count on graphs with 20+ nodes; energy convergence
-  criterion is < 0.001 mean displacement per node per step at
-  termination. These thresholds are pinned as numeric constants in
-  the test file at the time W3 ships.
+  count must be less than or equal to ForceLayout's overlap count;
+  crossings must be within 10% of ForceLayout's count on graphs with
+  20+ nodes; energy convergence criterion is < 0.001 mean
+  displacement per node per step at termination.
+
+  Baseline measurement protocol: baseline overlap and crossing counts
+  are measured once using the existing ForceLayout (with d3-force) at
+  W3 ship time and frozen as numeric constants in the test file --
+  they are NOT recomputed at test run time. d3-force has its own
+  internal RNG seeding mechanism separate from the mulberry32 call
+  site; if d3-force's RNG is not driven by mulberry32 at baseline
+  measurement time, the baseline is measured without seeding and
+  frozen regardless. The clean-room sim uses the mulberry32 seed
+  value at its own RNG call site. The frozen numeric constants remain
+  valid reference points even if a future d3-force version changes
+  its output, because they are constants, not live comparisons.
 
 - **W4 cytoscape-fcose**: delivers a standalone ForceLayout engine
   that accepts LayoutInput and returns LayoutResult positions using
@@ -69,8 +95,18 @@ bundle ledger notes the delta.
   canvas2d renderer), consistent with the Tier 3 block below.
   W4's parity gate is settle-time budget (numeric: force iteration
   count measured on the standard fixtures, threshold pinned in test)
-  plus visual sign-off (Zach) via the Pages playground. W4 ships
-  when both pass; until then the cytoscape-fcose path remains.
+  plus visual sign-off (Zach) via the Pages playground.
+
+  State at W4 ship time (explicit): the CytoscapeCanvas.tsx fcose
+  registration block, the fcoseRegistered flag, and the "fcose"
+  layout-name branch in the canvas options path are removed entirely
+  and replaced by the new clean-room engine's integration. After W4
+  lands, `cytoscape-fcose` is imported nowhere in source -- the
+  package.json entry persists (brief 08 owns that deletion) but the
+  dep is orphaned for the inter-brief window. This is an expected
+  transient state, not a dual-implementation state: only the clean-
+  room engine answers layout requests after W4 ships. Brief 08 removes
+  the orphaned package.json entry when the native renderer lands.
 
 ## Tier 2 -- utility deps (independent of Tier 1, start immediately)
 
@@ -90,6 +126,15 @@ bundle ledger notes the delta.
   fixtures and wiring-guide examples, all evaluated identically under
   the clean-room parser as under expr-eval before deletion. Delete
   dep.
+
+  Error semantics (explicit): on parse failure, the clean-room parser
+  must throw a named Error subclass (ExprParseError or equivalent)
+  carrying at minimum the failing expression string and a description
+  of the offending token or position. It must NOT return a sentinel
+  value. Before W6 ships, every call site in DerivedPropertyEngine
+  that currently catches expr-eval exceptions must be audited and
+  updated to catch the new type; this audit is a gating deliverable
+  alongside the grammar tests.
 
 - **W8 graphology-communities-louvain** (depends on W9 -- do last in
   Tier 2): collapse-by-cluster.ts:31 feeds a graphology MultiGraph
@@ -114,9 +159,16 @@ bundle ledger notes the delta.
   adjacency-map structure implementing exactly the operations UGM
   uses. The audit of which MultiGraph operations UGM calls is a
   formal blocking deliverable for W9: produce an explicit list before
-  writing the replacement. The UGM test suite is the gate. Largest
-  Tier-2 item; the internal adjacency-map type it defines is the
-  interface W8 consumes.
+  writing the replacement. The audit must additionally enumerate which
+  edge-direction modes the replacement must support (directed,
+  undirected, or mixed). The current ugm.ts uses `addEdge` (directed
+  in graphology MultiGraph) and `neighbors()` / `edges(nodeId)` which
+  include all adjacent edges regardless of direction; the audit must
+  confirm the mode set and the adjacency-map must implement exactly
+  the confirmed modes -- no more, no fewer. The UGM test suite is the
+  gate; the test suite must cover all confirmed edge-direction modes
+  before W9 ships. Largest Tier-2 item; the internal adjacency-map
+  type it defines is the interface W8 consumes.
 
 ## Tier 3 (superseded 2026-08-14: now IN scope, briefs 08 + 09)
 
@@ -159,6 +211,17 @@ package.json with the revert commit. No item is batched with another
 to avoid cross-item revert blast radius. For W6 (Pratt parser) and
 W8 (Louvain) the existing test suites provide the regression surface;
 a silent regression failing tests fails CI before merge.
+
+Exception -- W8 and W9 form a sequenced pair for revert purposes:
+W8's clean-room Louvain consumes W9's internal adjacency-map type,
+not `graphology.MultiGraph`. If W8 must be reverted after W9 has
+already shipped (graphology deleted), the W8 revert cannot land alone
+-- W9 must also be reverted first (restoring graphology) before a
+W8 revert commit can compile. Revert order in this case is: revert
+W8 first, then revert W9. The "atomic per-PR revert" guarantee holds
+independently for all other items; only the W8-after-W9 case requires
+a coordinated two-PR revert, and that ordering must be noted in both
+PRs' merge instructions at ship time.
 
 ## Verification (every W item)
 
