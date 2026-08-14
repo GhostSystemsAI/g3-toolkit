@@ -13,6 +13,7 @@
 import { useMemo, useState } from "react";
 import {
   CytoscapeCanvas,
+  labelWrapRule,
   useSelectionStore,
   categoricalColorMap,
 } from "@g3t/react";
@@ -32,6 +33,11 @@ import { OntologyExplorer } from "./OntologyExplorer";
 import { BIO_STYLES } from "./bio-styles";
 import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
+
+/** Wrap width for node labels (px). The long protein/disease names
+ *  ("Epidermal growth factor receptor") overlap neighbors unwrapped;
+ *  tune here, toggle live via the "Wrap labels" switch. */
+const LABEL_WRAP_WIDTH = 90;
 
 const SPEC: EncodingSpec = {
   version: 1,
@@ -100,6 +106,15 @@ export function BioShell({ onBack }: { onBack: () => void }) {
   );
   const [chartType, setChartType] = useState<"bar" | "scatter">("bar");
 
+  // Label word-wrap switch. Rides the `stylesheet` prop, which the
+  // relayout contract defines as a style refresh: toggling never
+  // re-runs layout or moves the camera.
+  const [wrapLabels, setWrapLabels] = useState(true);
+  const wrapStylesheet = useMemo(
+    () => (wrapLabels ? [labelWrapRule(LABEL_WRAP_WIDTH)] : []),
+    [wrapLabels],
+  );
+
   const chartHint = useMemo(
     () => defaultQueries.find((q) => q.id === queryId)?.chart,
     [queryId],
@@ -167,6 +182,15 @@ export function BioShell({ onBack }: { onBack: () => void }) {
                 {v === "projected" ? "Projected" : "Raw triples"}
               </button>
             ))}
+            <button
+              type="button"
+              className={wrapLabels ? "bio-view-btn active" : "bio-view-btn"}
+              aria-pressed={wrapLabels}
+              data-testid="bio-wrap-toggle"
+              onClick={() => setWrapLabels((w) => !w)}
+            >
+              Wrap labels
+            </button>
             <span className="bio-view-caption" data-testid="bio-view-caption">
               {canvasUgm.getNodeIds().length} nodes ·{" "}
               {canvasView === "raw"
@@ -177,6 +201,7 @@ export function BioShell({ onBack }: { onBack: () => void }) {
           <CytoscapeCanvas
             ugm={canvasUgm}
             encodingSpec={SPEC}
+            stylesheet={wrapStylesheet}
             animate={!reducedMotion}
           />
         </main>

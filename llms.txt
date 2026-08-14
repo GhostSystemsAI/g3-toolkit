@@ -42,7 +42,8 @@ computation".
   `shaclShapesToStructural`, `shaclRowSeverities`, `closedShapeIds`.
 - Structural (UML/SysML-style) layout: `layoutStructural`,
   `isChainEdgeId`, `routeStructuralEdges` (pure edge router, for live
-  re-route during drags); rendered by `StructuralSvgView`.
+  re-route during drags; opt-in `nudge` option separates parallel
+  runs into distinct tracks); rendered by `StructuralSvgView`.
 - Algorithms and scale: `parseAlgorithmResult`, `applyAlgorithmResult`,
   `ingestAlgorithmResults`, `findShortestPath`, `allShortestPaths`,
   `collapseByCluster`, `buildSubgraph`, `computeIncrementalUpdate`,
@@ -62,6 +63,8 @@ below), onReady which hands you the Cytoscape Core),
 `SearchBar`, `FacetFilter`, `FilterBuilder`, `ContextMenuManager`,
 `createDefaultMenuManager`, `registerToolkitActions`, `runGraphLayout`,
 `createCameraController`, `createTheme`, `applyEncodingSpec`,
+`labelWrapRule` (word-wrap long node labels; pass via the `stylesheet`
+prop, a position-preserving restyle),
 `captureWorkspace` / `applyWorkspace` / `serializeWorkspace`, plus view
 components: TableView, TreeView, TimelineView, MapView, MatrixView,
 SankeyView, SchemaView, StatsPanel, QueryEditor, ShaclShapeBrowser,
@@ -124,8 +127,9 @@ Details:
 - [API reference (typedoc)](https://zwelz3.github.io/g3-toolkit/api/)
 - [Playground](https://zwelz3.github.io/g3-toolkit/playground/): five
   domain shells (Ontology, Auditor, MBSE, Supply Chain, Biomedical) +
-  three capability dashboards (Analytics, Scale, Style Lab), live in
-  the browser.
+  capability dashboards (Analytics, Scale, Style Lab, Routing Lab —
+  hard edge-routing scenarios graded live), live in the browser. The
+  landing footer links this file, AGENTS.md, and the wiring guide.
 - [Storybook](https://zwelz3.github.io/g3-toolkit/storybook/)
 
 ## Optional

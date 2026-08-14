@@ -637,6 +637,29 @@ const theme = createTheme({ id: "acme", name: "Acme", accentPrimary: "#0af" });
 // contrast against its background.
 ```
 
+### Word-wrapping long node labels
+
+Long labels (RDF entity names, protein or disease terms) render
+single-line by default and can overlap neighboring nodes.
+`labelWrapRule` builds the wrap rule; pass it through the `stylesheet`
+prop, which is a style refresh by the relayout contract, so toggling
+wrap on or off never re-runs layout or moves the camera:
+
+```tsx no-check
+import { CytoscapeCanvas, labelWrapRule } from "@g3t/react";
+
+const wrapSheet = useMemo(
+  () => (wrap ? [labelWrapRule(90)] : []), // max width in px; default 120
+  [wrap],
+);
+<CytoscapeCanvas ugm={ugm} stylesheet={wrapSheet} />;
+```
+
+The rule is scoped to `node[label]` (only nodes carrying a data-driven
+label match), so it composes with encoding specs and never triggers
+per-frame mapping warnings. The Biomedical shell's "Wrap labels"
+switch is the live demonstration.
+
 ### Camera control
 
 ```ts

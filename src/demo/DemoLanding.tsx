@@ -371,6 +371,47 @@ export function DemoLanding({
             Source on GitHub
           </a>
         </div>
+        {/* A33: adopter + AI-agent guides surfaced on the landing page
+            so a visitor (or an agent pointed at the playground) finds
+            the integration docs without spelunking the repo. */}
+        <div
+          style={{
+            marginTop: 10,
+            display: "flex",
+            justifyContent: "center",
+            flexWrap: "wrap",
+            gap: 14,
+          }}
+        >
+          {[
+            [
+              "Wiring guide",
+              "https://github.com/zwelz3/g3-toolkit/blob/main/docs/wiring-guide.md",
+              "landing-wiring-guide-link",
+            ],
+            [
+              "AI guide (llms.txt)",
+              "https://github.com/zwelz3/g3-toolkit/blob/main/llms.txt",
+              "landing-llms-link",
+            ],
+            [
+              "Agent guide (AGENTS.md)",
+              "https://github.com/zwelz3/g3-toolkit/blob/main/AGENTS.md",
+              "landing-agents-link",
+            ],
+          ].map(([label, href, testid]) => (
+            <a
+              key={testid}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              data-testid={testid}
+              style={{ color: "#94a3b8", textDecoration: "none" }}
+            >
+              {label}
+            </a>
+          ))}
+        </div>
       </div>
     </div>
   );

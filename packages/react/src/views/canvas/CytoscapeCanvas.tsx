@@ -665,6 +665,23 @@ export function composeCanvasStylesheet(
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+/** Word-wrap rule for data-driven node labels: long labels (RDF
+ *  entity names, protein/disease terms) otherwise render single-line
+ *  and overlap neighboring nodes. Append the returned rule via the
+ *  `stylesheet` prop; toggling it on/off is a STYLE REFRESH by the
+ *  relayout contract, so positions and the camera hold. Scoped to
+ *  `node[label]` (the mapping-warning doctrine: never a bare `node`
+ *  rule for data-carried fields). */
+export function labelWrapRule(maxWidthPx = 120): CyStylesheet {
+  return {
+    selector: "node[label]",
+    style: {
+      "text-wrap": "wrap",
+      "text-max-width": `${maxWidthPx}px`,
+    } as never,
+  };
+}
+
 /** Upstream P2 (prm-analyzer, 2026-07-28): interaction knobs that
  *  are init-time-only in cytoscape (wheelSensitivity in
  *  particular), exposed as a prop instead of forcing consumers to

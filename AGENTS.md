@@ -35,7 +35,7 @@ exposing through one of these three, never a fourth mechanism.
 - Package manager: pnpm, ENFORCED. Never npm or yarn.
 - `pnpm install` then `pnpm run dev` (opens the scenario gallery:
   Ontology, Auditor, MBSE, Supply Chain, Biomedical shells plus the
-  Analytics, Scale, and Style Lab dashboards).
+  Analytics, Scale, Style Lab, and Routing Lab dashboards).
 - `pnpm run storybook` for components in isolation.
 - `pnpm run docs:api` generates typedoc into docs-out/api.
 
@@ -137,6 +137,11 @@ docs/wiring-guide.md, and every wiring snippet runs in CI.
 14. Vendored tarballs: `pnpm pack` rewrites `workspace:*`; pin
     `@g3t/core` to one instance via overrides or the theme store
     silently splits between two copies.
+15. Long node labels overlap neighbors unwrapped: append
+    `labelWrapRule(maxWidthPx)` through the `stylesheet` prop (a
+    style refresh, so positions and the camera hold). Do not hand-roll
+    a bare `node { text-wrap }` rule; the helper is `node[label]`
+    scoped to avoid per-frame mapping warnings.
 
 When unsure of a signature, read the shipped declaration files
 (`packages/*/dist/*.d.ts` after `pnpm run verify`, or the typedoc at

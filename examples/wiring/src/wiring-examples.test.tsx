@@ -58,6 +58,7 @@ import {
   applyEncodingSpec,
   createTheme,
   createCameraController,
+  labelWrapRule,
   ProvenanceTrace,
   Minimap,
   createDefaultMenuManager,
@@ -725,6 +726,19 @@ describe("programmatic APIs (guide: Programmatic APIs)", () => {
     expect(theme.id).toBe("acme");
     expect(theme.bgPrimary.length).toBeGreaterThan(0);
     expect(theme.textPrimary.length).toBeGreaterThan(0);
+  });
+
+  it("labelWrapRule builds a node[label]-scoped wrap rule for the stylesheet prop", () => {
+    const styleOf = (rule: ReturnType<typeof labelWrapRule>) =>
+      (rule as unknown as { style: Record<string, string> }).style;
+    const rule = labelWrapRule(90);
+    // Field-scoped selector (mapping-warning doctrine) so nodes without
+    // a data label never trigger per-frame Cytoscape warnings.
+    expect(rule.selector).toBe("node[label]");
+    expect(styleOf(rule)["text-wrap"]).toBe("wrap");
+    expect(styleOf(rule)["text-max-width"]).toBe("90px");
+    // Default width when called bare.
+    expect(styleOf(labelWrapRule())["text-max-width"]).toBe("120px");
   });
 
   it("createCameraController drives the cy viewport imperatively", () => {

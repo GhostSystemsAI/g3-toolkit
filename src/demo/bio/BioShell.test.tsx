@@ -11,14 +11,18 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import type { UGM } from "@g3t/core";
 
-const canvasCalls = vi.hoisted(() => ({ nodeCounts: [] as number[] }));
+const canvasCalls = vi.hoisted(() => ({
+  nodeCounts: [] as number[],
+  stylesheets: [] as unknown[],
+}));
 
 vi.mock("@g3t/react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@g3t/react")>();
   return {
     ...actual,
-    CytoscapeCanvas: (props: { ugm: UGM }) => {
+    CytoscapeCanvas: (props: { ugm: UGM; stylesheet?: unknown }) => {
       canvasCalls.nodeCounts.push(props.ugm.getNodeIds().length);
+      canvasCalls.stylesheets.push(props.stylesheet);
       return <div data-testid="canvas-stub" />;
     },
   };
@@ -75,6 +79,26 @@ describe("BioShell SPARQL workbench", () => {
     expect(rawCount ?? 0).toBeGreaterThan(projectedCount ?? 0);
     fireEvent.click(screen.getByRole("button", { name: "Projected" }));
     expect(canvasCalls.nodeCounts.at(-1)).toBe(projectedCount);
+  });
+
+  it("wraps labels by default and the switch toggles the wrap rule off", () => {
+    render(<BioShell onBack={() => {}} />);
+    const last = () =>
+      canvasCalls.stylesheets.at(-1) as
+        | { selector: string; style: Record<string, string> }[]
+        | undefined;
+    // Default ON: one node[label]-scoped wrap rule (restyle channel).
+    const rules = last();
+    expect(rules).toHaveLength(1);
+    expect(rules?.[0]?.selector).toBe("node[label]");
+    expect(rules?.[0]?.style["text-wrap"]).toBe("wrap");
+    const toggle = screen.getByTestId("bio-wrap-toggle");
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(toggle);
+    expect(last()).toHaveLength(0);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(toggle);
+    expect(last()).toHaveLength(1);
   });
 
   it("carries the production-engine notice and the capability callout", () => {
