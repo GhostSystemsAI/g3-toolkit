@@ -57,7 +57,15 @@ const BUDGETS = {
   // oracle-pinned.
   // Round 21 (2026-08-05): +1 KB for the structural style applier
   // (R-12a), the renderer-neutral counterpart of the cytoscape one.
-  core: 155.5 * 1024, // 184 KB
+  // RAISED 155.5 -> 167 (2026-08-14): brief 01 (routing independence)
+  // landed the route-nudging post-pass: g3t-nudging.ts (grouping,
+  // divergence sort, placement ladder, snapshot-plan atomic commit),
+  // the CorridorDemand contract brief 04 consumes, and the
+  // g3t-polyline-utils extraction. ~9.7 KB of pure routing compute,
+  // opt-in (`nudge` option), 11 oracle-pinned unit tests. Measured
+  // 165.2; modest headroom only, so briefs 02-10 renegotiate here
+  // as they land rather than riding silent headroom.
+  core: 167 * 1024,
   // Core ledger:
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with
