@@ -15,6 +15,14 @@
  *
  * Escape hatch: blocks tagged ```ts no-check (or ```tsx no-check)
  * are skipped, for intentionally illustrative fragments.
+ *
+ * Placeholders: a snippet stands for code an adopter writes, so it
+ * names things the adopter owns (`ugm`, `cy`, `orgSettings`) without
+ * declaring them. Those names are declared as `any` in a generated
+ * ambient file, PLACEHOLDERS below. Toolkit symbols are deliberately
+ * NOT in that list: a snippet that uses one must import it, which is
+ * what makes a removed or renamed export fail this gate. Adding a
+ * toolkit name to PLACEHOLDERS would defeat the check, so do not.
  */
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -28,9 +36,50 @@ const READMES = [
   "packages/core/README.md",
   "packages/react/README.md",
   "packages/charts/README.md",
+  // The wiring guide is the adopter surface, so its snippets rot the
+  // same way the quickstarts did: it carried working recipes for a
+  // collapse API that had been removed by ruling months earlier, and
+  // nothing failed. Its executable twins in examples/wiring/src/ run
+  // under the test gate, but nothing ties a fence to a twin, so a
+  // snippet added without one was unchecked. This gate covers the
+  // fences themselves.
+  "docs/wiring-guide.md",
 ];
 
 const FENCE = /```(tsx?)([^\n`]*)\n([\s\S]*?)```/g;
+
+/**
+ * Names the docs use for things the ADOPTER owns: their graph, their
+ * Cytoscape handle, their settings, their router, their components.
+ * Host-side only. See the header note before adding anything here.
+ */
+const PLACEHOLDERS = {
+  // The adopter's graph. Typed for real, not `any`: the snippets call
+  // methods on it, and those calls are worth checking.
+  ugm: "UGM",
+  shapeUgm: "UGM",
+  big: "UGM",
+  // Everything else is the adopter's own code and has no toolkit type.
+  caseId: "any",
+  cy: "any",
+  DossierLookup: "any",
+  initialSpec: "any",
+  navigate: "any",
+  orgSettings: "any",
+  processEngine: "any",
+  rdfGraph: "any",
+  result: "any",
+  riskViewSpec: "any",
+  saved: "any",
+  saveToCase: "any",
+  seededRng: "any",
+  selectedIds: "any",
+  selection: "any",
+  setSpec: "any",
+  shapes: "any",
+  spec: "any",
+  validationResults: "any",
+};
 const dir = resolve(root, ".verify-snippets");
 rmSync(dir, { recursive: true, force: true });
 mkdirSync(dir, { recursive: true });
@@ -54,6 +103,25 @@ if (files.length === 0) {
   console.log("check-readme-snippets: no ts/tsx blocks found");
   process.exit(0);
 }
+
+// Ambient host-side placeholders. `any` on purpose: the point is not
+// to typecheck the adopter's own values, it is to keep an undeclared
+// TOOLKIT symbol from hiding among them.
+writeFileSync(
+  resolve(dir, "_placeholders.d.ts"),
+  [
+    'import type { UGM } from "@g3t/core";',
+    "declare global {",
+    ...Object.entries(PLACEHOLDERS).map(
+      ([name, type]) => `  const ${name}: ${type};`,
+    ),
+    "}",
+    "export {};",
+    "",
+  ].join("\n"),
+);
+const snippetCount = files.length;
+files.push("_placeholders.d.ts");
 
 writeFileSync(
   resolve(dir, "tsconfig.json"),
@@ -95,7 +163,7 @@ try {
     { stdio: "pipe", cwd: root },
   );
   console.log(
-    `check-readme-snippets: ${files.length} snippet(s) typecheck cleanly`,
+    `check-readme-snippets: ${snippetCount} snippet(s) typecheck cleanly`,
   );
   rmSync(dir, { recursive: true, force: true });
 } catch (err) {
