@@ -31,6 +31,78 @@ interface Edge {
 }
 
 /**
+ * Corridor supply contract (brief 04, owner Jake, 2026-08-14).
+ *
+ * Layout is responsible for corridor width, the router only for
+ * arranging tracks inside it (the dagre negative lesson: a router
+ * cannot widen the gap; only the layer-placement pass can). The
+ * estimate is computed from structure (chain-segment count per
+ * boundary), gap-sizing is a pure function of demand + base gap +
+ * caps, and after routing the nudge pass returns a measured demand
+ * that a dev-mode drift assertion compares back against the estimate
+ * to catch systematic underestimation.
+ *
+ * These constants mirror the nudging defaults so the estimate uses
+ * the same track/clearance geometry the router will consume.
+ */
+export const CORRIDOR_TRACK_GAP = 8;
+export const CORRIDOR_CLEARANCE = 8;
+export const CORRIDOR_MAX_GAP_FACTOR = 3;
+/** Asymmetric slack in the drift assertion: estimate is expected to
+ *  be >= actual demand; 1 track covers a single additional track
+ *  from any one proxy source (bend avoidance, bundle splitting,
+ *  shared-segment reuse). Widen (with a calibration note) when a
+ *  diagram class fires two or more sources on the same corridor. */
+export const CORRIDOR_DRIFT_TOLERANCE = 1;
+
+/**
+ * Count edges crossing each inter-layer boundary. Boundary index i
+ * sits between layer i and layer i+1. Chain splitting is invariant
+ * to this count (each original edge with span k contributes 1 to
+ * each of k boundaries, same as k chain sub-edges), so the estimate
+ * is computed from the pre-split (edges, layerOf) pair.
+ */
+export function estimateCorridorDemand(
+  edges: readonly Edge[],
+  layerOf: ReadonlyMap<string, number>,
+): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const e of edges) {
+    if (e.source === e.target) continue;
+    const ls = layerOf.get(e.source);
+    const lt = layerOf.get(e.target);
+    if (ls === undefined || lt === undefined) continue;
+    const lo = Math.min(ls, lt);
+    const hi = Math.max(ls, lt);
+    for (let i = lo; i < hi; i++) {
+      out.set(i, (out.get(i) ?? 0) + 1);
+    }
+  }
+  return out;
+}
+
+/**
+ * Corridor gap formula: min(maxGapFactor*baseGap, max(baseGap,
+ * demand*trackGap + 2*clearance)). Cap-active flag rides out so the
+ * caller can annotate corridors that hit the outer cap (verification
+ * step 4 in brief 04: total-area growth with all corridors cap-limited
+ * signals the maxGapFactor default is too restrictive, not that the
+ * area threshold is too tight).
+ */
+export function computeCorridorGap(
+  demand: number,
+  baseGap: number,
+  trackGap: number = CORRIDOR_TRACK_GAP,
+  clearance: number = CORRIDOR_CLEARANCE,
+  maxGapFactor: number = CORRIDOR_MAX_GAP_FACTOR,
+): { gap: number; capActive: boolean } {
+  const uncapped = Math.max(baseGap, demand * trackGap + 2 * clearance);
+  const cap = maxGapFactor * baseGap;
+  if (uncapped > cap) return { gap: cap, capActive: true };
+  return { gap: uncapped, capActive: false };
+}
+
+/**
  * Size of a dummy pseudo node (square). NON-ZERO on purpose: BK's
  * placement uses each node's cross-extent for size-aware separation
  * (`nodeSpacing`-plus-half-widths), so a zero-sized dummy would let

@@ -34,8 +34,56 @@ import {
   removeCycles,
   type G3tLayoutOptions,
 } from "./g3t-layered";
-import { harvestBendHints, splitLongSpanEdges } from "./g3t-dummy-chain";
+import {
+  CORRIDOR_DRIFT_TOLERANCE,
+  computeCorridorGap,
+  estimateCorridorDemand,
+  harvestBendHints,
+  splitLongSpanEdges,
+} from "./g3t-dummy-chain";
+import { nudgeRoutes, type CorridorDemand } from "./g3t-nudging";
 import type { Pt } from "./g3t-polyline-utils";
+
+/**
+ * Dev-mode drift assertion (brief 04): the router's measured
+ * per-corridor track demand must not exceed the layout's structural
+ * estimate by more than CORRIDOR_DRIFT_TOLERANCE. Warnings name the
+ * corridor so the calibration test can widen the tolerance per
+ * diagram class (never silently: a failing assertion is a signal, not
+ * a runtime re-layout trigger).
+ */
+function checkCorridorDrift(
+  estimated: ReadonlyMap<number, number>,
+  midlines: readonly number[],
+  measured: readonly CorridorDemand[],
+  horizontal: boolean,
+): void {
+  const isDev =
+    typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
+  if (!isDev) return;
+  const expectedAxis: "v" | "h" = horizontal ? "v" : "h";
+  for (const m of measured) {
+    if (m.axis !== expectedAxis) continue;
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < midlines.length; i++) {
+      const mid = midlines[i];
+      if (mid === undefined) continue;
+      const d = Math.abs(mid - m.midline);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx < 0) continue;
+    const est = estimated.get(bestIdx) ?? 0;
+    if (m.tracksRequired > est + CORRIDOR_DRIFT_TOLERANCE) {
+      console.warn(
+        `[g3t/layout] corridor supply underestimated: boundary ${bestIdx} at ${m.midline.toFixed(1)} estimated ${est} tracks, router measured ${m.tracksRequired}`,
+      );
+    }
+  }
+}
 
 function at<T>(v: T | undefined, what: string): T {
   if (v === undefined) throw new Error(`g3t structural invariant: ${what}`);
@@ -196,6 +244,12 @@ export function g3tLayoutStructural(
   // Track each layer's flow-axis center as it emits, keyed by layer
   // INDEX (the same index augmentedLayerOf uses for dummies).
   const layerFlowCenter: number[] = [];
+  // Brief 04: per-boundary corridor-supply sizing. Demand is a chain-
+  // segment count computed from structure (before placement); gaps
+  // widen where the estimate exceeds baseGap and are capped by
+  // maxGapFactor. Midlines are captured for the drift assertion.
+  const corridorDemandEst = estimateCorridorDemand(edges, layerOf);
+  const corridorMidlines: number[] = [];
   const nodes: StructuralGeometry["nodes"] = {};
   const ports: StructuralGeometry["ports"] = {};
   // Direction (WS-D D3a): layers stack along the FLOW axis. RIGHT
@@ -207,7 +261,8 @@ export function g3tLayoutStructural(
   const flowExtent = (id: string): number =>
     horizontal ? (widthOf.get(id) ?? 100) : (heightOf.get(id) ?? 44);
   let flow = 0;
-  for (const layer of realLayers) {
+  for (let li = 0; li < realLayers.length; li++) {
+    const layer = realLayers[li] ?? [];
     const layerF = Math.max(0, ...layer.map((id) => flowExtent(id)));
     layerFlowCenter.push(flow + layerF / 2);
     for (const id of layer) {
@@ -299,7 +354,14 @@ export function g3tLayoutStructural(
         });
       }
     }
-    flow += layerF + layerSpacing;
+    if (li < realLayers.length - 1) {
+      const demand = corridorDemandEst.get(li) ?? 0;
+      const { gap } = computeCorridorGap(demand, layerSpacing);
+      corridorMidlines.push(flow + layerF + gap / 2);
+      flow += layerF + gap;
+    } else {
+      flow += layerF + layerSpacing;
+    }
   }
   // LAY-005: interpolate dummy positions from the placed real
   // endpoints. Along the FLOW axis the dummy takes its layer's
@@ -367,7 +429,11 @@ export function g3tLayoutStructural(
     headerHeight,
   };
   if (options?.routeEdges ?? true) {
-    geometry.edges = routeStructuralEdges(input, geometry, {
+    // Brief 04: route WITHOUT the router's built-in nudge fold, then
+    // run nudgeRoutes here so we can capture corridorDemand for the
+    // drift assertion. When the caller did not ask for nudging we
+    // skip the measurement pass entirely (byte-identical to before).
+    const rawRoutes = routeStructuralEdges(input, geometry, {
       routingBudgetMs: options?.routingBudgetMs,
       direction: options?.direction,
       // R-6 (upstream register, 2026-08-03): anchor was added for
@@ -375,7 +441,6 @@ export function g3tLayoutStructural(
       // from the single call most consumers make and they had to
       // re-route over geometry the layout had just produced.
       anchor: options?.anchor,
-      nudge: options?.nudge,
       // LAY-005: preserve the historical default so a direct raw
       // routeStructuralEdges call (which now defaults longEdgeNear
       // to Infinity, disabling perimeter) does not silently change
@@ -383,6 +448,38 @@ export function g3tLayoutStructural(
       longEdgeNear: options?.longEdgeNear ?? 12,
       bendHints,
     });
+    if (options?.nudge) {
+      const topBoxes = Object.entries(geometry.nodes).filter(
+        ([, g]) => g.kind !== "row",
+      );
+      const obstacles = topBoxes.map(([id, g]) => ({
+        id,
+        x: g.x,
+        y: g.y,
+        width: g.width,
+        height: g.height,
+      }));
+      const { routes, corridorDemand } = nudgeRoutes(rawRoutes, obstacles);
+      // Preserve the intermediate hints the router attaches; nudge
+      // rewrites points only.
+      const merged: Record<string, { points: Pt[]; intermediate?: Pt[] }> = {};
+      for (const [id, r] of Object.entries(routes)) {
+        const orig = rawRoutes[id];
+        merged[id] =
+          orig?.intermediate !== undefined
+            ? { points: r.points, intermediate: orig.intermediate }
+            : { points: r.points };
+      }
+      geometry.edges = merged;
+      checkCorridorDrift(
+        corridorDemandEst,
+        corridorMidlines,
+        corridorDemand,
+        horizontal,
+      );
+    } else {
+      geometry.edges = rawRoutes;
+    }
   }
   return geometry;
 }

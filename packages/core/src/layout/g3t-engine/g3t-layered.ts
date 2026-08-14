@@ -22,7 +22,12 @@
  * break lexicographically; identical inputs emit identical bytes.
  */
 import type { StructuralGeometry, StructuralGraphInput } from "../structural";
-import { isDummyId, splitLongSpanEdges } from "./g3t-dummy-chain";
+import {
+  computeCorridorGap,
+  estimateCorridorDemand,
+  isDummyId,
+  splitLongSpanEdges,
+} from "./g3t-dummy-chain";
 
 export interface G3tLayoutOptions {
   /** Gap between layers (flow axis). Default 64. */
@@ -529,8 +534,13 @@ export function g3tLayoutFlat(
   );
   const widthOf = new Map(augmentedNodes.map((n) => [n.id, n.width] as const));
   const geoNodes: StructuralGeometry["nodes"] = {};
+  // Brief 04: per-boundary corridor gap sizing. Demand from
+  // structural chain-segment count; the router does not run here
+  // (flat has no edges in its geometry), so no drift assertion.
+  const corridorDemandEst = estimateCorridorDemand(edges, layerOf);
   let y = 0;
-  for (const l of layers) {
+  for (let li = 0; li < layers.length; li++) {
+    const l = layers[li] ?? [];
     const layerH = Math.max(0, ...l.map((id) => heightOf.get(id) ?? DEFAULT_H));
     for (const id of l) {
       // LAY-005: dummies participate in layer heights so lanes stay
@@ -546,7 +556,12 @@ export function g3tLayoutFlat(
         kind: "node",
       };
     }
-    y += layerH + layerSpacing;
+    if (li < layers.length - 1) {
+      const demand = corridorDemandEst.get(li) ?? 0;
+      y += layerH + computeCorridorGap(demand, layerSpacing).gap;
+    } else {
+      y += layerH + layerSpacing;
+    }
   }
   // No edge routes by design (the router boundary stays).
   return { version: 1, nodes: geoNodes, ports: {}, edges: {}, headerHeight: 0 };

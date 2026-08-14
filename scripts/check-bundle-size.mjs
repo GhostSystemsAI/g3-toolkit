@@ -79,7 +79,16 @@ const BUDGETS = {
   // seeding path that reads dummy positions as intermediate bend
   // hints and emits them as StructuralEdgeGeometry.intermediate.
   // Measured 172.5; the +2 KB headroom covers upcoming polish.
-  core: 173 * 1024,
+  // RAISED 173 -> 176 (2026-08-14): brief 04 (corridor supply contract)
+  // landed in g3t-dummy-chain (estimateCorridorDemand, computeCorridorGap,
+  // named constants), threading per-corridor gap sizing through
+  // g3tLayoutFlat and g3tLayoutStructural, and adding a dev-mode
+  // layout-supply / router-demand drift assertion (nudge measurement
+  // moved from routeStructuralEdges into g3tLayoutStructural so the
+  // corridorDemand it emits can be compared against the estimate).
+  // Measured 174.4; +1.6 KB headroom for the follow-on E/W-axis
+  // calibration in brief 04 verification step 5.
+  core: 176 * 1024,
   // Core ledger:
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with

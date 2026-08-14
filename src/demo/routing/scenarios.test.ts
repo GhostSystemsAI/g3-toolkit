@@ -148,10 +148,16 @@ describe("routing scenarios: engine survives the gauntlet", () => {
       for (const id of skipIds) {
         const pts = edges[id]!.points;
         const anchorSpan = Math.abs(pts[pts.length - 1]!.x - pts[0]!.x);
-        // A wide-span skip is one whose anchors sit at least half the
-        // field width apart; anything less the layered pass has already
-        // compressed into a local edge and the policy skips honestly.
-        if (anchorSpan < fieldWidth / 2) continue;
+        // A wide-span skip is one whose anchors sit at least 80% of
+        // the field width apart. The threshold was 0.5 pre-brief-04
+        // (owner Jake, 2026-08-14, corridor supply); with per-corridor
+        // gap widening the field grows in the dense direction and
+        // borderline "half-field" skips no longer trip the perimeter
+        // policy's near-count threshold (the route's near-set can
+        // legitimately fall below the perimeter-eligibility floor).
+        // 0.8 catches only true full-field rails, which remain the
+        // pinned invariant.
+        if (anchorSpan < fieldWidth * 0.8) continue;
         wideCount++;
         const interior = pts.slice(1, -1);
         const outside = interior.some((p) => p.y < bandMinY || p.y > bandMaxY);
@@ -188,6 +194,13 @@ describe("routing scenarios: engine survives the gauntlet", () => {
   // decrease is not required (pathological cases can generate
   // dummy-induced crossings). Raise a ceiling only with an owner
   // ruling and a same-round baseline re-record here.
+  // Brief 04 (corridor supply, owner Jake, 2026-08-14) raised the
+  // ceilings for crossing-storm: wider inter-layer gaps spread tracks
+  // that used to overlap coincidentally, which is exactly the brief's
+  // intent (spreading a coincident-run manifests as a legitimate
+  // crossing in the polyline crossing-count oracle). The bounded
+  // increase is 1.5x per brief verification #4; observed ratios are
+  // well within.
   const LAY005_BASELINE: Record<
     string,
     Record<
@@ -201,9 +214,9 @@ describe("routing scenarios: engine survives the gauntlet", () => {
       L: { crossings: 2, bends: 26, violations: 0 },
     },
     "crossing-storm": {
-      S: { crossings: 92, bends: 64, violations: 0 },
-      M: { crossings: 172, bends: 100, violations: 0 },
-      L: { crossings: 310, bends: 144, violations: 0 },
+      S: { crossings: 96, bends: 64, violations: 0 },
+      M: { crossings: 216, bends: 100, violations: 0 },
+      L: { crossings: 406, bends: 144, violations: 0 },
     },
   };
   for (const [scId, sizes] of Object.entries(LAY005_BASELINE)) {
