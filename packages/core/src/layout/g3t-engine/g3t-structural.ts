@@ -300,6 +300,7 @@ export function g3tLayoutStructural(
       // from the single call most consumers make and they had to
       // re-route over geometry the layout had just produced.
       anchor: options?.anchor,
+      nudge: options?.nudge,
     });
   }
   return geometry;

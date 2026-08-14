@@ -29,7 +29,14 @@ export interface RouteQuality {
   /** Edges whose route passes through a box it neither starts nor ends at. */
   violations: number;
   violatingEdges: string[];
+  /** Pairs of distinct edges with parallel overlapping segments closer
+   *  than `coincidentRunThreshold` (default 4 px). A high count is the
+   *  parallel-run-separation defect the nudging pass is designed to
+   *  eliminate; a 2-point straight edge in the pair is EXCLUDED from
+   *  contribution (nudging never adds bends to straight lines). */
+  coincidentRuns: number;
 }
+export const COINCIDENT_RUN_THRESHOLD = 4;
 
 interface Pt {
   x: number;
@@ -149,6 +156,11 @@ export function gradeRoutes(
     }
   }
 
+  const coincidentRuns = countCoincidentRuns(
+    routedPolylines,
+    COINCIDENT_RUN_THRESHOLD,
+  );
+
   return {
     routed,
     unrouted: input.edges.length - routed,
@@ -158,5 +170,73 @@ export function gradeRoutes(
     diagonalSegments,
     violations: violatingEdges.length,
     violatingEdges,
+    coincidentRuns,
   };
+}
+
+interface AxisSeg {
+  axis: "h" | "v";
+  perp: number;
+  along: [number, number];
+}
+function decomposeAxis(pts: readonly Pt[]): AxisSeg[] {
+  const out: AxisSeg[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    if (!a || !b) continue;
+    const dx = Math.abs(b.x - a.x);
+    const dy = Math.abs(b.y - a.y);
+    if (dx < 1e-6 && dy < 1e-6) continue;
+    if (dx > 1e-6 && dy > 1e-6) continue;
+    if (dx >= dy) {
+      out.push({
+        axis: "h",
+        perp: a.y,
+        along: [Math.min(a.x, b.x), Math.max(a.x, b.x)],
+      });
+    } else {
+      out.push({
+        axis: "v",
+        perp: a.x,
+        along: [Math.min(a.y, b.y), Math.max(a.y, b.y)],
+      });
+    }
+  }
+  return out;
+}
+
+function countCoincidentRuns(
+  routes: { id: string; pts: Pt[] }[],
+  threshold: number,
+): number {
+  const decomposed = routes.map((r) => ({
+    id: r.id,
+    straight: r.pts.length === 2,
+    segs: decomposeAxis(r.pts),
+  }));
+  let n = 0;
+  for (let i = 0; i < decomposed.length; i++) {
+    for (let j = i + 1; j < decomposed.length; j++) {
+      const A = decomposed[i];
+      const B = decomposed[j];
+      if (!A || !B) continue;
+      if (A.straight || B.straight) continue;
+      let paired = false;
+      for (const sa of A.segs) {
+        for (const sb of B.segs) {
+          if (sa.axis !== sb.axis) continue;
+          if (Math.abs(sa.perp - sb.perp) >= threshold) continue;
+          const oLo = Math.max(sa.along[0], sb.along[0]);
+          const oHi = Math.min(sa.along[1], sb.along[1]);
+          if (oHi <= oLo) continue;
+          paired = true;
+          break;
+        }
+        if (paired) break;
+      }
+      if (paired) n++;
+    }
+  }
+  return n;
 }

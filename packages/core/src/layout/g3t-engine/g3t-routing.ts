@@ -22,29 +22,8 @@ import {
   routeOrthogonal,
   type RouteSide,
 } from "../../route/orthogonal-router";
-
-interface Pt {
-  x: number;
-  y: number;
-}
-
-function dedupeCollinear(points: Pt[]): Pt[] {
-  const out: Pt[] = [];
-  for (const p of points) {
-    const a = out[out.length - 2];
-    const b = out[out.length - 1];
-    if (
-      a !== undefined &&
-      b !== undefined &&
-      ((a.x === b.x && b.x === p.x) || (a.y === b.y && b.y === p.y))
-    ) {
-      out[out.length - 1] = p;
-    } else {
-      out.push(p);
-    }
-  }
-  return out;
-}
+import { dedupeCollinear, type Pt } from "./g3t-polyline-utils";
+import { nudgeRoutes } from "./g3t-nudging";
 
 /** VR-9 (owner IBD screenshots, 2026-07-28): when the router fails
  *  in a dense corridor, the old fallback surrendered to the
@@ -118,6 +97,12 @@ export function routeStructuralEdges(
      *  order rather than against the target's center. Default
      *  "source" preserves existing scenes exactly. */
     anchor?: "source" | "target";
+    /** Parallel-run separation post-pass (see g3t-nudging.ts).
+     *  Groups coincident parallel interior segments into corridors
+     *  and distributes them across distinct tracks. Currently OPT-IN
+     *  (default false); the brief mandates a follow-up flip to
+     *  default true, gated on a baseline re-pin. */
+    nudge?: boolean;
   },
 ): Record<string, { points: Pt[] }> {
   // Direction-aware (WS-D D3a fix): under horizontal flow (RIGHT/
@@ -696,6 +681,10 @@ export function routeStructuralEdges(
     // even the detour cannot clear (extreme containment).
     const detour = detourAround(s.point, sTip, t.point, tTip, near);
     out[e.id] = { points: detour ?? simple };
+  }
+  if (options?.nudge) {
+    const { routes } = nudgeRoutes(out, obstacles);
+    return routes;
   }
   return out;
 }

@@ -226,6 +226,15 @@ export interface StructuralLayoutOptions extends G3tEngineTuning {
    */
   routeEdges?: boolean;
   /**
+   * Parallel-run separation post-pass. Groups coincident parallel
+   * interior segments emitted by `routeStructuralEdges` into
+   * corridors and distributes them across distinct tracks. Currently
+   * OPT-IN (default false); the brief mandates a follow-up flip to
+   * default true, gated on a same-PR baseline re-pin of every
+   * affected snapshot/geometry test.
+   */
+  nudge?: boolean;
+  /**
    * ELK node-placement strategy. "BRANDES_KOEPF" (default) favors
    * straight through-edges; "NETWORK_SIMPLEX" is more compact;
    * "LINEAR_SEGMENTS"/"SIMPLE" are cheaper.
@@ -744,6 +753,7 @@ function layoutOptionsKey(options?: StructuralLayoutOptions): string {
     edgeNodeSpacing: options?.edgeNodeSpacing ?? 16,
     edgeEdgeSpacing: options?.edgeEdgeSpacing ?? 24,
     routeEdges: options?.routeEdges ?? true,
+    nudge: options?.nudge ?? false,
     g3t: {
       layering: options?.layering ?? "network-simplex",
       layerWidth: options?.layerWidth ?? 8,
