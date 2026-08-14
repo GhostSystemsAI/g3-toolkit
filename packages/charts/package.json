@@ -44,11 +44,11 @@
     "clean": "tsc --build --clean && rm -rf dist"
   },
   "dependencies": {
-    "@g3t/core": "workspace:*",
-    "@g3t/react": "workspace:*",
     "echarts-for-react": "^3.0.0"
   },
   "peerDependencies": {
+    "@g3t/core": "workspace:*",
+    "@g3t/react": "workspace:*",
     "react": ">=18.0.0",
     "echarts": ">=5.0.0"
   },
