@@ -149,6 +149,13 @@ export {
   G3tLayeredLayout,
   WorkingSetManager,
 } from "@g3t/core";
+// The engines' option bag, re-exported alongside them so `LayoutOptions`
+// on this entry means the thing the engines actually accept. The
+// LayoutManager panel's UI state used to own this name here, which
+// type-checked against ForceLayout.compute() and silently discarded
+// every force-tuning field (audit 2026-08); that type is now
+// LayoutPanelOptions.
+export type { LayoutOptions } from "@g3t/core";
 export * from "./icons";
 
 // ── VisualAttributes -> Cytoscape projection (G3L:ARC-008 posture):

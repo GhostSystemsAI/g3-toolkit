@@ -38,7 +38,7 @@ import { usePositionPinStore } from "../../state/position-pin-store";
 import {
   LAYOUTS,
   DEFAULT_LAYOUT_OPTIONS,
-  type LayoutOptions,
+  type LayoutPanelOptions,
 } from "../layout-manager/LayoutManager";
 
 /** Map layout ids and options onto a Cytoscape layout config.
@@ -89,7 +89,7 @@ function triggerDownload(filename: string, href: string): void {
 
 export function layoutConfig(
   layoutId: string,
-  options: LayoutOptions,
+  options: LayoutPanelOptions,
   randomize = false,
 ): Record<string, unknown> {
   const animate = options.animate && !prefersReducedMotion();
@@ -152,7 +152,7 @@ export function layoutConfig(
 export function runGraphLayout(
   cy: Core | null,
   layoutId: string,
-  options: LayoutOptions,
+  options: LayoutPanelOptions,
   randomize = false,
 ): void {
   if (!cy) return;
@@ -197,10 +197,10 @@ export function GraphToolbar({
       ? cyProp
       : null;
   const [layoutId, setLayoutId] = useState(initialLayout ?? "force");
-  const [options, setOptionsRaw] = useState<LayoutOptions>(
+  const [options, setOptionsRaw] = useState<LayoutPanelOptions>(
     DEFAULT_LAYOUT_OPTIONS,
   );
-  const setOptions = useCallback((next: LayoutOptions) => {
+  const setOptions = useCallback((next: LayoutPanelOptions) => {
     optionsEverEdited.current = true;
     setOptionsRaw(next);
   }, []);
@@ -225,7 +225,7 @@ export function GraphToolbar({
   const setAllPinned = usePositionPinStore((s) => s.setAllPinned);
 
   const run = useCallback(
-    (id: string, opts: LayoutOptions) => runGraphLayout(cy, id, opts),
+    (id: string, opts: LayoutPanelOptions) => runGraphLayout(cy, id, opts),
     [cy],
   );
 
