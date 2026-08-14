@@ -1,6 +1,6 @@
 ---
 project: g3_toolkit
-part_of: https://forge.tail515200.ts.net/ontology/kb/codex/Plan/brief-route-nudging-post-pass-parallel-run-separation-f20410d0
+part_of: https://forge.tail515200.ts.net/ontology/kb/g3_toolkit/Plan/orchestrate-routing-quality-dense-scene-legibility-dependenc-33ea5324
 ---
 
 # Brief: route nudging post-pass (parallel-run separation)
@@ -59,6 +59,15 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    explicit first step. Nudging does NOT assume the router pre-deduped;
    the call is idempotent and cheap, and it guarantees step 1 never
    sees spurious near-zero-length segments.
+   SOURCE FACTS (checked 2026-08-14; implementing worker re-verifies
+   before coding): `dedupeCollinear` lives at
+   packages/core/src/layout/g3t-engine/g3t-routing.ts:30 with signature
+   `(points: Pt[]) => Pt[]`; it is PURE — it builds a fresh output
+   array and never mutates its argument, so the copy-then-validate /
+   revert pattern in step 5 is safe. It is currently MODULE-PRIVATE
+   (no `export`); this slice adds `export` to it (or lifts it to a
+   shared routing-util module) so g3t-nudging.ts can import it — do
+   not duplicate the implementation.
 1. **Decompose** each polyline into maximal axis-aligned segments.
    Interior segments are movable on their perpendicular axis; the
    first/last segments (anchor stubs) are FIXED — anchors keep their
@@ -83,10 +92,18 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
 4. **Place** tracks with the existing forward/backward two-sweep:
    desired = current position, min separation = `trackGap` (default
    8px), freedom interval = corridor free span from the obstacle boxes
-   minus `clearance` (8px). Degradation ladder, in order:
-   (a) span >= n*gap: full-gap placement centered on the corridor
-   midline. (b) 0 < span < n*gap: distribute evenly ELK-style
-   (span / (n+1)) — reduced but positive spacing, never overlapping a
+   minus `clearance` (8px). ONE spacing convention everywhere:
+   `spanRequired = (n + 1) * trackGap` — full gap between every
+   adjacent track pair PLUS a full-gap margin at each edge of the
+   spread (matching the CorridorDemand schema; deficit is 0 exactly
+   when the ladder selects case (a)). Degradation ladder, in order:
+   (a) span >= (n + 1) * gap: full-gap placement. CENTERING
+   CONVENTION: the n tracks are placed symmetric about the FREE-SPAN
+   midline — the midpoint between the clearance-adjusted faces of the
+   two bounding obstacle boxes; when boxes are asymmetric this midline
+   (not any geometric average of the original segment positions) wins.
+   (b) 0 < span < (n + 1) * gap: distribute evenly ELK-style
+   (span / (n + 1)) — reduced but positive spacing, never overlapping a
    box. (c) span <= 0 (corridor fully occluded): TERMINAL FALLBACK —
    the whole group keeps its original positions untouched, and the
    corridor is recorded in `corridorDemand` with `blocked: true` and
@@ -95,9 +112,11 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    compute all rewritten polylines (move each segment to its track,
    extend/trim the two perpendicular neighbor segments,
    `dedupeCollinear`) on COPIES. Validate the whole group: every
-   rewritten route must pass `polylineIntersectsBoxes` (VERIFIED:
-   exported from packages/core/src/route/orthogonal-router.ts:389 as
-   `(points, boxes) => boolean`, already imported by g3t-routing.ts).
+   rewritten route must pass `polylineIntersectsBoxes`. SOURCE FACTS
+   (checked 2026-08-14; implementing worker re-greps before coding and
+   adapts import path/signature if it moved): exported from
+   packages/core/src/route/orthogonal-router.ts:389 as
+   `(points, boxes) => boolean`, already imported by g3t-routing.ts.
    If ANY member fails, first retry the group placement once at half
    gap (re-enter step 4's ladder); if a member still fails, the ENTIRE
    group reverts to its original polylines and the corridor is
@@ -117,27 +136,47 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    the implementing worker MUST re-pin every affected snapshot /
    pixel / geometry assertion in the SAME PR (test churn is expected
    and accepted; a red baseline left for the next brief is not).
+   AUDIT RULE: deleting or skipping a test to make the suite pass is
+   FORBIDDEN; the commit message body lists every re-pinned test by
+   file so the re-pin set is reviewable, and the worker reports the
+   count in its outcome summary. ROLLBACK PATH: the `nudge` option is
+   the escape hatch — a rendering regression after merge is recovered
+   by a single-line default flip (`nudge: false`) PR; the owner
+   (Jake/Zach) decides the flip, no config atom or infra involved.
 
 ### corridorDemand schema (the Phase 2 contract — defined, not opaque)
 
 ```ts
 interface CorridorDemand {
   axis: 'h' | 'v';          // segment orientation in the corridor
-  corridorKey: string;       // stable id: axis + quantized midline cross coord + quantized extent
-  midline: number;           // cross coordinate of the corridor midline
+  corridorKey: string;       // deterministic id, spec below
+  midline: number;           // cross coordinate of the free-span midline
   extent: [number, number];  // corridor span along the segment axis
   edgeIds: string[];         // members, in final track order
   tracksRequired: number;    // n = group size
-  spanAvailable: number;     // free span between bounding obstacle boxes minus clearance
-  spanRequired: number;      // (n + 1) * trackGap
+  spanAvailable: number;     // free span between obstacle boxes minus clearance
+  spanRequired: number;      // (n + 1) * trackGap — same convention as step 4
   deficit: number;           // max(0, spanRequired - spanAvailable)
   blocked: boolean;          // true when spanAvailable <= 0 or the group reverted
 }
 ```
 
+`corridorKey` QUANTIZATION SPEC (deterministic, versioned with the
+layout): coordinate space is the layout coordinate space of
+`geometry.edges` (the same numbers the polylines carry); quantization
+is `Math.round` to integer pixels (round-half-up, JS default); key =
+`` `${axis}:${Math.round(midline)}:${Math.round(extent[0])}..${Math.round(extent[1])}` ``.
+Two passes over the same geometry produce identical keys; a genuine
+layout change legitimately changes them (keys identify corridors
+within a layout, they are not stable across relayouts — brief 04
+matches by key within one pass, never across passes).
+
 `nudgeRoutes` returns `corridorDemand: CorridorDemand[]` sorted by
 deficit descending — brief 04 (corridor supply) consumes exactly this
-shape.
+shape. BLOCKED SEMANTICS for brief 04: `blocked: true` means "this
+corridor NEEDS spanRequired but layout supplied spanAvailable" — it is
+a space-reservation REQUEST at highest priority, never a
+skip-this-corridor signal.
 
 ## Verification
 
@@ -161,6 +200,12 @@ shape.
 - Group-atomicity test: construct a corridor where one member cannot
   move without a box hit; assert the WHOLE group is byte-identical to
   input (no mixed-nudge state) and `coincidentRuns` did not increase.
+- Multi-bend ordering test: a path with 3+ bends before and after a
+  shared corridor, crossing a second corridor, asserting the
+  corridor-local sort keys still yield a crossing count that does not
+  increase — the empirical backstop for the combinatorial-order
+  argument on exactly the geometry where local and global cross
+  coords diverge.
 - Routing Lab gets a `nudge` on/off knob next to `routeEdges` for
   visual A/B; live check on g3.ghostsystems.ai is the acceptance
   surface (edge rendering is not headlessly verifiable — CLAUDE.md).
