@@ -129,7 +129,10 @@ Details:
 - [Playground](https://zwelz3.github.io/g3-toolkit/playground/): five
   domain shells (Ontology, Auditor, MBSE, Supply Chain, Biomedical) +
   capability dashboards (Analytics, Scale, Style Lab, Routing Lab —
-  hard edge-routing scenarios graded live), live in the browser. The
+  hard edge-routing scenarios graded live, with an Engine toolbar row
+  exposing every live routing switch: nudge separation, long-edge
+  perimeter threshold, anchor, placement/layering strategy, and effort
+  budgets), live in the browser. The
   landing footer links this file, AGENTS.md, and the wiring guide.
 - [Storybook](https://zwelz3.github.io/g3-toolkit/storybook/)
 

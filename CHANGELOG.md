@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0 (continued): 2026-08-14 Routing Lab engine controls
+
+- The Routing Lab dashboard gained an Engine toolbar row exposing
+  every live routing switch: a nudge checkbox (default ON in the lab,
+  ahead of the still-staged library default flip), the long-edge
+  perimeter threshold (`longEdgeNear`: off / 8 / 12 / 20), router
+  anchor (source/target), placement (Brandes-Koepf/median), layering
+  strategy (network-simplex / Coffman-Graham / tight-tree), and an
+  effort preset over the anytime phase budgets. Demo-only; no library
+  defaults changed.
+
 ## 1.0.0 (continued): 2026-08-14 label wrapping
 
 - Canvas node labels now word-wrap (`text-wrap: wrap`,

@@ -9,7 +9,11 @@
  *
  * The knobs re-run the SAME scenario under different layout budgets
  * (size, direction, layer gap, routes on/off), so a reviewer can watch
- * the quality numbers move as the corridor supply changes.
+ * the quality numbers move as the corridor supply changes. The Engine
+ * row exposes every live routing switch (owner ask 2026-08-14): nudge
+ * (default ON here so separation is evaluable), the long-edge
+ * perimeter threshold, router anchor, placement/layering strategies,
+ * and an effort preset over the phase time budgets.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StructuralSvgView, useStructuralLayout } from "@g3t/react";
@@ -30,6 +34,39 @@ import { CapabilityBubble } from "../components/CapabilityCallout";
 
 const LAYER_GAPS = { compact: 40, default: 80, wide: 140 } as const;
 type LayerGap = keyof typeof LAYER_GAPS;
+
+/** Long-edge perimeter policy threshold (longEdgeNear): how many
+ *  near-obstacle boxes make an edge prefer the outside perimeter.
+ *  "off" maps to Infinity (the documented rollback value). */
+const LONG_EDGE = {
+  off: Number.POSITIVE_INFINITY,
+  eager: 8,
+  default: 12,
+  conservative: 20,
+} as const;
+type LongEdge = keyof typeof LONG_EDGE;
+
+/** Effort presets over the engine's anytime phase budgets (PRF-001
+ *  allocation is the default; high trades latency for quality). */
+const EFFORTS = {
+  low: {
+    layeringBudgetMs: 40,
+    orderingBudgetMs: 30,
+    routingBudgetMs: 40,
+    maxSweeps: 4,
+  },
+  default: {},
+  high: {
+    layeringBudgetMs: 400,
+    orderingBudgetMs: 300,
+    routingBudgetMs: 400,
+    maxSweeps: 24,
+  },
+} as const;
+type Effort = keyof typeof EFFORTS;
+
+type Placement = "brandes-koepf" | "median";
+type Layering = "network-simplex" | "coffman-graham" | "tight-tree";
 
 /** Categorical palette for per-edge coloring (A9: same-gray edges made
  *  crossings untraceable). Hues picked for pairwise contrast on the
@@ -139,6 +176,15 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   const [direction, setDirection] = useState<"auto" | "RIGHT" | "DOWN">("auto");
   const [layerGap, setLayerGap] = useState<LayerGap>("default");
   const [routeEdges, setRouteEdges] = useState(true);
+  // Nudge defaults ON in the lab (owner ruling A35, 2026-08-14) even
+  // though the library default is still false: the bench exists to
+  // evaluate separation, so the post-pass must be visible by default.
+  const [nudge, setNudge] = useState(true);
+  const [longEdge, setLongEdge] = useState<LongEdge>("default");
+  const [anchor, setAnchor] = useState<"source" | "target">("source");
+  const [placement, setPlacement] = useState<Placement>("brandes-koepf");
+  const [layering, setLayering] = useState<Layering>("network-simplex");
+  const [effort, setEffort] = useState<Effort>("default");
   const [colorMode, setColorMode] = useState<ColorMode>("rainbow");
   // A9 (owner: "line crossovers are hard to tail"): a clicked edge
   // pins a trace (everything else dims); clicking anything that is
@@ -163,8 +209,24 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
       direction: dir,
       layerSpacing: LAYER_GAPS[layerGap],
       routeEdges,
+      nudge,
+      longEdgeNear: LONG_EDGE[longEdge],
+      anchor,
+      placement,
+      layering,
+      ...EFFORTS[effort],
     }),
-    [dir, layerGap, routeEdges],
+    [
+      dir,
+      layerGap,
+      routeEdges,
+      nudge,
+      longEdge,
+      anchor,
+      placement,
+      layering,
+      effort,
+    ],
   );
 
   const { structural: scene } = useStructuralLayout(input, options);
@@ -312,6 +374,85 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
               >
                 <option value="rainbow">Per-edge</option>
                 <option value="mono">Monochrome</option>
+              </select>
+            </span>
+          </div>
+          <div className="rlab-toolbar rlab-toolbar-engine">
+            <span className="rlab-toolbar-tag rlab-mono">ENGINE</span>
+            <span>
+              <label htmlFor="rlab-nudge">Nudge</label>
+              <input
+                id="rlab-nudge"
+                type="checkbox"
+                data-testid="rlab-nudge-toggle"
+                checked={nudge}
+                onChange={(e) => setNudge(e.target.checked)}
+              />
+            </span>
+            <span>
+              <label htmlFor="rlab-longedge">Perimeter</label>
+              <select
+                id="rlab-longedge"
+                data-testid="rlab-longedge-select"
+                value={longEdge}
+                onChange={(e) => setLongEdge(e.target.value as LongEdge)}
+              >
+                <option value="off">Off</option>
+                <option value="eager">Eager (8)</option>
+                <option value="default">Default (12)</option>
+                <option value="conservative">Conservative (20)</option>
+              </select>
+            </span>
+            <span>
+              <label htmlFor="rlab-anchor">Anchor</label>
+              <select
+                id="rlab-anchor"
+                data-testid="rlab-anchor-select"
+                value={anchor}
+                onChange={(e) =>
+                  setAnchor(e.target.value as "source" | "target")
+                }
+              >
+                <option value="source">Source</option>
+                <option value="target">Target</option>
+              </select>
+            </span>
+            <span>
+              <label htmlFor="rlab-placement">Placement</label>
+              <select
+                id="rlab-placement"
+                data-testid="rlab-placement-select"
+                value={placement}
+                onChange={(e) => setPlacement(e.target.value as Placement)}
+              >
+                <option value="brandes-koepf">Brandes-Koepf</option>
+                <option value="median">Median</option>
+              </select>
+            </span>
+            <span>
+              <label htmlFor="rlab-layering">Layering</label>
+              <select
+                id="rlab-layering"
+                data-testid="rlab-layering-select"
+                value={layering}
+                onChange={(e) => setLayering(e.target.value as Layering)}
+              >
+                <option value="network-simplex">Network simplex</option>
+                <option value="coffman-graham">Coffman-Graham</option>
+                <option value="tight-tree">Tight tree</option>
+              </select>
+            </span>
+            <span>
+              <label htmlFor="rlab-effort">Effort</label>
+              <select
+                id="rlab-effort"
+                data-testid="rlab-effort-select"
+                value={effort}
+                onChange={(e) => setEffort(e.target.value as Effort)}
+              >
+                <option value="low">Low (fast)</option>
+                <option value="default">Default</option>
+                <option value="high">High (quality)</option>
               </select>
             </span>
           </div>

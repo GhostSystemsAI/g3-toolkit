@@ -84,6 +84,12 @@ export const ROUTING_STYLES = `
   border: 1px solid var(--rl-line); border-radius: 5px;
   padding: 3px 6px; font-size: 12px;
 }
+.rlab-toolbar input[type="checkbox"] { accent-color: var(--rl-cyan); vertical-align: middle; }
+.rlab-toolbar-engine { flex-wrap: wrap; row-gap: 4px; }
+.rlab-toolbar-tag {
+  font-size: 10px; letter-spacing: 0.12em; color: var(--rl-ink-dim);
+  border: 1px solid var(--rl-line); border-radius: 4px; padding: 2px 6px;
+}
 .rlab-canvas-host { flex: 1 1 auto; position: relative; min-height: 0; }
 .rlab-canvas-host > div { position: absolute; inset: 0; }
 

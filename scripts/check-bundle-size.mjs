@@ -65,7 +65,12 @@ const BUDGETS = {
   // opt-in (`nudge` option), 11 oracle-pinned unit tests. Measured
   // 165.2; modest headroom only, so briefs 02-10 renegotiate here
   // as they land rather than riding silent headroom.
-  core: 167 * 1024,
+  // RAISED 167 -> 169 (2026-08-14): brief 10 (long-edge perimeter
+  // policy) landed in g3t-routing/g3t-layered: edges with >= 12
+  // near-obstacle boxes prefer a perimeter detour with deterministic
+  // outward stagger. Measured 167.0 (bytes over the 167 line); the
+  // renegotiate-per-brief posture above holds.
+  core: 169 * 1024,
   // Core ledger:
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with
@@ -229,7 +234,10 @@ const BUDGETS = {
   // Round 21 (2026-08-05): +1.5 KB for R-12 (structural node
   // styles, controlled drag offsets, the renderer-neutral editor
   // target) and R-13.3 (one legend serving both renderers).
-  react: 386 * 1024, // 420 KB
+  // RAISED 386 -> 388 (2026-08-14): measured 386.1 after brief 10's
+  // perimeter policy (core routing growth re-bundled through the
+  // react dist); no react-side code was added.
+  react: 388 * 1024, // 420 KB
   // - 384 -> 420 KB, 2026-07-07 (review remediation round 2): measured
   //   379.9 KB (99% of cap) after the emphasis/effects layer
   //   (emphasis store + class application), useStructuralCollapse,

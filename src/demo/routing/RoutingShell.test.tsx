@@ -136,6 +136,34 @@ describe("RoutingShell", () => {
     );
   });
 
+  it("engine row: nudge defaults ON, perimeter defaults to 12 (A35)", async () => {
+    render(<RoutingShell onBack={() => {}} />);
+    await waitFor(() => expect(captured.scenes.length).toBeGreaterThan(0));
+    const nudge = screen.getByTestId("rlab-nudge-toggle") as HTMLInputElement;
+    expect(nudge.checked).toBe(true);
+    const longEdge = screen.getByTestId(
+      "rlab-longedge-select",
+    ) as HTMLSelectElement;
+    expect(longEdge.value).toBe("default");
+  });
+
+  it("engine knob change re-runs the layout (new scene delivered)", async () => {
+    render(<RoutingShell onBack={() => {}} />);
+    await waitFor(() => expect(captured.scenes.length).toBeGreaterThan(0));
+    const before = captured.scenes.length;
+    fireEvent.click(screen.getByTestId("rlab-nudge-toggle"));
+    await waitFor(() => {
+      expect(captured.scenes.length).toBeGreaterThan(before);
+    });
+    const afterNudge = captured.scenes.length;
+    fireEvent.change(screen.getByTestId("rlab-longedge-select"), {
+      target: { value: "off" },
+    });
+    await waitFor(() => {
+      expect(captured.scenes.length).toBeGreaterThan(afterNudge);
+    });
+  });
+
   it("colors knob: per-edge CSS present by default, gone on monochrome", async () => {
     render(<RoutingShell onBack={() => {}} />);
     await waitFor(() => expect(captured.scenes.length).toBeGreaterThan(0));
