@@ -116,7 +116,7 @@ for (const readme of READMES) {
     const [, lang, info, body] = match;
     i++;
     if (/\bno-check\b/.test(info)) continue;
-    const name = `${readme.replace(/[\/.]/g, "_")}_${i}.${lang}`;
+    const name = `${readme.replace(/[/.]/g, "_")}_${i}.${lang}`;
     // Wrap in a module scope; allow snippets that are component bodies.
     writeFileSync(resolve(dir, name), body);
     files.push(name);
@@ -130,7 +130,7 @@ for (const page of HTML_FILES) {
   for (const [, lang, body] of text.matchAll(HTML_SNIPPET)) {
     i++;
     found++;
-    const name = `${page.replace(/[\/.]/g, "_")}_${i}.${lang}`;
+    const name = `${page.replace(/[/.]/g, "_")}_${i}.${lang}`;
     writeFileSync(resolve(dir, name), unhtml(body));
     files.push(name);
   }

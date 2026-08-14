@@ -1,6 +1,34 @@
 # Changelog
 
-## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, adopter docs, planning tree)
+## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, adopter docs, planning tree)
+
+- **Lint and format now cover the whole tree, and `lint:fix` fixes what
+  `lint` checks.** `lint` named five source directories, so
+  `examples/`, `scripts/`, `.storybook/` and every config file were
+  outside it; the shared `ignores` list also excluded `*.config.*`
+  wholesale, which meant even a run over those paths would have skipped
+  them. `lint:fix` named only two of the five directories `lint`
+  checked, so the autofixer could not repair a class of failures the
+  gate reported, and a contributor who ran it and got a clean exit still
+  had a red gate. Both scripts are now `eslint .` plus a matching
+  Prettier invocation, with the exclusion list living in
+  `eslint.config.js` and a new `.prettierignore` rather than in the
+  script strings, so the two cannot drift apart again. `api-surface.json`
+  and `pnpm-lock.yaml` are in the Prettier ignore list on purpose: both
+  are generated, and `verify:surface` compares the first byte for byte,
+  so reformatting it would put two gates in permanent conflict. Bringing
+  501 files into scope surfaced 16 real errors, now fixed: a ref written
+  during render in the analytics dashboard (unsafe under concurrent
+  rendering, since React may discard and replay a render) and two
+  `const`s referenced by an effect declared above them; a Storybook
+  decorator declared lowercase, so its hook calls read as a
+  rules-of-hooks violation, and typed `any`; a `useMemo(buildEntries, [])`
+  passing a named function whose dependencies the rule cannot analyse,
+  next to a non-null assertion on a `Map.get` the same expression had
+  just proved present; a `void`-typed value binding in the `style.css`
+  declaration; and a scattering of unused bindings and needless escapes.
+  Markdown stays out of Prettier's scope deliberately: the authored prose
+  in this file and under `docs/` is hand-wrapped.
 
 - **Contributor onboarding: the first hour no longer describes a
   repository that does not exist.** CONTRIBUTING.md had no install

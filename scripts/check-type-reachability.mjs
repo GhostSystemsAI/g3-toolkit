@@ -28,17 +28,50 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const packagesDir = join(root, "packages");
 
 const BUILTINS = new Set([
-  "Array", "ReadonlyArray", "Readonly", "Record", "Map", "ReadonlyMap", "Set",
-  "ReadonlySet", "Partial", "Required", "Pick", "Omit", "Promise", "Date",
-  "Error", "RegExp", "Function", "Object", "String", "Number", "Boolean",
-  "NonNullable", "Exclude", "Extract", "Parameters", "ReturnType", "Iterable",
-  "Element", "HTMLElement", "SVGSVGElement", "ReactNode", "ReactElement",
-  "CSSProperties", "Ref", "RefObject", "Core", "NodeSingular", "EdgeSingular",
+  "Array",
+  "ReadonlyArray",
+  "Readonly",
+  "Record",
+  "Map",
+  "ReadonlyMap",
+  "Set",
+  "ReadonlySet",
+  "Partial",
+  "Required",
+  "Pick",
+  "Omit",
+  "Promise",
+  "Date",
+  "Error",
+  "RegExp",
+  "Function",
+  "Object",
+  "String",
+  "Number",
+  "Boolean",
+  "NonNullable",
+  "Exclude",
+  "Extract",
+  "Parameters",
+  "ReturnType",
+  "Iterable",
+  "Element",
+  "HTMLElement",
+  "SVGSVGElement",
+  "ReactNode",
+  "ReactElement",
+  "CSSProperties",
+  "Ref",
+  "RefObject",
+  "Core",
+  "NodeSingular",
+  "EdgeSingular",
 ]);
 
 function declaredNames(text) {
   const out = new Set();
-  const re = /(?:^|\n)\s*(?:export\s+)?(?:declare\s+)?(interface|type|class|enum)\s+([A-Z]\w*)/g;
+  const re =
+    /(?:^|\n)\s*(?:export\s+)?(?:declare\s+)?(interface|type|class|enum)\s+([A-Z]\w*)/g;
   let m;
   while ((m = re.exec(text)) !== null) out.add(m[2]);
   return out;
@@ -46,12 +79,18 @@ function declaredNames(text) {
 
 function exportedNames(text) {
   const out = new Set();
-  for (const m of text.matchAll(/export\s+(?:declare\s+)?(?:interface|type|class|enum|const|function)\s+([A-Za-z_]\w*)/g)) {
+  for (const m of text.matchAll(
+    /export\s+(?:declare\s+)?(?:interface|type|class|enum|const|function)\s+([A-Za-z_]\w*)/g,
+  )) {
     out.add(m[1]);
   }
   for (const m of text.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
     for (const part of m[1].split(",")) {
-      const name = part.trim().split(/\s+as\s+/).pop()?.trim();
+      const name = part
+        .trim()
+        .split(/\s+as\s+/)
+        .pop()
+        ?.trim();
       if (name) out.add(name.replace(/^type\s+/, ""));
     }
   }
@@ -107,7 +146,9 @@ for (const dir of readdirSync(packagesDir)) {
     }
     // Named re-exports point at modules too; their targets may
     // themselves star-export the type we are looking for.
-    for (const m of text.matchAll(/export\s*(?:type\s*)?\{[^}]*\}\s*from\s*["']([^"']+)["']/g)) {
+    for (const m of text.matchAll(
+      /export\s*(?:type\s*)?\{[^}]*\}\s*from\s*["']([^"']+)["']/g,
+    )) {
       const spec = m[1];
       if (!spec.startsWith(".")) continue;
       const base = join(dirname(filePath), spec);
@@ -125,7 +166,9 @@ for (const dir of readdirSync(packagesDir)) {
   visit(entryPath);
 
   // Prop interfaces and the identifiers their members reference.
-  for (const m of allText.matchAll(/interface\s+(\w*Props)\s*(?:extends[^{]*)?\{([\s\S]*?)\n\}/g)) {
+  for (const m of allText.matchAll(
+    /interface\s+(\w*Props)\s*(?:extends[^{]*)?\{([\s\S]*?)\n\}/g,
+  )) {
     const [, propsName, body] = m;
     if (!exported.has(propsName)) continue; // not public surface
     checked += 1;

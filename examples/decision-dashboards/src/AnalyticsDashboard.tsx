@@ -53,7 +53,6 @@ import {
   MatrixView,
   SankeyView,
   GraphToolbar,
-  FloatingPanel,
   categoricalColorMap,
 } from "@g3t/react";
 import { LinkedChart } from "@g3t/charts";
@@ -94,11 +93,31 @@ export function AnalyticsDashboard({ className }: AnalyticsDashboardProps) {
   const [menuStatus, setMenuStatus] = useState<string | null>(null);
   const [core, setCore] = useState<Core | null>(null);
   const coreRef = useRef<Core | null>(null);
-  coreRef.current = core;
+  // Written in an effect, not during render. A ref mutation during
+  // render is not safe under concurrent rendering: React may discard
+  // and replay the render, and the ref would keep the discarded value.
+  // The only reader is a post-hide setTimeout, which runs after commit.
+  useEffect(() => {
+    coreRef.current = core;
+  }, [core]);
   // 9.17: the path effect needs a visible exit; the chip renders
   // whenever the emphasis layer is active.
   const emphasisActive = useEmphasisStore((s) => s.active);
   const [editNodeId, setEditNodeId] = useState<string | null>(null);
+  // Declared HERE, above the context-menu effect that closes over their
+  // setters, rather than beside the panels that render them. A `const`
+  // captured before its declaration is a temporal-dead-zone hazard: it
+  // happens to work because the effect body runs after the whole
+  // component function has, but nothing enforces that ordering.
+  //
+  // Review 4.10: "View Neighbors" opens a floating second graph view
+  // instead of selecting the whole neighborhood on the main canvas.
+  const [neighborsOf, setNeighborsOf] = useState<{
+    nodeId: string;
+    hops: number;
+  } | null>(null);
+  // Review 4.11: "Inspect" opens an actual inspector panel.
+  const [inspected, setInspected] = useState<string | null>(null);
   const { menuManager, bus } = useMemo(() => {
     const eventBus = new G3tEventBus();
     const manager = new ContextMenuManager();
@@ -212,10 +231,16 @@ export function AnalyticsDashboard({ className }: AnalyticsDashboardProps) {
   // Reviews 5.1/5.2: every demonstration has a visible consequence,
   // wired through the encoding spec. Size follows the last computed
   // numeric property (degree by default, or a derived property);
-  // color switches to _component after the components demo. The
-  // reset chip returns both to defaults.
-  const [sizeKey, setSizeKey] = useState("_degree");
-  const [colorKey, setColorKey] = useState<string | null>(null);
+  // color switches to _component after the components demo.
+  //
+  // The setters are deliberately not destructured: 12.6 removed the
+  // property-writing panels that called them and the reset chip they
+  // fed, so both values are fixed at their defaults today. They stay as
+  // state, and stay named, because the spec below and the inspector's
+  // LR-40 type-chip guard both read them; restoring a switcher means
+  // taking the setter back, nothing else.
+  const [sizeKey] = useState("_degree");
+  const [colorKey] = useState<string | null>(null);
   const spec = useMemo<EncodingSpec>(() => {
     const base = fromLegacyConfig({
       ...DEFAULT_ENCODING,
@@ -234,7 +259,6 @@ export function AnalyticsDashboard({ className }: AnalyticsDashboardProps) {
       },
     };
   }, [sizeKey, colorKey]);
-  const styledOffDefault = sizeKey !== "_degree" || colorKey !== null;
 
   const degreePipeline = useMemo(() => createDegreeDistribution(), []);
   // Centrality vs a domain property (supply nodes carry a numeric
@@ -244,7 +268,7 @@ export function AnalyticsDashboard({ className }: AnalyticsDashboardProps) {
     () => createCentralityVsProperty("_degree", "risk"),
     [],
   );
-  const nodeColors = useMemo(() => categoricalColorMap(spec, ugm), [ugm]);
+  const nodeColors = useMemo(() => categoricalColorMap(spec, ugm), [spec, ugm]);
   // LR-40: the node dot shows the node's ACTUAL applied color (the
   // spec's own resolver), not the primary type's palette entry.
   const nodeColorResolver = useMemo(
@@ -254,14 +278,8 @@ export function AnalyticsDashboard({ className }: AnalyticsDashboardProps) {
   );
 
   const [tab, setTab] = useState<Tab>("degree");
-  // Review 4.10: "View Neighbors" opens a floating second graph view
-  // instead of selecting the whole neighborhood on the main canvas.
-  const [neighborsOf, setNeighborsOf] = useState<{
-    nodeId: string;
-    hops: number;
-  } | null>(null);
-  // Review 4.11: "Inspect" opens an actual inspector panel.
-  const [inspected, setInspected] = useState<string | null>(null);
+  // (neighborsOf / inspected are declared above the context-menu effect
+  //  that sets them.)
   // LR-11: once open, the inspector follows canvas selection;
   // closed stays closed. Derived at render, no state-sync effect.
   const followedId = useSelectionStore(

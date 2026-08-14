@@ -45,14 +45,23 @@ const demoSrc = read("src/demo/Demo.tsx");
 
 /** `{ id, title }` in declaration order. */
 function surfaces(anchor) {
-  const body = literalBody(landingSrc, anchor, "\n];", "src/demo/DemoLanding.tsx");
-  const found = [...body.matchAll(/\bid:\s*"([^"]+)",\s*\n\s*title:\s*"([^"]+)"/g)];
+  const body = literalBody(
+    landingSrc,
+    anchor,
+    "\n];",
+    "src/demo/DemoLanding.tsx",
+  );
+  const found = [
+    ...body.matchAll(/\bid:\s*"([^"]+)",\s*\n\s*title:\s*"([^"]+)"/g),
+  ];
   if (found.length === 0) fail(`no id/title pairs under ${anchor}`);
   return found.map(([, id, title]) => ({ id, title }));
 }
 
 const scenarios = surfaces("export const SCENARIOS: Scenario[] = [");
-const capabilities = surfaces("export const CAPABILITY_SURFACES: Scenario[] = [");
+const capabilities = surfaces(
+  "export const CAPABILITY_SURFACES: Scenario[] = [",
+);
 const all = [...scenarios, ...capabilities];
 
 // Which ids resolve to a shell. A surface card with no SHELL_MAP entry
@@ -87,7 +96,11 @@ if (uncarded.length > 0) {
 // production build, so a dev-only surface must not be promised here,
 // and a prod-only one must not be silently dropped from the sentence.
 const GATES = [
-  { id: "scale", line: `if (id === "scale") return !import.meta.env.DEV;`, in: "prod" },
+  {
+    id: "scale",
+    line: `if (id === "scale") return !import.meta.env.DEV;`,
+    in: "prod",
+  },
   {
     id: "style-lab",
     line: `if (id === "style-lab") return import.meta.env.DEV;`,
@@ -163,7 +176,8 @@ const html = read(htmlPath);
 // page shipped a 404 into a tree that had been untracked months
 // earlier, and a landing page is the one surface where nobody who
 // could fix a dead link is the one clicking it.
-const REPO_LINK = /href="https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/main\/([^"]*)"/g;
+const REPO_LINK =
+  /href="https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/main\/([^"]*)"/g;
 const dead = [...html.matchAll(REPO_LINK)]
   .map(([, path]) => path)
   .filter((path) => path !== "" && !existsSync(resolve(root, path)));

@@ -325,7 +325,7 @@ for (const [pkg, budget] of Object.entries(BUDGETS)) {
   let total;
   try {
     total = dirSize(dist, [".mjs", ".js"]);
-  } catch (err) {
+  } catch {
     console.error(
       `  @g3t/${pkg}: dist/ missing; run pnpm run build:packages first`,
     );
