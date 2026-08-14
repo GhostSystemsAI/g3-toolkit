@@ -119,7 +119,13 @@ const BUDGETS = {
   // HolonicAdapter (ringed holon + exposed boundary nodes via the
   // _boundaryContains containment type + portal stubs with transit
   // markers), additive optional fields only. Measured 187.7.
-  core: 190 * 1024,
+  // RAISED 190 -> 196 (2026-08-14): brief 14 RDF 1.2 triple-term
+  // projection — projection/hyperarc.ts adds projectTripleTermsAsEdges
+  // (haunt-style dashed qualified edges) + projectTripleTermsAsHyperarcs
+  // (diamond _Statement pseudo-nodes with rdf:subject/object arcs,
+  // recursing on nested << << s p o >> p2 o2 >>), both additive/opt-in,
+  // exported through projection + top-level barrels. Measured 192.1.
+  core: 196 * 1024,
   // Core ledger:
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with
