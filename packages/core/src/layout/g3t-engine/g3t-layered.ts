@@ -22,6 +22,7 @@
  * break lexicographically; identical inputs emit identical bytes.
  */
 import type { StructuralGeometry, StructuralGraphInput } from "../structural";
+import { isDummyId, splitLongSpanEdges } from "./g3t-dummy-chain";
 
 export interface G3tLayoutOptions {
   /** Gap between layers (flow axis). Default 64. */
@@ -493,18 +494,48 @@ export function g3tLayoutFlat(
   const nodeSpacing = options?.nodeSpacing ?? 24;
   const reversed = removeCycles(nodes, edges);
   const layerOf = layersFor(nodes, edges, reversed, options);
-  const { layers } = orderLayers(nodes, edges, reversed, layerOf, options);
+  // LAY-005: split long-span edges into dummy chains BEFORE ordering
+  // so barycenter sees the intermediate positions and BK's type-1
+  // conflict machinery has inner segments to guard. Dummies are
+  // append-only to their layer arrays (orderLayers builds them from
+  // the augmented node list, which appends dummies at the tail).
+  const { augmentedNodes, augmentedEdges, augmentedLayerOf } =
+    splitLongSpanEdges(nodes, edges, layerOf, reversed);
+  const { layers } = orderLayers(
+    augmentedNodes,
+    augmentedEdges,
+    reversed,
+    augmentedLayerOf,
+    options,
+  );
   const x =
     (options?.placement ?? "brandes-koepf") === "brandes-koepf"
-      ? placeBrandesKoepf(nodes, edges, reversed, layers, nodeSpacing)
-      : placeNodes(nodes, edges, reversed, layers, nodeSpacing);
-  const heightOf = new Map(nodes.map((n) => [n.id, n.height] as const));
-  const widthOf = new Map(nodes.map((n) => [n.id, n.width] as const));
+      ? placeBrandesKoepf(
+          augmentedNodes,
+          augmentedEdges,
+          reversed,
+          layers,
+          nodeSpacing,
+        )
+      : placeNodes(
+          augmentedNodes,
+          augmentedEdges,
+          reversed,
+          layers,
+          nodeSpacing,
+        );
+  const heightOf = new Map(
+    augmentedNodes.map((n) => [n.id, n.height] as const),
+  );
+  const widthOf = new Map(augmentedNodes.map((n) => [n.id, n.width] as const));
   const geoNodes: StructuralGeometry["nodes"] = {};
   let y = 0;
   for (const l of layers) {
     const layerH = Math.max(0, ...l.map((id) => heightOf.get(id) ?? DEFAULT_H));
     for (const id of l) {
+      // LAY-005: dummies participate in layer heights so lanes stay
+      // budgeted, but they never emit into the geometry document.
+      if (isDummyId(id)) continue;
       const w = widthOf.get(id) ?? DEFAULT_W;
       const h = heightOf.get(id) ?? DEFAULT_H;
       geoNodes[id] = {
@@ -804,9 +835,9 @@ function compareDecreasing(a: readonly number[], b: readonly number[]): number {
  * (up/down x left/right), median vertical alignment into blocks,
  * horizontal compaction with size-aware separation, then per-node
  * balancing (average of the middle pair of the four candidates).
- * NOTE: without LAY-005's dummy chains there are no inner segments,
- * so type-1 conflict marking is vacuous in this stage; it activates
- * when ESK dummies land.
+ * NOTE (LAY-005): dummy chains from splitLongSpanEdges now feed the
+ * augmented graph, so ordering and BK see inner segments and the
+ * placement's block/alignment structure applies to real chains.
  */
 export function placeBrandesKoepf(
   nodes: readonly FlatNode[],

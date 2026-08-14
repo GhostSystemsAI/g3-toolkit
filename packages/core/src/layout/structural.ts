@@ -326,6 +326,15 @@ export interface StructuralPortGeometry {
  */
 export interface StructuralEdgeGeometry {
   points: { x: number; y: number }[];
+  /**
+   * LAY-005 (owner Jake, 2026-08-14): ordered dummy-chain bend hints
+   * for edges the layered pass split into a chain of pseudo nodes
+   * (long-span edges spanning k>1 layers). Points are ABSOLUTE and
+   * ordered source-to-target. Present only when the layered pass
+   * produced hints AND the edge was not perimeter-routed. Downstream
+   * `.points` consumers can ignore this: `points` is the drawn route.
+   */
+  intermediate?: { x: number; y: number }[];
 }
 
 /**

@@ -181,6 +181,54 @@ describe("routing scenarios: engine survives the gauntlet", () => {
     expect(q.violations).toBe(0);
   });
 
+  // LAY-005 oracle no-regression (owner Jake, 2026-08-14). The two
+  // adversarial long-span scenes get their crossings, bend counts,
+  // and violation counts PINNED at the pre-LAY-005 baseline: the
+  // dagre-style dummy chain must not regress these, though a strict
+  // decrease is not required (pathological cases can generate
+  // dummy-induced crossings). Raise a ceiling only with an owner
+  // ruling and a same-round baseline re-record here.
+  const LAY005_BASELINE: Record<
+    string,
+    Record<
+      "S" | "M" | "L",
+      { crossings: number; bends: number; violations: number }
+    >
+  > = {
+    "span-gauntlet": {
+      S: { crossings: 3, bends: 26, violations: 0 },
+      M: { crossings: 2, bends: 26, violations: 0 },
+      L: { crossings: 2, bends: 26, violations: 0 },
+    },
+    "crossing-storm": {
+      S: { crossings: 92, bends: 64, violations: 0 },
+      M: { crossings: 172, bends: 100, violations: 0 },
+      L: { crossings: 310, bends: 144, violations: 0 },
+    },
+  };
+  for (const [scId, sizes] of Object.entries(LAY005_BASELINE)) {
+    for (const size of ["S", "M", "L"] as const) {
+      const baseline = sizes[size];
+      it(`LAY-005 ${scId} (${size}): crossings/bends/violations do not regress`, async () => {
+        const sc = ROUTING_SCENARIOS.find((s) => s.id === scId)!;
+        const input = sc.build(size);
+        const geometry = await layoutStructural(input, {
+          direction: sc.direction,
+        });
+        const q = gradeRoutes(input, geometry);
+        expect(q.crossings, `${scId}/${size} crossings`).toBeLessThanOrEqual(
+          baseline.crossings,
+        );
+        expect(q.bends, `${scId}/${size} bends`).toBeLessThanOrEqual(
+          baseline.bends,
+        );
+        expect(q.violations, `${scId}/${size} violations`).toBeLessThanOrEqual(
+          baseline.violations,
+        );
+      });
+    }
+  }
+
   it("routeEdges: false omits routes and the oracle reports the fallback", async () => {
     const sc = ROUTING_SCENARIOS.find((s) => s.id === "fan-bus")!;
     const input = sc.build("S");

@@ -111,8 +111,16 @@ export function routeStructuralEdges(
      *  disables (single-line rollback). Ineligible edges are
      *  byte-identical to before. */
     longEdgeNear?: number;
+    /** LAY-005 (owner Jake, 2026-08-14): dummy-chain bend hints per
+     *  edge id, in source-to-target order. When an edge has hints and
+     *  is NOT perimeter-eligible, the interior route seeds from these
+     *  points instead of the single midpoint jog; the hints ride out
+     *  as `intermediate` on the emitted geometry. Perimeter-eligible
+     *  edges skip seeding by policy (the perimeter detour is the
+     *  right shape for a long line through a dense field). */
+    bendHints?: ReadonlyMap<string, readonly Pt[]>;
   },
-): Record<string, { points: Pt[] }> {
+): Record<string, { points: Pt[]; intermediate?: Pt[] }> {
   // Direction-aware (WS-D D3a fix): under horizontal flow (RIGHT/
   // LEFT, the default) edges leave EAST/WEST and jog VERTICALLY in
   // the inter-layer gap; under vertical flow they leave NORTH/SOUTH
@@ -122,8 +130,13 @@ export function routeStructuralEdges(
   const direction = options?.direction ?? "RIGHT";
   const horizontal = direction === "RIGHT" || direction === "LEFT";
   const budgetMs = options?.routingBudgetMs ?? 80;
-  const longEdgeNear = options?.longEdgeNear ?? 12;
-  const out: Record<string, { points: Pt[] }> = {};
+  // LAY-005 (owner Jake, 2026-08-14): absent -> Infinity (policy
+  // disabled, so seeding applies to every hinted edge). Callers that
+  // want the perimeter policy pass the threshold explicitly
+  // (g3tLayoutStructural preserves the historical default of 12).
+  const longEdgeNear = options?.longEdgeNear ?? Infinity;
+  const bendHints = options?.bendHints;
+  const out: Record<string, { points: Pt[]; intermediate?: Pt[] }> = {};
   // Perimeter-routed edges collected during the loop; a post-pass
   // staggers coincident tracks so two long lines sharing a band do
   // not overlap exactly. (Once 01-nudging lands, its group machinery
@@ -714,8 +727,65 @@ export function routeStructuralEdges(
         continue;
       }
     }
+    // LAY-005: bend-hint seeding for non-perimeter-eligible edges.
+    // The hints came from dummy-chain placement, so they express the
+    // ordering's preferred column at each intermediate layer; a
+    // hint-seeded polyline threads through those bends and gives the
+    // rest of the pipeline (routing verification, nudging, canvas
+    // rendering) a route that already respects layered structure.
+    // Perimeter-eligible edges skip seeding by policy (the perimeter
+    // detour is the right shape for a long line through a dense
+    // field). Hints ride out as `intermediate` on the emitted
+    // geometry so downstream tooling can distinguish structural bends
+    // from routing corrections.
+    const hintsForEdge =
+      bendHints !== undefined && near.length < longEdgeNear
+        ? bendHints.get(e.id)
+        : undefined;
+    if (hintsForEdge !== undefined && hintsForEdge.length > 0) {
+      const horizontalTravel =
+        Math.abs(tTip.x - sTip.x) >= Math.abs(tTip.y - sTip.y);
+      const seeded: Pt[] = [s.point, sTip];
+      let prev: Pt = sTip;
+      for (const h of hintsForEdge) {
+        if (horizontalTravel) {
+          seeded.push({ x: h.x, y: prev.y });
+          seeded.push({ x: h.x, y: h.y });
+        } else {
+          seeded.push({ x: prev.x, y: h.y });
+          seeded.push({ x: h.x, y: h.y });
+        }
+        prev = { x: h.x, y: h.y };
+      }
+      if (horizontalTravel) seeded.push({ x: tTip.x, y: prev.y });
+      else seeded.push({ x: prev.x, y: tTip.y });
+      seeded.push(tTip);
+      seeded.push(t.point);
+      const seededPts = dedupeCollinear(seeded);
+      const seededNear = obstacles.filter((b) => {
+        let sx1 = Infinity;
+        let sy1 = Infinity;
+        let sx2 = -Infinity;
+        let sy2 = -Infinity;
+        for (const pnt of seededPts) {
+          sx1 = Math.min(sx1, pnt.x);
+          sy1 = Math.min(sy1, pnt.y);
+          sx2 = Math.max(sx2, pnt.x);
+          sy2 = Math.max(sy2, pnt.y);
+        }
+        return (
+          b.x < sx2 && b.x + b.width > sx1 && b.y < sy2 && b.y + b.height > sy1
+        );
+      });
+      if (!polylineIntersectsBoxes(seededPts, seededNear)) {
+        out[e.id] = { points: seededPts, intermediate: [...hintsForEdge] };
+        continue;
+      }
+    }
     if (!polylineIntersectsBoxes(simple, near)) {
-      out[e.id] = { points: simple };
+      out[e.id] = hintsForEdge
+        ? { points: simple, intermediate: [...hintsForEdge] }
+        : { points: simple };
       continue;
     }
     const clear = [...obstacles]; // VR-7a: endpoint boxes included
@@ -758,6 +828,7 @@ export function routeStructuralEdges(
         if (routed !== null) {
           out[e.id] = {
             points: dedupeCollinear([s.point, ...routed.points, t.point]),
+            ...(hintsForEdge ? { intermediate: [...hintsForEdge] } : {}),
           };
           done = true;
           break;
@@ -770,7 +841,10 @@ export function routeStructuralEdges(
     // rather than drawing through it. Straight-simple only when
     // even the detour cannot clear (extreme containment).
     const detour = detourAround(s.point, sTip, t.point, tTip, near);
-    out[e.id] = { points: detour ?? simple };
+    out[e.id] = {
+      points: detour ?? simple,
+      ...(hintsForEdge ? { intermediate: [...hintsForEdge] } : {}),
+    };
   }
   // Deterministic perimeter stagger: coincident perimeter tracks on
   // the same side of a band derive an identical cross coordinate; walk

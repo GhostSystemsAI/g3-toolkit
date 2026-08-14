@@ -34,6 +34,8 @@ import {
   removeCycles,
   type G3tLayoutOptions,
 } from "./g3t-layered";
+import { harvestBendHints, splitLongSpanEdges } from "./g3t-dummy-chain";
+import type { Pt } from "./g3t-polyline-utils";
 
 function at<T>(v: T | undefined, what: string): T {
   if (v === undefined) throw new Error(`g3t structural invariant: ${what}`);
@@ -132,6 +134,29 @@ export function g3tLayoutStructural(
 
   const reversed = removeCycles(crossBoxes, edges);
   const layerOf = layersFor(crossBoxes, edges, reversed, options);
+  // LAY-005: split long-span edges into dummy chains so ordering and
+  // placement see intermediate positions. Dummies are appended to
+  // their layers (BK's type-1 scan is index-keyed; appending keeps
+  // the block structure stable).
+  const { augmentedLayerOf, dummyIdsByEdge } = splitLongSpanEdges(
+    crossBoxes,
+    edges,
+    layerOf,
+    reversed,
+  );
+  // LAY-005: pass the augmented graph to orderLayers so dummies drag
+  // real-node positions via barycenter to reduce crossings against
+  // the chain. Real-node ORDER within each layer is what carries
+  // over to placement (see realLayers below); the dummies then leave
+  // the pipeline until interpolation.
+  //
+  // Prune-wall (16 columns, 5 K-column-span skips) reproducibly
+  // regresses when the augmented graph feeds orderLayers: the
+  // ordering shuffle moves obstacles enough that the perimeter router
+  // can no longer reach a clean route. Ordering on the real graph
+  // keeps those routes intact; the dummies still shape the router's
+  // seed via interpolation below, which is the load-bearing product
+  // for the router. Revisit when the channel router (PRF-003) lands.
   const ordering = orderLayers(crossBoxes, edges, reversed, layerOf, {
     orderingBudgetMs: options?.orderingBudgetMs,
     // INTERACTIVE semantics: warm-start + one refinement sweep.
@@ -152,19 +177,25 @@ export function g3tLayoutStructural(
         }
       : {}),
   });
+  const realLayers = ordering.layers;
   const x =
     (options?.placement ?? "brandes-koepf") === "brandes-koepf"
-      ? placeBrandesKoepf(
-          crossBoxes,
-          edges,
-          reversed,
-          ordering.layers,
-          nodeSpacing,
-        )
-      : placeNodes(crossBoxes, edges, reversed, ordering.layers, nodeSpacing);
+      ? placeBrandesKoepf(crossBoxes, edges, reversed, realLayers, nodeSpacing)
+      : placeNodes(crossBoxes, edges, reversed, realLayers, nodeSpacing);
 
   const widthOf = new Map(boxes.map((b) => [b.id, b.width] as const));
   const heightOf = new Map(boxes.map((b) => [b.id, b.height] as const));
+  // LAY-005: collect dummy centers in the FINAL absolute frame so
+  // harvested hints hand the router the exact points to bend at.
+  // Positions come from LAYER-INDEX interpolation across the placed
+  // real endpoints (see the interpolation pass below the emission
+  // loop), not from BK's compaction: dummies do not participate in
+  // placement (see the realLayers/realEdges pass above), keeping
+  // real-node coords stable for the router's obstacle assumptions.
+  const dummyPositions = new Map<string, Pt>();
+  // Track each layer's flow-axis center as it emits, keyed by layer
+  // INDEX (the same index augmentedLayerOf uses for dummies).
+  const layerFlowCenter: number[] = [];
   const nodes: StructuralGeometry["nodes"] = {};
   const ports: StructuralGeometry["ports"] = {};
   // Direction (WS-D D3a): layers stack along the FLOW axis. RIGHT
@@ -176,8 +207,9 @@ export function g3tLayoutStructural(
   const flowExtent = (id: string): number =>
     horizontal ? (widthOf.get(id) ?? 100) : (heightOf.get(id) ?? 44);
   let flow = 0;
-  for (const layer of ordering.layers) {
+  for (const layer of realLayers) {
     const layerF = Math.max(0, ...layer.map((id) => flowExtent(id)));
+    layerFlowCenter.push(flow + layerF / 2);
     for (const id of layer) {
       const w = widthOf.get(id) ?? 100;
       const h = heightOf.get(id) ?? 44;
@@ -269,6 +301,42 @@ export function g3tLayoutStructural(
     }
     flow += layerF + layerSpacing;
   }
+  // LAY-005: interpolate dummy positions from the placed real
+  // endpoints. Along the FLOW axis the dummy takes its layer's
+  // center (the same slot BK would land it in with zero size and
+  // zero spacing); along the CROSS axis it interpolates linearly by
+  // layer-index fraction between source and target centers. Straight
+  // by construction: the router uses these as bend hints and may
+  // choose a different corridor, but the seed is always inside the
+  // between-endpoints envelope so it can never introduce a violation
+  // the router wouldn't produce anyway (the escalation ladder still
+  // runs when the seed doesn't clear).
+  for (const [edgeId, dummyIds] of dummyIdsByEdge) {
+    const origEdge = input.edges.find((e) => e.id === edgeId);
+    if (origEdge === undefined) continue;
+    const sGeo = nodes[origEdge.source];
+    const tGeo = nodes[origEdge.target];
+    if (sGeo === undefined || tGeo === undefined) continue;
+    const sc = { x: sGeo.x + sGeo.width / 2, y: sGeo.y + sGeo.height / 2 };
+    const tc = { x: tGeo.x + tGeo.width / 2, y: tGeo.y + tGeo.height / 2 };
+    const sl = augmentedLayerOf.get(origEdge.source) ?? 0;
+    const tl = augmentedLayerOf.get(origEdge.target) ?? 0;
+    for (const did of dummyIds) {
+      const l = augmentedLayerOf.get(did);
+      if (l === undefined) continue;
+      const f = tl === sl ? 0.5 : (l - sl) / (tl - sl);
+      const crossCoord = horizontal
+        ? sc.y + f * (tc.y - sc.y)
+        : sc.x + f * (tc.x - sc.x);
+      const flowCoord = layerFlowCenter[l] ?? 0;
+      dummyPositions.set(
+        did,
+        horizontal
+          ? { x: flowCoord, y: crossCoord }
+          : { x: crossCoord, y: flowCoord },
+      );
+    }
+  }
   // LEFT/UP: mirror the flow axis so layer 0 sits at the far edge.
   if (direction === "LEFT" || direction === "UP") {
     let maxEdge = -Infinity;
@@ -283,7 +351,14 @@ export function g3tLayoutStructural(
       if (horizontal) pg.x = maxEdge - pg.x - pg.width;
       else pg.y = maxEdge - pg.y - pg.height;
     }
+    // LAY-005: dummy centers ride the same mirror so hints stay in
+    // the emitted geometry frame the router consumes.
+    for (const [id, p] of dummyPositions) {
+      if (horizontal) dummyPositions.set(id, { x: maxEdge - p.x, y: p.y });
+      else dummyPositions.set(id, { x: p.x, y: maxEdge - p.y });
+    }
   }
+  const bendHints = harvestBendHints(dummyIdsByEdge, dummyPositions);
   at(nodes, "geometry");
   const geometry: StructuralGeometry = {
     version: 1,
@@ -301,7 +376,12 @@ export function g3tLayoutStructural(
       // re-route over geometry the layout had just produced.
       anchor: options?.anchor,
       nudge: options?.nudge,
-      longEdgeNear: options?.longEdgeNear,
+      // LAY-005: preserve the historical default so a direct raw
+      // routeStructuralEdges call (which now defaults longEdgeNear
+      // to Infinity, disabling perimeter) does not silently change
+      // behavior when invoked through the layout pipeline.
+      longEdgeNear: options?.longEdgeNear ?? 12,
+      bendHints,
     });
   }
   return geometry;

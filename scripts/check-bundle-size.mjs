@@ -70,7 +70,16 @@ const BUDGETS = {
   // near-obstacle boxes prefer a perimeter detour with deterministic
   // outward stagger. Measured 167.0 (bytes over the 167 line); the
   // renegotiate-per-brief posture above holds.
-  core: 169 * 1024,
+  // RAISED 169 -> 173 (2026-08-14): LAY-005 (dummy chains for long-
+  // span edges) landed in g3t-dummy-chain.ts plus wire-through in
+  // g3t-layered.ts / g3t-structural.ts / g3t-routing.ts. The new
+  // module carries splitLongSpanEdges, harvestBendHints, and the
+  // chooseDummyParent helper (for the nested-container case the
+  // input model does not yet expose); the router grew a bend-hint
+  // seeding path that reads dummy positions as intermediate bend
+  // hints and emits them as StructuralEdgeGeometry.intermediate.
+  // Measured 172.5; the +2 KB headroom covers upcoming polish.
+  core: 173 * 1024,
   // Core ledger:
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with
