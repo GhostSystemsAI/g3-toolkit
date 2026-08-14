@@ -88,7 +88,18 @@ const BUDGETS = {
   // corridorDemand it emits can be compared against the estimate).
   // Measured 174.4; +1.6 KB headroom for the follow-on E/W-axis
   // calibration in brief 04 verification step 5.
-  core: 176 * 1024,
+  // RAISED 176 -> 182 (2026-08-14): brief 05a (channel router, PRF-003
+  // phase 1) landed g3t-channel-router.ts (channel/track model,
+  // libavoid divergence-sort track assignment, per-channel demand
+  // overflow to routeOrthogonal, geometry emission from track index)
+  // and g3t-fallback-classifier.ts (the same-layer / anti-monotone /
+  // compound-boundary AABB classifier), both pure-additive behind an
+  // off-by-default `useChannelRouter` flag on routeStructuralEdges;
+  // 17 oracle-pinned unit tests. Measured 180.7; +1.3 KB headroom.
+  // 05b flips the flag on, deletes the escalation ladder + brief-10
+  // stage-A accept-site + the transient flag (no-legacy), which nets
+  // most of this back; renegotiate here when it lands.
+  core: 182 * 1024,
   // Core ledger:
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with

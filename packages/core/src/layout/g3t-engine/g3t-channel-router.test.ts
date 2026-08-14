@@ -150,7 +150,10 @@ describe("emitChannelRoute (PRF-003 05a)", () => {
       channels: [
         { boundary: 0, axis: "v", midline: 100, demand: 4, trackGap: 8 },
       ],
-      layerOf: new Map<string, number>([["a", 0], ["c", 1]]),
+      layerOf: new Map<string, number>([
+        ["a", 0],
+        ["c", 1],
+      ]),
     });
     const edges: ChannelEdge[] = [
       { id: "e1", source: "a", target: "c", entryCross: 0, exitCross: 0 },

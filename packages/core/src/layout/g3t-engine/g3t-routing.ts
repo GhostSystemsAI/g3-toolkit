@@ -473,11 +473,13 @@ export function routeStructuralEdges(
           source: e.source,
           target: e.target,
           entryCross:
-            channelPlan.direction === "RIGHT" || channelPlan.direction === "LEFT"
+            channelPlan.direction === "RIGHT" ||
+            channelPlan.direction === "LEFT"
               ? centerY(e.source)
               : centerX(e.source),
           exitCross:
-            channelPlan.direction === "RIGHT" || channelPlan.direction === "LEFT"
+            channelPlan.direction === "RIGHT" ||
+            channelPlan.direction === "LEFT"
               ? centerY(e.target)
               : centerX(e.target),
         })),

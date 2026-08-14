@@ -218,8 +218,7 @@ export function emitChannelRoute(
     return t % 2 === 1 ? magnitude : -magnitude;
   };
 
-  const horizontal =
-    plan.direction === "RIGHT" || plan.direction === "LEFT";
+  const horizontal = plan.direction === "RIGHT" || plan.direction === "LEFT";
   const points: Pt[] = [anchors.source.point, anchors.sourceTip];
   let prev: Pt = anchors.sourceTip;
   for (const b of traversed) {

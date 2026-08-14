@@ -37,7 +37,10 @@ export interface FallbackEdge {
   target: string;
 }
 
-export type FallbackReason = "same-layer" | "anti-monotone" | "compound-boundary";
+export type FallbackReason =
+  | "same-layer"
+  | "anti-monotone"
+  | "compound-boundary";
 
 export interface FallbackClassification {
   /** Edge ids that must route as fallback (routeOrthogonal), with the
@@ -113,9 +116,7 @@ export function classifyFallback(
   // reduces to "source and target ordering violates the flow sign".
   const forwardAscending = direction === "RIGHT" || direction === "DOWN";
 
-  const containers = nodes.filter((n) =>
-    nodes.some((c) => c.parent === n.id),
-  );
+  const containers = nodes.filter((n) => nodes.some((c) => c.parent === n.id));
 
   const out = new Map<string, FallbackReason>();
   for (const e of edges) {
