@@ -9,7 +9,8 @@ Owner ask (Jake, 2026-08-14): "I want smart routing on every example."
 ## Current coverage (verified against source this session)
 
 Smart routing = the obstacle-aware machinery that already ships:
-`layoutStructural` ELK routes (`routeEdges`, default on) rendered as
+`layoutStructural` g3t-engine obstacle-aware routes (`routeEdges`,
+default on; elkjs itself left the tree 2026-07-19) rendered as
 `curve-style: segments` via `g3t-structural-edge-routed`, plus the
 generic `routeOrthogonal` A* router (`packages/core/src/route/`,
 exported from `@g3t/core`) used for interactive re-routing.
