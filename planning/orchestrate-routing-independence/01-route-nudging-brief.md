@@ -115,7 +115,12 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    (not any geometric average of the original segment positions) wins.
    (b) 0 < span < (n + 1) * gap: distribute evenly ELK-style
    (span / (n + 1)) — reduced but positive spacing, never overlapping a
-   box. (c) span <= 0 (corridor fully occluded): TERMINAL FALLBACK —
+   box. STARTING ANCHOR AND CENTERING CONVENTION: identical to branch
+   (a) -- the n tracks are placed symmetric about the free-span midline
+   (the midpoint between the clearance-adjusted obstacle box faces), with
+   inter-track spacing span/(n+1). Branch (a) and branch (b) share
+   exactly one centering convention; the only difference is the spacing
+   value. (c) span <= 0 (corridor fully occluded): TERMINAL FALLBACK —
    the whole group keeps its original positions untouched, and the
    corridor is recorded in `corridorDemand` with `blocked: true`,
    `blockedReason: 'occluded'`, and its full deficit. No exception,
@@ -186,15 +191,28 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    crossing. Within a true single corridor the check passes by
    construction; for a wrongly merged corridor it converts a
    potential rendering regression into a clean group revert.
-   If ANY member fails either check, first retry the group placement once with
-   `trackGap' = trackGap / 2`, RE-RUNNING THE FULL three-branch
-   ladder at the halved gap (not a direct fixed-spacing emit); if a
-   member still fails, the ENTIRE group reverts to its original
-   polylines and the corridor is recorded in `corridorDemand` as
-   blocked with `blockedReason: 'reverted'`. All-or-nothing per group:
-   no mixed-nudge states, so the pass can never produce a co-located
-   pair that was not already in the input — the un-nudged input is the
-   guaranteed worst case. A 2-point straight route is never nudged (a
+   Failure semantics are DISTINGUISHED by failure type:
+   - BOX CHECK failure (spacing-driven): retry once with
+     `trackGap' = trackGap / 2`, RE-RUNNING THE FULL three-branch
+     ladder at the halved gap (not a direct fixed-spacing emit). A
+     tighter gap may find a valid placement. If the retry still fails
+     the box check, the ENTIRE group reverts to its original polylines
+     and the corridor is recorded in `corridorDemand` as blocked with
+     `blockedReason: 'reverted'`.
+   - CROSSING CHECK failure (group-membership-driven): immediately
+     revert the ENTIRE group WITHOUT any retry. Crossing failures
+     indicate the capture band merged two legitimately distinct dense
+     channels with no obstacle box between them. The sort order and
+     group composition are unchanged at a halved gap; re-running the
+     ladder cannot alter the ordering that introduced the crossing.
+     Consuming the one-retry budget on a geometrically impossible
+     outcome silently misclassifies an algorithmic edge case as a
+     spacing problem. Record the group in `corridorDemand` as blocked
+     with `blockedReason: 'reverted'`.
+   In both failure paths, revert is ALL-OR-NOTHING per group: no
+   mixed-nudge states, so the pass can never produce a co-located
+   pair that was not already in the input -- the un-nudged input is
+   the guaranteed worst case. A 2-point straight route is never nudged (a
    straight line must not gain bends) and never joins a group.
    Rollback granularity is the GROUP (which contains whole routes'
    corridor segments); a route outside any committed group is
@@ -207,6 +225,12 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    enabled with an opt-out; it does NOT claim routeEdges itself has
    any nudge sub-option (this brief introduces nudging for the first
    time). Thread through `layoutStructural`'s routing options.
+   OPTIONS BAG SIGNATURE (verified 2026-08-14 against g3t-routing.ts:
+   111-122): the current options object carries exactly three fields --
+   `routingBudgetMs?`, `direction?`, `anchor?`. Adding `nudge?: boolean`
+   has no field name collision. Implementing worker re-verifies this
+   signature before adding the new field to confirm no collision was
+   introduced after this date.
    Non-test call sites enumerated (checked 2026-08-14; worker
    re-greps): g3t-structural.ts:295 (the `layoutStructural` flow) and
    packages/react/src/views/svg/structural-svg-view.tsx:408 (a DIRECT
@@ -228,12 +252,15 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    FORBIDDEN; baseline re-pins land as ONE SEPARATE commit in the
    same PR (implementation commit + re-pin commit), the re-pin commit
    body lists every re-pinned test by file, and the worker reports
-   the count in its outcome summary. ROLLBACK PATH: a rendering
-   regression after merge is recovered by ONE revert PR that flips
-   the default (`nudge: false`) AND reverts the re-pin commit —
-   that's why re-pins are a separate, cleanly revertible commit; the
-   owner (Jake/Zach) decides the flip, no config atom or infra
-   involved. NORMALIZATION CAVEAT: Step 0 applies `dedupeCollinear`
+   the count in its outcome summary. ROLLBACK PATH (nudging-caused
+   regressions only): when bisection confirms the regression traces to
+   the nudging pass itself (track placement, group formation, or
+   ordering), recovery is ONE revert PR that flips the default
+   (`nudge: false`) AND reverts the re-pin commit -- that's why re-pins
+   are a separate, cleanly revertible commit; the owner (Jake/Zach)
+   decides the flip, no config atom or infra involved. This path does
+   NOT cover normalization-caused regressions -- see NORMALIZATION
+   CAVEAT below. NORMALIZATION CAVEAT: Step 0 applies `dedupeCollinear`
    normalization to ALL input polylines unconditionally, regardless of
    the `nudge` flag value. A regression caused by normalization alone
    (collinear-point removal changing a route's bounding geometry or
@@ -294,10 +321,16 @@ within a layout, they are not stable across relayouts — brief 04
 matches by key within one pass, never across passes).
 FLOATING-POINT DISCIPLINE: midline and extent are computed EXACTLY
 ONCE per corridor per pass, from the immutable snapshot, and that
-single value is reused for both track placement and the key — no
+single value is reused for both track placement and the key -- no
 caller recomputes the "same" midline via a different arithmetic
 path, so within-pass key identity cannot be broken by FP rounding
-divergence.
+divergence. `layoutBound` (used for the open-side clamp in step 4)
+is computed ONCE at the start of the pass from the immutable input
+geometry -- the bounding box of all obstacle node boxes plus the
+routing margin from the options -- and that single value is reused
+throughout the pass. It is never recomputed from live geometry
+mid-pass, giving it the same one-source-of-truth guarantee as
+midline and extent.
 KEY COLLISION EDGE CASE: the split rule separates corridors on
 either side of an obstacle box, but if the box is thin enough that
 the two clearance-adjusted midlines (each calculated from its own
@@ -306,7 +339,14 @@ the same integer and the extent ranges may also round identically,
 yielding a key collision within one pass. The implementing worker
 MUST detect this case at construction time and append a per-pass
 index suffix (e.g. `:0`, `:1`) to disambiguate: deduplicate emitted
-keys within the pass and suffix any duplicate, in order of emission.
+keys within the pass and suffix any duplicate in DETERMINISTIC
+CORRIDOR EMISSION ORDER: corridors are enumerated in lexicographic
+order of their pre-collision key -- axis ascending ('h' < 'v'), then
+`Math.round(midline)` ascending, then `Math.round(extent[0])`
+ascending. This order is fully determined by the immutable input
+snapshot. Two passes over identical geometry therefore assign :0/:1
+to the same corridors, preserving the 'two passes produce identical
+keys' guarantee.
 Brief 04 matches by key within one pass and must handle suffixed
 keys transparently (the suffix is part of the opaque key string).
 
@@ -345,11 +385,23 @@ above states the same discrimination):
   not "reaches 0". Any lab scenario containing a coincident 2-point
   route must have this carve-out applied per pair to avoid false
   positive failures.
+- **Nudge-bypass test:** with `nudge: false` explicitly set, assert
+  each output route is byte-identical to applying `dedupeCollinear` to
+  its input polyline and nothing else -- no group is formed, no track
+  placement occurs. This is the ONLY test that empirically confirms the
+  flag provides a complete bypass of steps 1-5 (grouping through
+  rewrite), and it establishes the normalization/nudging boundary: any
+  output difference on `nudge: false` vs the raw input is attributable
+  to Step 0 normalization alone, and any further difference between
+  `nudge: false` and `nudge: true` is attributable to steps 1-5 alone.
+  Without this test, the rollback promise (flip the default to recover
+  nudging regressions) is untested and the regression source
+  unresolvable by inspection.
 - **Return-value sense test:** add a direct unit test asserting
   `polylineIntersectsBoxes` return polarity: a polyline segment that
   passes through a box interior must return `true`; a polyline that
   avoids all boxes must return `false`. This test is a guard against
-  inversion during the import — it verifies the convention the
+  inversion during the import -- it verifies the convention the
   validation logic depends on, independent of the nudging pass.
 - Unit tests on the module: order preservation (no new crossings by
   construction — assert crossings metric does not increase on all six
@@ -373,11 +425,20 @@ above states the same discrimination):
   off-by-one canary); (c) fully blocked corridor (span <= 0) asserts
   byte-identical passthrough of the group AND a `corridorDemand`
   entry with `blocked: true`, `blockedReason: 'occluded'`, and the
-  correct deficit.
-- Retry-branch test: a group whose first placement fails validation
-  but succeeds at trackGap/2 asserts the retry re-runs the full
-  ladder at the halved gap and commits; a group that fails both
-  asserts whole-group revert with `blockedReason: 'reverted'`.
+  correct deficit. RUNTIME NOTE: `polylineIntersectsBoxes` enforces
+  box interior non-intersection only -- it does not verify clearance
+  margin. The outermost-track clearance assertion in branch (b) is a
+  unit test invariant only; there is no runtime validation backstop
+  analogous to the box check for this property. The unit test is the
+  sole enforcement layer for branch (b) clearance.
+- Retry-branch test: a group whose first placement fails the BOX CHECK
+  but succeeds at trackGap/2 asserts the retry re-runs the full ladder
+  at the halved gap and commits; a group that fails the box check on
+  both attempts asserts whole-group revert with
+  `blockedReason: 'reverted'`; a group that fails the CROSSING CHECK
+  on the first attempt asserts immediate whole-group revert with
+  `blockedReason: 'reverted'` and NO retry (the half-gap retry must
+  not fire for crossing failures).
 - Split-rule test: two segments within the 16px capture band with an
   obstacle box between them on the perpendicular axis assert they are
   NOT grouped (two distinct corridors emitted, neither track set
@@ -434,9 +495,17 @@ above states the same discrimination):
 No public API widening beyond the `nudge` routing option and the
 exported `corridorDemand` shape. `dedupeCollinear`'s new export is
 ENGINE-INTERNAL only: exported from g3t-routing.ts so g3t-nudging.ts
-can import it, but NOT re-exported from packages/core/src/index.ts —
-it stays out of the package surface and future refactors may still
-treat it as internal. No changes to anchor fans, the escalation
+can import it, but NOT re-exported from packages/core/src/index.ts --
+it stays out of the package's declared public surface. KNOWN
+LIMITATION: adding `export` to dedupeCollinear causes it to appear
+in the package's generated .d.ts declaration files, making it
+technically reachable via deep imports (`packages/core/src/layout/
+g3t-engine/g3t-routing`) and visible to IDE auto-import suggestions.
+This .d.ts leakage is accepted: ENGINE-INTERNAL is a semantic
+designation, not a compile-time enforcement boundary. If .d.ts
+leakage is later judged unacceptable, extract dedupeCollinear to a
+private helper file that neither module re-exports. Future refactors
+may still treat it as internal. No changes to anchor fans, the escalation
 ladder, or the simple template — this slice ONLY separates what they
 emit. Dummy chains (LAY-005) and the channel router
 (PRF-003) remain later phases; corridorDemand is the bridge to them.
