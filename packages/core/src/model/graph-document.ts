@@ -14,6 +14,16 @@
  * Round-trip guarantee (oracle-pinned): parseGraphDocument of
  * serializeGraphDocument is deep-equal for every valid document.
  * The JSON Schema is published as GRAPH_DOCUMENT_SCHEMA.
+ *
+ * Failure contract: `parseGraphDocument` returns `{ error }` or
+ * `{ document, diagnostics }` and NEVER throws. It used to guard only
+ * the top-level shape and then cast, so a null array member reached
+ * library internals as a raw TypeError while a numeric id passed as
+ * valid and corrupted the layout stages downstream. Element shapes are
+ * now checked against the published schema before the cast;
+ * unusable elements are DROPPED with a BAD_SHAPE diagnostic naming
+ * their array index, the same degrade-and-report convention
+ * `elk-import.ts` uses.
  */
 import type { StructuralGeometry } from "../layout/structural";
 import type {
@@ -233,6 +243,166 @@ export function serializeGraphDocument(doc: GraphDocument): string {
   return JSON.stringify(doc);
 }
 
+// ── Element-shape checking ──────────────────────────────────────────
+//
+// The hand-written counterpart of GRAPH_DOCUMENT_SCHEMA. The schema is
+// the PUBLISHED contract; these predicates are what actually runs, and
+// `graph-document.test.ts` pins the two together so the schema cannot
+// drift into decoration. Validating the schema directly would mean
+// shipping a JSON Schema engine inside core, which the architecture
+// doctrine (heavy machinery stays external) and the bundle budget both
+// argue against.
+
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === "string" && v.length > 0;
+}
+
+/** Type of an optional field, or `undefined` if absent. Missing is OK. */
+function optionalTypeError(
+  value: unknown,
+  expected: "string" | "number" | "object" | "array",
+): string | undefined {
+  if (value === undefined) return undefined;
+  switch (expected) {
+    case "array":
+      return Array.isArray(value) ? undefined : "must be an array";
+    case "object":
+      return isObject(value) ? undefined : "must be an object";
+    case "number":
+      return typeof value === "number" && Number.isFinite(value)
+        ? undefined
+        : "must be a finite number";
+    case "string":
+      return typeof value === "string" ? undefined : "must be a string";
+  }
+}
+
+const PORT_SIDES = new Set(["NORTH", "SOUTH", "EAST", "WEST"]);
+
+/**
+ * Check one array element against the schema's item shape.
+ *
+ * Returns the accepted element, or `undefined` to DROP it. Dropping
+ * rather than failing the whole parse matches `elk-import.ts`: the
+ * document channel degrades with diagnostics instead of refusing, and
+ * the caller sees exactly which index was unusable. A document with no
+ * salvageable elements still parses, to a document with empty arrays
+ * and one diagnostic per casualty.
+ */
+function checkNode(
+  raw: unknown,
+  index: number,
+  out: DocumentDiagnostic[],
+): DocNode | undefined {
+  const subject = `nodes[${index}]`;
+  if (!isObject(raw)) {
+    out.push({
+      code: "BAD_SHAPE",
+      subject,
+      message: `${subject} is not an object; dropped`,
+    });
+    return undefined;
+  }
+  if (!isNonEmptyString(raw.id)) {
+    out.push({
+      code: "BAD_SHAPE",
+      subject,
+      message: `${subject} has no usable "id" (must be a non-empty string); dropped`,
+    });
+    return undefined;
+  }
+  const fields: Array<[string, "string" | "number" | "object" | "array"]> = [
+    ["parent", "string"],
+    ["label", "string"],
+    ["width", "number"],
+    ["height", "number"],
+    ["ports", "array"],
+    ["data", "object"],
+    ["layoutOptions", "object"],
+  ];
+  for (const [key, expected] of fields) {
+    const err = optionalTypeError(raw[key], expected);
+    if (err) {
+      out.push({
+        code: "BAD_SHAPE",
+        subject: `${subject}.${key}`,
+        message: `node "${raw.id}" field "${key}" ${err}; dropped`,
+      });
+      return undefined;
+    }
+  }
+  if (Array.isArray(raw.ports)) {
+    for (const [i, p] of raw.ports.entries()) {
+      if (!isObject(p) || !isNonEmptyString(p.id)) {
+        out.push({
+          code: "BAD_SHAPE",
+          subject: `${subject}.ports[${i}]`,
+          message: `node "${raw.id}" port ${i} has no usable "id"; node dropped`,
+        });
+        return undefined;
+      }
+      if (p.side !== undefined && !PORT_SIDES.has(p.side as string)) {
+        out.push({
+          code: "BAD_SHAPE",
+          subject: `${subject}.ports[${i}]`,
+          message: `node "${raw.id}" port "${String(p.id)}" has side "${String(p.side)}", not one of NORTH/SOUTH/EAST/WEST; node dropped`,
+        });
+        return undefined;
+      }
+    }
+  }
+  return raw as unknown as DocNode;
+}
+
+function checkEdge(
+  raw: unknown,
+  index: number,
+  out: DocumentDiagnostic[],
+): DocEdge | undefined {
+  const subject = `edges[${index}]`;
+  if (!isObject(raw)) {
+    out.push({
+      code: "BAD_SHAPE",
+      subject,
+      message: `${subject} is not an object; dropped`,
+    });
+    return undefined;
+  }
+  for (const key of ["id", "source", "target"] as const) {
+    if (!isNonEmptyString(raw[key])) {
+      out.push({
+        code: "BAD_SHAPE",
+        subject,
+        message: `${subject} has no usable "${key}" (must be a non-empty string); dropped`,
+      });
+      return undefined;
+    }
+  }
+  const fields: Array<[string, "string" | "object"]> = [
+    ["sourcePort", "string"],
+    ["targetPort", "string"],
+    ["label", "string"],
+    ["kind", "string"],
+    ["data", "object"],
+  ];
+  for (const [key, expected] of fields) {
+    const err = optionalTypeError(raw[key], expected);
+    if (err) {
+      out.push({
+        code: "BAD_SHAPE",
+        subject: `${subject}.${key}`,
+        message: `edge "${String(raw.id)}" field "${key}" ${err}; dropped`,
+      });
+      return undefined;
+    }
+  }
+  return raw as unknown as DocEdge;
+}
+
 export function parseGraphDocument(
   text: string,
 ):
@@ -254,8 +424,40 @@ export function parseGraphDocument(
   if (!Array.isArray(doc.nodes) || !Array.isArray(doc.edges)) {
     return { error: "nodes/edges arrays missing" };
   }
-  const document = doc as GraphDocument;
-  return { document, diagnostics: validateGraphDocument(document) };
+  const rawNodes: unknown[] = doc.nodes;
+  const rawEdges: unknown[] = doc.edges;
+
+  // Everything past the top-level guards runs inside the declared
+  // failure union. The contract says a caller who checks `"error" in
+  // result` has handled failure, so a throw out of here would be a
+  // contract violation, not merely a bug.
+  try {
+    const diagnostics: DocumentDiagnostic[] = [];
+    const nodes: DocNode[] = [];
+    for (const [i, n] of rawNodes.entries()) {
+      const checked = checkNode(n, i, diagnostics);
+      if (checked) nodes.push(checked);
+    }
+    const edges: DocEdge[] = [];
+    for (const [i, e] of rawEdges.entries()) {
+      const checked = checkEdge(e, i, diagnostics);
+      if (checked) edges.push(checked);
+    }
+
+    // Rebuild only when something was dropped, so the round-trip
+    // guarantee stays literal for valid documents: the returned
+    // object is the parsed one, carrying any fields a future version
+    // adds.
+    const document: GraphDocument =
+      nodes.length === rawNodes.length && edges.length === rawEdges.length
+        ? (doc as GraphDocument)
+        : { ...(doc as GraphDocument), nodes, edges };
+
+    diagnostics.push(...validateGraphDocument(document));
+    return { document, diagnostics };
+  } catch (e) {
+    return { error: `could not validate document: ${String(e)}` };
+  }
 }
 
 /**

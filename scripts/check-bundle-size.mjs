@@ -57,8 +57,20 @@ const BUDGETS = {
   // oracle-pinned.
   // Round 21 (2026-08-05): +1 KB for the structural style applier
   // (R-12a), the renderer-neutral counterpart of the cytoscape one.
-  core: 160.0 * 1024,
+  core: 162.0 * 1024,
   // Core ledger:
+  // - 160 -> 162 KB, 2026-08-14 (parse-boundary hardening):
+  //   element-shape checking in
+  //   model/graph-document.ts so parseGraphDocument honors its
+  //   declared `{ error } | { document, diagnostics }` union instead
+  //   of throwing a raw TypeError out of library internals, and so a
+  //   numeric id stops passing as a well-typed document. Measured
+  //   160.4 KB, +0.4 KB. Sourcemap audit still clean (zero
+  //   node_modules bytes). The checkers are hand-written rather than
+  //   a JSON Schema engine precisely because of this budget: an
+  //   engine would cost more than the whole document module. Second
+  //   raise this session, both of them hardening work; ordinary
+  //   feature work should still expect to argue for its bytes.
   // - 155.5 -> 160 KB, 2026-08-14 (adapter query-argument safety):
   //   adapter/query-safety.ts plus the
   //   call sites in the Gremlin, Cypher and SPARQL adapters,
