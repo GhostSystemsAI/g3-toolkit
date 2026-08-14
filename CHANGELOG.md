@@ -1,6 +1,32 @@
 # Changelog
 
-## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, adopter docs, planning tree)
+## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, adopter docs, planning tree)
+
+- **Contributor onboarding: the first hour no longer describes a
+  repository that does not exist.** CONTRIBUTING.md had no install
+  section at all, while `preinstall` runs `only-allow pnpm` and rejects
+  npm without naming corepack, and `pnpm run gates` terminates in three
+  Python scripts needing an interpreter and a `pyyaml` no document
+  mentioned. A new Setup section names all three prerequisites with the
+  versions the `engines` and `packageManager` fields pin, and points at
+  `pnpm run gates` as the single command CI runs. The rest of the file
+  was corrected against the package split: the testing matrix and Code
+  Style rules cited the pre-split `src/core/` and `src/views/`; the
+  rationale link pointed at `docs/testing-architecture.md`, which has
+  never existed (the file is `docs/source/testing-architecture.md`); the
+  PR checklist ran `test && typecheck && lint`, a strict subset of CI
+  that skips `verify` and the spec gates, and required a CHANGELOG
+  `[Unreleased]` section with zero occurrences in this file; the commit
+  format was the retired milestone ticket scheme. DEVELOPER.md's
+  structure tree, barrel-export recipe, test count and demo description
+  were rewritten from the current tree (eight lazy shells, not nine
+  scenarios with five shells and a generic fallback), the fcose
+  declaration path was corrected, and counts were dropped rather than
+  re-guessed: hand-maintained numbers here have drifted repeatedly, and
+  the gate script is the authority. `pnpm-workspace.yaml` carried the
+  literal string `set this to true or false` where `allowBuilds.canvas`
+  expects a boolean; canvas is an optional jsdom peer this repo
+  deliberately does not install, so the value is `false`.
 
 - **`@g3t/react`: a render failure no longer takes the whole page
   down.** Two holes, one theme. `useStructuralLayout` started a
