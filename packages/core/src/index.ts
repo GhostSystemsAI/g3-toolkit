@@ -359,7 +359,11 @@ export { khopNeighborhood } from "./path-analysis/khop";
 export type { KhopOptions } from "./path-analysis/khop";
 export type { PathResult, PathOptions } from "./path-analysis";
 export * from "./export";
-export { collapseByCluster, buildSubgraph } from "./scale/collapse-by-cluster";
+export {
+  collapseByCluster,
+  buildSubgraph,
+  clusterBadgeText,
+} from "./scale/collapse-by-cluster";
 export type {
   CollapseByClusterOptions,
   CollapseResult,

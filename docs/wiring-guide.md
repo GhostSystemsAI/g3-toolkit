@@ -603,7 +603,9 @@ import {
   type TripleTermAnnotation,
 } from "@g3t/core";
 
-const rows: TripleTermAnnotation[] = [/* from your SPARQL results */];
+const rows: TripleTermAnnotation[] = [
+  /* from your SPARQL results */
+];
 const hyperarcUgm = projectTripleTermsAsHyperarcs(rows);
 // _Statement nodes carry `_rdfStatement: true`; a `confidence`
 // annotation folds onto the node as `_confidence`. Scope the opacity
@@ -611,7 +613,7 @@ const hyperarcUgm = projectTripleTermsAsHyperarcs(rows);
 // Cytoscape with per-frame warnings.
 const stylesheet = [
   { selector: "node[?_rdfStatement]", style: { shape: "diamond" } },
-  { selector: "node[_confidence]",  style: { opacity: "data(_confidence)" } },
+  { selector: "node[_confidence]", style: { opacity: "data(_confidence)" } },
 ];
 
 // Same rows, edge render — one dashed star edge per annotation:
@@ -682,9 +684,42 @@ const { ugm: sub, truncated } = buildSubgraph(big, memberIds, 1500);
 ```
 
 Supernodes carry `memberCount` (drive the size channel with it),
-`typeBreakdown`, and a label like "Person cluster (847)"; inter-cluster
-edges aggregate into weighted `cluster-link` edges. This is Approach 1
-of planning/large-graph-design.md; Approach 4 (worker layout with
+`interiorEdgeCount` (edges wholly inside the cluster — the "how many
+paths in it" number an analyst asks for first), `boundaryEdgeCount`
+(edges crossing the cluster boundary), `typeBreakdown`, and a
+disambiguated name like "Person cluster around alice"; inter-cluster
+edges aggregate into weighted `cluster-link` edges.
+
+Compose the count badge into the canvas label with the pure helper
+`clusterBadgeText(attrs)` — renderer-neutral so it survives brief
+08's per-view renderer independence. The typical wiring precomputes
+`_badge` onto each supernode and points the Cytoscape label at it:
+
+```ts
+import { clusterBadgeText } from "@g3t/core";
+
+clustered.forEachNode((id, attrs) => {
+  attrs.properties._badge = clusterBadgeText(attrs.properties);
+});
+
+// Then in the stylesheet you pass to CytoscapeCanvas:
+const stylesheet = [
+  {
+    selector: "node",
+    style: {
+      label: "data(_badge)",
+      "text-valign": "bottom",
+      "text-margin-y": 6,
+      "font-size": 10,
+    },
+  },
+];
+```
+
+Never bake counts into `name`: the label is a NAME and doubling the
+count wherever a consumer also shows `memberCount` (side panels,
+rails) was a real regression. This is Approach 1 of
+planning/large-graph-design.md; Approach 4 (worker layout with
 viewport culling, for drilled sets past ~5k) is designed but not yet
 implemented.
 

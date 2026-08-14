@@ -85,9 +85,11 @@ describe("ScaleSurface", () => {
 
   it("drills into a cluster from the rail and returns", () => {
     render(<ScaleSurface onBack={() => {}} />);
+    // Rail entries end with the count badge from clusterBadgeText:
+    // "<name> <N> nodes · <M> links". Match that shape.
     const clusterButtons = screen
       .getAllByRole("button")
-      .filter((b) => /\(\d+\)/.test(b.textContent ?? ""));
+      .filter((b) => /\d+ nodes? · \d+ links?/.test(b.textContent ?? ""));
     expect(clusterButtons.length).toBeGreaterThan(1);
     const target = clusterButtons[0] as HTMLElement;
     // Louvain approximately recovers the planted partition (bridge
@@ -95,7 +97,7 @@ describe("ScaleSurface", () => {
     // planted size: the drilled canvas count equals the clicked rail
     // entry's own member count.
     const declared = Number(
-      /\((\d+)\)\s*$/.exec(target.textContent ?? "")?.[1],
+      /(\d+) nodes? · \d+ links?/.exec(target.textContent ?? "")?.[1],
     );
     fireEvent.click(target);
 

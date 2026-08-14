@@ -618,6 +618,19 @@ describe("scaling (guide: Scaling: collapse large graphs to clusters)", () => {
     expect(members.get("cluster:t1")?.length).toBe(40);
     expect(clustered.getNode("cluster:t1")?.properties.memberCount).toBe(40);
 
+    // Interior + boundary edge counts land on every supernode. In
+    // this fixture every edge stays inside its team (created as
+    // `x{c}-i` -> `x{c}-0`), so boundary must be 0 and interior
+    // must be the team's edge count. This is the wiring an adopter
+    // uses to answer "how many paths in this cluster?" without
+    // re-walking the source UGM.
+    expect(clustered.getNode("cluster:t1")?.properties.interiorEdgeCount).toBe(
+      39,
+    );
+    expect(clustered.getNode("cluster:t1")?.properties.boundaryEdgeCount).toBe(
+      0,
+    );
+
     const { ugm: sub, truncated } = buildSubgraph(
       big,
       members.get("cluster:t1") ?? [],
@@ -625,6 +638,35 @@ describe("scaling (guide: Scaling: collapse large graphs to clusters)", () => {
     );
     expect(truncated).toBe(true);
     expect(sub.getNodeIds().length).toBe(25);
+  });
+
+  it("composes the count badge for a Cytoscape label via clusterBadgeText", async () => {
+    const { clusterBadgeText } = await import("@g3t/core");
+    const big = new UGM();
+    for (let c = 0; c < 3; c++) {
+      for (let i = 0; i < 40; i++) {
+        big.addNode(`y${c}-${i}`, {
+          types: ["Thing"],
+          properties: { name: `y${c}-${i}`, team: `t${c}` },
+        });
+        if (i > 0) big.addEdge(`y${c}-${i}`, `y${c}-0`, { type: "in" });
+      }
+    }
+    const { ugm: clustered } = collapseByCluster(big, {
+      threshold: 100,
+      clusterProperty: "team",
+    });
+
+    // Precompute the badge onto each supernode so the Cytoscape
+    // stylesheet can point at `data(_badge)`. Renderer-neutral: the
+    // helper is a pure text function, no cytoscape import required.
+    clustered.forEachNode((_id, attrs) => {
+      attrs.properties._badge = clusterBadgeText(attrs.properties);
+    });
+
+    expect(clustered.getNode("cluster:t0")?.properties._badge).toBe(
+      "40 nodes · 39 links",
+    );
   });
 });
 

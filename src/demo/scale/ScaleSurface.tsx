@@ -27,7 +27,12 @@ import {
   type EncodingSpec,
 } from "@g3t/react";
 import type { Core } from "cytoscape";
-import { collapseByCluster, buildSubgraph, UGM } from "@g3t/core";
+import {
+  collapseByCluster,
+  buildSubgraph,
+  clusterBadgeText,
+  UGM,
+} from "@g3t/core";
 import { SurfaceFrame } from "../surfaces/DashboardSurfaces";
 import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
@@ -90,6 +95,14 @@ function buildModel(): Model {
     rng: mulberry32(SCALE_SEED),
   });
   const collapseMs = performance.now() - t1;
+  // Precompute the "N nodes · M links" badge onto each supernode so
+  // the Cytoscape stylesheet can point at data(_badge). Kept out of
+  // `name` on purpose (baking counts into the name double-renders
+  // wherever a consumer also shows memberCount, per the
+  // clusterLabel note in collapse-by-cluster.ts).
+  clustered.forEachNode((_id, attrs) => {
+    attrs.properties._badge = clusterBadgeText(attrs.properties);
+  });
   return { full, clustered, members, genMs, collapseMs, edgeCount };
 }
 
@@ -451,7 +464,7 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
             </div>
           )}
           <div style={{ marginTop: 10 }}>
-            {supernodes.map(([superId, ids]) => (
+            {supernodes.map(([superId, _ids]) => (
               <button
                 key={superId}
                 type="button"
@@ -473,7 +486,11 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
                 }}
               >
                 {labelFor(model, superId)}{" "}
-                <span style={{ opacity: 0.6 }}>({ids.length})</span>
+                <span style={{ opacity: 0.6 }}>
+                  {clusterBadgeText(
+                    model.clustered.getNode(superId)?.properties,
+                  )}
+                </span>
               </button>
             ))}
           </div>
@@ -518,11 +535,31 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
           <CytoscapeCanvas
             ugm={canvasUgm}
             encodingSpec={spec}
-            stylesheet={
-              edgeLabels
-                ? undefined
-                : [{ selector: "edge", style: { label: "" } }]
-            }
+            stylesheet={[
+              // Brief 11: render the auto-collapse count badge
+              // ("N nodes · M links") under every supernode. Scoped
+              // to node[_badge] so the data-mapper only sees
+              // elements that have the field (avoids Cytoscape's
+              // per-frame missing-field warning storm — see the
+              // canvas doctrine in CLAUDE.md). Only clusters view
+              // carries _badge; the drill view has none, so nothing
+              // matches and the rule is inert.
+              {
+                selector: "node[_badge]",
+                style: {
+                  label: "data(_badge)",
+                  "text-valign": "bottom",
+                  "text-margin-y": 6,
+                  "font-size": 10,
+                  color: "#cbd5e1",
+                  "text-outline-width": 2,
+                  "text-outline-color": "#0f172a",
+                },
+              },
+              ...(edgeLabels
+                ? []
+                : [{ selector: "edge", style: { label: "" } }]),
+            ]}
             layoutOptions={layoutOptions}
             layout={cachedPositions ? "preset" : undefined}
             // D3: route only in the collapsed clusters view; the raw
