@@ -582,6 +582,36 @@ The biomedical playground shell renders this live: its canvas toggle
 shows the raw triple view beside the projected one, and its caption
 lists the preset's step names straight from `getSteps()`.
 
+## Holon boundary views (holarchy → boundary → interior)
+
+CI-executed in `examples/wiring/src/wiring-examples.test.tsx` ("holon
+boundary" describe). The `HolonicAdapter` projects three drill levels
+of the four-graph holon model: `projectToLPG()` (opaque holons,
+portals as edges), `projectHolonBoundary(holon)` (what the holon
+PUBLISHES: exposed nodes inside a boundary ring, portal edges crossing
+out to stubbed neighbors), and `projectHolonInterior(holon)` (the
+fully open flat LPG). Boundary exposure is additive data: list
+interior node ids in `boundaryNodeIds` and optionally pin a portal to
+its transit node via `boundaryNodeId`.
+
+```ts
+import { HolonicAdapter } from "@g3t/core";
+const adapter = new HolonicAdapter(dataset);
+const boundary = adapter.projectHolonBoundary(dataset.holons[0]);
+// Holon node carries _boundaryRing (double-ring styling in the
+// canvas defaults); exposed nodes link from the holon via
+// HolonicAdapter.BOUNDARY_CONTAINMENT_EDGE — hand that type to the
+// canvas containment prop to render them inside the ring compound.
+// Portal edges carry _portalTransit (mid-edge glyph; diamond when
+// CONSTRUCT-backed).
+```
+
+Drill via the context menu with `registerHolonDrillItems(adapter,
+menuManager, onOpen)` from `@g3t/react`: it adds "Open boundary" on
+every holon node and "Open interior" where an interior exists; your
+`onOpen(level, holon, ugm)` swaps the canvas UGM. The ontology
+workbench shell's Holons tab shows all three levels live.
+
 ## Scaling: collapse large graphs to clusters
 
 CI-executed in `examples/wiring/src/wiring-examples.test.tsx`. When a

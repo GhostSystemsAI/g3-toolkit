@@ -41,6 +41,8 @@ import {
   collapseByCluster,
   buildSubgraph,
   G3tEventBus,
+  HolonicAdapter,
+  type HolonicDataset,
   type RDFGraph,
 } from "@g3t/core";
 import {
@@ -65,6 +67,7 @@ import {
   Minimap,
   createDefaultMenuManager,
   registerToolkitActions,
+  registerHolonDrillItems,
   type ProvenanceChain,
 } from "@g3t/react";
 
@@ -792,5 +795,86 @@ describe("routeEdges (guide: Route edges around nodes on any layout)", () => {
     // `_segDist` / `_segWeight` under the g3t-canvas-edge-routed class.
     expect(seg.distances.length).toBe(seg.weights.length);
     expect(seg.distances.length).toBeGreaterThan(0);
+  });
+});
+
+describe("holon boundary (guide: Holon boundary views)", () => {
+  const dataset: HolonicDataset = {
+    holons: [
+      {
+        id: "space",
+        label: "Space Segment",
+        types: ["Segment"],
+        properties: {},
+        interiorNodes: [
+          { id: "comms", types: ["CommsSubsystem"], properties: {} },
+          { id: "bus", types: ["BusSubsystem"], properties: {} },
+        ],
+        interiorEdges: [{ source: "comms", target: "bus", type: "on" }],
+        boundaryNodeIds: ["comms"],
+        portals: [
+          {
+            id: "p-down",
+            label: "downlinksTo",
+            sourceHolonId: "space",
+            targetHolonId: "ground",
+            boundaryNodeId: "comms",
+          },
+        ],
+      },
+      {
+        id: "ground",
+        label: "Ground Segment",
+        types: ["Segment"],
+        properties: {},
+        portals: [],
+      },
+    ],
+  };
+
+  it("projects the three drill levels with ring, containment, and transit markers", () => {
+    const adapter = new HolonicAdapter(dataset);
+
+    // Holarchy: opaque holons, portals as edges.
+    const holarchy = adapter.projectToLPG();
+    expect(holarchy.nodeCount).toBe(2);
+
+    // Boundary: ringed holon + exposed node + external stub; the
+    // hidden interior node (bus) does not appear.
+    const boundary = adapter.projectHolonBoundary(dataset.holons[0]!);
+    expect(boundary.getNode("space")?.properties._boundaryRing).toBe(true);
+    expect(boundary.getNode("comms")?.properties._exposed).toBe(true);
+    expect(boundary.hasNode("bus")).toBe(false);
+    let containment = 0;
+    let transit = 0;
+    boundary.forEachEdge((_id, attrs) => {
+      if (attrs.type === HolonicAdapter.BOUNDARY_CONTAINMENT_EDGE)
+        containment++;
+      if (attrs.properties._portalTransit === true) transit++;
+    });
+    expect(containment).toBe(1);
+    expect(transit).toBe(1);
+
+    // Interior: the fully open flat LPG.
+    expect(adapter.projectHolonInterior(dataset.holons[0]!).nodeCount).toBe(2);
+  });
+
+  it("registers drill items the host consumes to swap the canvas UGM", () => {
+    const adapter = new HolonicAdapter(dataset);
+    const menuManager = new ContextMenuManager();
+    const opened: string[] = [];
+    registerHolonDrillItems(adapter, menuManager, (level, holon) => {
+      opened.push(`${level}:${holon.id}`);
+    });
+
+    const items = menuManager.resolve({
+      type: "node",
+      id: "space",
+      position: { x: 0, y: 0 },
+    });
+    items
+      .find((i) => i.id === "open-holon-boundary")
+      ?.action({ type: "node", id: "space", position: { x: 0, y: 0 } });
+    expect(opened).toEqual(["boundary:space"]);
   });
 });

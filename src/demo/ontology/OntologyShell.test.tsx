@@ -86,6 +86,7 @@ describe("OntologyShell", () => {
       "neighborhood",
       "instances",
       "shapes",
+      "holons",
       "sparql",
     ]) {
       expect(screen.getByTestId(`ow-view-${t}`)).toBeTruthy();
@@ -235,5 +236,32 @@ describe("OntologyShell", () => {
     // Collapse hides the grid, keeps the header.
     fireEvent.click(screen.getByTestId("ow-dock-toggle"));
     expect(dock.querySelector("[data-testid^='table-row-']")).toBeNull();
+  });
+
+  it("holons tab drills holarchy → boundary → interior (specs/05 boundary view)", () => {
+    render(<OntologyShell onBack={() => undefined} />);
+    fireEvent.click(screen.getByTestId("ow-view-holons"));
+
+    // Holarchy: 3 opaque holons.
+    expect(captured.counts.at(-1)).toBe(3);
+
+    // Boundary of Space Segment: holon (ringed) + 2 exposed nodes +
+    // 2 external stubs; interior-only nodes hidden.
+    fireEvent.click(screen.getByTestId("ow-holon-boundary-space-segment"));
+    expect(screen.getByTestId("ow-holon-crumb").textContent).toContain(
+      "Space Segment",
+    );
+    expect(screen.getByTestId("ow-holon-crumb").textContent).toContain(
+      "boundary",
+    );
+    expect(captured.counts.at(-1)).toBe(5);
+
+    // Interior: the fully open flat LPG (6 interior nodes).
+    fireEvent.click(screen.getByTestId("ow-holon-interior-space-segment"));
+    expect(captured.counts.at(-1)).toBe(6);
+
+    // Back up to the holarchy.
+    fireEvent.click(screen.getByTestId("ow-holon-holarchy"));
+    expect(captured.counts.at(-1)).toBe(3);
   });
 });

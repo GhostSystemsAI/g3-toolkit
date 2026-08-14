@@ -435,6 +435,30 @@ export const DEFAULT_STYLESHEET: CyStylesheet[] = [
     } as any,
   },
   {
+    // Holon boundary ring (specs/05 boundary view): the annulus between
+    // the holon's interior and the outside is node STYLING, not extra
+    // graph elements. Double border reads as a ring on both plain and
+    // compound (containment-parent) holon nodes.
+    selector: "node[_boundaryRing]",
+    style: {
+      "border-width": 6,
+      "border-style": "double",
+      "border-color": "#c9a227",
+      "border-opacity": 0.9,
+    } as any,
+  },
+  {
+    // External holon stubs in the boundary view: de-emphasized so the
+    // published subgraph inside the ring carries the visual weight.
+    selector: "node[_portalStub]",
+    style: {
+      "background-opacity": 0.35,
+      "border-width": 1,
+      "border-style": "dashed",
+      "border-color": "#888",
+    } as any,
+  },
+  {
     selector: "edge",
     style: {
       // label moved to the edge[label] rule below (same per-frame mapping
@@ -480,6 +504,26 @@ export const DEFAULT_STYLESHEET: CyStylesheet[] = [
     selector: "edge[label]",
     style: {
       label: "data(label)",
+    } as any,
+  },
+  {
+    // Portal transit glyph (specs/05 boundary view): a mid-edge marker
+    // makes the point where a portal edge crosses the boundary ring
+    // legible. Position is wherever the router puts the edge; no anchor
+    // constraint solving. CONSTRUCT-backed portals get a distinct
+    // diamond via the [_hasConstruct] override below.
+    selector: "edge[_portalTransit]",
+    style: {
+      "mid-target-arrow-shape": "circle",
+      "mid-target-arrow-color": "#c9a227",
+      "arrow-scale": 1.2,
+      "line-style": "dashed",
+    } as any,
+  },
+  {
+    selector: "edge[_portalTransit][?_hasConstruct]",
+    style: {
+      "mid-target-arrow-shape": "diamond",
     } as any,
   },
   {

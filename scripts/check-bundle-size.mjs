@@ -109,7 +109,17 @@ const BUDGETS = {
   // JunctionMap reverse maps + shared pseudo-node filter helpers), pure
   // additive/opt-in; 12 oracle-pinned unit tests. Measured 184.8;
   // +2.2 KB headroom.
-  core: 187 * 1024,
+  // RAISED 187 -> 190 (2026-08-14): two additive features in one
+  // consolidation round: (1) VR-10 routing correctness — travelBand/
+  // crossBounds in g3t-routing.ts fix the perimeter-policy and
+  // detourAround collision checks that judged against the bbox-
+  // filtered 'near' set (rails leave that bbox by definition; 8
+  // violations -> 0 across the 108-cell sweep, flow-sweep pin added);
+  // (2) brief 12 holon boundary projection — projectHolonBoundary on
+  // HolonicAdapter (ringed holon + exposed boundary nodes via the
+  // _boundaryContains containment type + portal stubs with transit
+  // markers), additive optional fields only. Measured 187.7.
+  core: 190 * 1024,
   // Core ledger:
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with
@@ -284,7 +294,14 @@ const BUDGETS = {
   // (routeSceneEdges / polylineToCytoscapeSegments) is imported from
   // `@g3t/core`, so the react-side growth is just the wiring, effect,
   // and prop plumbing.
-  react: 390 * 1024, // 420 KB
+  // RAISED 390 -> 393 (2026-08-14): brief 12 holon boundary view —
+  // registerHolonDrillItems (Open boundary / Open interior context-
+  // menu registration) plus four field-scoped stylesheet rules
+  // (node[_boundaryRing] double ring, node[_portalStub] de-emphasis,
+  // edge[_portalTransit] mid-edge glyph with a diamond override for
+  // CONSTRUCT-backed portals), and the RDF 1.2 triple-term parser
+  // growth in core re-bundled through the react dist. Measured 390.6.
+  react: 393 * 1024, // 420 KB
   // - 384 -> 420 KB, 2026-07-07 (review remediation round 2): measured
   //   379.9 KB (99% of cap) after the emphasis/effects layer
   //   (emphasis store + class application), useStructuralCollapse,

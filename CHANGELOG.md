@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.0.0 (continued): 2026-08-14 consolidation: VR-10 routing fix, RDF 1.2 triple terms, holon boundary view
+
+- **VR-10 routing correctness.** The long-edge perimeter policy and
+  `detourAround` (VR-9) verified candidate rails against the obstacle
+  set pre-filtered by the simple route's bounding box; a perimeter
+  rail leaves that bbox by definition, so whole rows were invisible
+  to both the bound derivation and the collision check (prune-wall's
+  `pskip.0` rail ran through 19 boxes). New `travelBand` helper
+  filters the FULL obstacle set to the route's travel-axis span, and
+  band-derived bounds now COMPETE with the near-derived candidates
+  instead of replacing them. 108-cell sweep (9 scenarios x 3 sizes x
+  4 flows): 8 violations to 0, all other rows byte-identical; a
+  flow-sweep regression pin now runs every scenario under all four
+  flows.
+- **RDF 1.2 triple terms.** `SparqlAdapter` ingests triple-term
+  objects (`<< s p o >>` reification, flat and nested) without
+  corruption, tested against a captured Fuseki fixture. (Cherry-picked
+  from the upstream PR branch so the consolidated line carries it.)
+- **Holon boundary + projection representation (brief 12).**
+  `Holon.boundaryNodeIds` / `Portal.boundaryNodeId` (additive,
+  optional) declare what a holon publishes. New
+  `HolonicAdapter.projectHolonBoundary(holon)` emits the ringed holon
+  (`_boundaryRing`, double-ring canvas styling), exposed nodes inside
+  the ring via the `_boundaryContains` containment type, and portal
+  stubs with `_portalTransit` mid-edge glyphs (diamond when
+  CONSTRUCT-backed). `registerHolonDrillItems` (@g3t/react) adds
+  "Open boundary" / "Open interior" context-menu drills. The ontology
+  workbench gains a Holons tab walking holarchy, boundary, and
+  interior over a spacecraft segment fixture. Wiring-guide section
+  plus executable twin.
+
 ## 1.0.0 (continued): 2026-08-14 canvas edge routing (routeEdges prop)
 
 - New `CytoscapeCanvas` prop `routeEdges` runs a post-layout
