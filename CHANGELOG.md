@@ -65,6 +65,22 @@
   (the flagship planning set, the visual-acceptance round log) now say
   so instead of pointing at nothing; STATUS.md's stale "CURRENT FOCUS:
   the flagship demo" section is retitled as superseded.
+- **The Pages landing page describes the product that exists.** Its
+  playground card named a "data science" and a "healthcare" shell that
+  no longer exist while omitting five that do, so the sentence matched
+  no build of the app. That list is now generated from the demo sources
+  by `scripts/build-landing.mjs` (`verify:landing`), which reads the
+  titles and the dev/prod visibility gate from `DemoLanding.tsx`,
+  cross-checks every id against `Demo.tsx`'s `SHELL_MAP` in both
+  directions, and fails on a rename rather than emitting a quietly
+  short list. It also states the dev/prod difference, which was
+  documented nowhere a visitor could see it. The same gate fails on a
+  `blob/main/` link naming a path that is not in the repo, which is how
+  the footer's 404 shipped. The Quick Start gained the stylesheet
+  import it omitted, the one line whose absence renders every view
+  unstyled with no error and no warning, and it is now typechecked:
+  `check-readme-snippets.mjs` reads `<pre data-snippet="tsx">` blocks
+  out of the landing page alongside the markdown fences.
 
 ## 1.0.0 (continued): 2026-08-14 (public surface)
 
