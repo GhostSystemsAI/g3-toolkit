@@ -94,8 +94,14 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    source/target coordinates, which diverge from the local ones on
    multi-bend paths and would break sort stability. Never order by
    current pixel position alone.
-4. **Place** tracks with the existing forward/backward two-sweep:
-   desired = current position, min separation = `trackGap` (default
+4. **Place** tracks with a forward/backward two-sweep — the same
+   TECHNIQUE the fan-align pass uses, implemented FRESH in
+   g3t-nudging.ts (verified 2026-08-14: the existing sweep is INLINE
+   code at g3t-routing.ts:278-289 inside the fan pass, not a
+   callable API; it is ~12 lines, and extracting it would touch the
+   fan pass this brief's scope guard protects — do not refactor it,
+   write the sweep locally with nudging's own contract): desired =
+   current position, min separation = `trackGap` (default
    8px), freedom interval = corridor free span from the obstacle boxes
    minus `clearance` (8px). ONE spacing convention everywhere:
    `spanRequired = (n + 1) * trackGap` — full gap between every
@@ -115,10 +121,31 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    `blockedReason: 'occluded'`, and its full deficit. No exception,
    no undefined coordinates. OPEN CORRIDORS: when one or both sides
    of a corridor have no bounding obstacle box (edges routed near the
-   scene boundary), the free span is bounded by the layout bounds
-   (the geometry bounding box plus the routing margin) on that side;
-   midline and corridorKey are computed from those substitute bounds,
-   so both are always defined.
+   scene boundary), the free span on that side is bounded by
+   `min(layoutBound, ownExtreme + trackGap)`: the group's own
+   outermost original segment position on that side (from the input
+   snapshot) plus ONE trackGap, clamped inside the layout bounds
+   (geometry bounding box plus routing margin). The own-extreme term
+   is PRIMARY — a group never spreads more than one trackGap beyond
+   its own original extreme on an open side, no matter how much open
+   space the layout bounds offer. This restores per-group
+   independence BY CONSTRUCTION for open corridors: two distinct
+   groups are separated by MORE than the 16px capture band (strict,
+   else they'd have been unioned), and each can reach at most
+   trackGap = 8px beyond its own extreme toward the other, so their
+   track sets cannot meet (>16 - 8 - 8 > 0). It also removes any
+   dependency on the router's margin value being coherent with this
+   pass: the bound derives from the snapshot geometry the pass
+   already owns; layout bounds act only as an outer clamp. Midline
+   and corridorKey are computed from these substitute bounds, so
+   both are always defined. Bounding the open-side spread also
+   bounds ANCHOR-STUB extension by construction: no track sits
+   farther than one trackGap beyond the group's original extreme
+   (bounded corridors are bounded by the boxes themselves), so a
+   stub can never grow toward a neighboring node unchecked. A stub
+   trimmed to zero length collapses to a point and is removed by the
+   `dedupeCollinear` finish — no degenerate zero-length segments are
+   emitted.
 5. **Rewrite** with SNAPSHOT-PLAN / ATOMIC-COMMIT semantics. ALL of
    steps 2-4 (grouping, sort keys, track placement) are computed from
    ONE immutable snapshot of the input geometry — no group ever sees
@@ -130,13 +157,29 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    independent by construction: validation is against the STATIC
    obstacle boxes (which no group moves), and distinct corridors are
    separated beyond the capture band (or split by a box), so one
-   group's tracks cannot land on another group's. Validate the whole group: every
-   rewritten route must pass `polylineIntersectsBoxes`. SOURCE FACTS
-   (checked 2026-08-14; implementing worker re-greps before coding and
+   group's tracks cannot land on another group's (open corridors:
+   guaranteed by the own-extreme + trackGap bound in step 4).
+   Validate the whole group, TWO checks: (1) BOX CHECK — every
+   rewritten route must pass `polylineIntersectsBoxes`. RETURN-VALUE
+   SENSE (checked 2026-08-14 against source; worker re-verifies):
+   the function returns TRUE when any segment overlaps a box
+   interior — true means INVALID; a route validates when the call
+   returns FALSE. SOURCE FACTS (worker re-greps before coding and
    adapts import path/signature if it moved): exported from
    packages/core/src/route/orthogonal-router.ts:389 as
    `(points, boxes) => boolean`, already imported by g3t-routing.ts.
-   If ANY member fails, first retry the group placement once with
+   (2) CROSSING CHECK — pairwise segment crossings AMONG the group's
+   rewritten members must not exceed the same pairs' crossing count
+   in the input snapshot. This is the runtime backstop for the one
+   case the combinatorial-order argument does not cover: the 16px
+   capture band unioning two legitimately distinct dense channels
+   (e.g. 4px post-drag packings with no obstacle box between them,
+   where the split rule cannot fire) — a merged group's global sort
+   can interleave routes from different channels and introduce a
+   crossing. Within a true single corridor the check passes by
+   construction; for a wrongly merged corridor it converts a
+   potential rendering regression into a clean group revert.
+   If ANY member fails either check, first retry the group placement once with
    `trackGap' = trackGap / 2`, RE-RUNNING THE FULL three-branch
    ladder at the halved gap (not a direct fixed-spacing emit); if a
    member still fails, the ENTIRE group reverts to its original
@@ -150,8 +193,13 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    corridor segments); a route outside any committed group is
    byte-identical to its input.
 6. **Wire in** at the end of `routeStructuralEdges` ITSELF behind
-   option `nudge?: boolean` (default ON, matching `routeEdges`
-   posture), and thread through `layoutStructural`'s routing options.
+   option `nudge?: boolean`, default ON. "Default ON" mirrors the
+   DEFAULT POSTURE of the existing `routeEdges` option — verified
+   2026-08-14: structural.ts:746 resolves `routeEdges: options?.
+   routeEdges ?? true` — i.e. quality passes in this engine ship
+   enabled with an opt-out; it does NOT claim routeEdges itself has
+   any nudge sub-option (this brief introduces nudging for the first
+   time). Thread through `layoutStructural`'s routing options.
    Non-test call sites enumerated (checked 2026-08-14; worker
    re-greps): g3t-structural.ts:295 (the `layoutStructural` flow) and
    packages/react/src/views/svg/structural-svg-view.tsx:408 (a DIRECT
@@ -216,13 +264,25 @@ Two passes over the same geometry produce identical keys; a genuine
 layout change legitimately changes them (keys identify corridors
 within a layout, they are not stable across relayouts — brief 04
 matches by key within one pass, never across passes).
+FLOATING-POINT DISCIPLINE: midline and extent are computed EXACTLY
+ONCE per corridor per pass, from the immutable snapshot, and that
+single value is reused for both track placement and the key — no
+caller recomputes the "same" midline via a different arithmetic
+path, so within-pass key identity cannot be broken by FP rounding
+divergence.
 
 `nudgeRoutes` returns `corridorDemand: CorridorDemand[]` sorted by
 deficit descending — brief 04 (corridor supply) consumes exactly this
-shape. BLOCKED SEMANTICS for brief 04: `blocked: true` means "this
-corridor NEEDS spanRequired but layout supplied spanAvailable" — it is
-a space-reservation REQUEST at highest priority, never a
-skip-this-corridor signal.
+shape. BLOCKED SEMANTICS for brief 04 — dispatch on `blockedReason`,
+never on `blocked` alone (this is the ONE rule; the schema footnote
+above states the same discrimination):
+- `blockedReason: 'occluded'` — a GEOMETRY deficiency: "this corridor
+  NEEDS spanRequired but layout supplied spanAvailable <= 0". This is
+  a space-reservation REQUEST at highest priority, never a
+  skip-this-corridor signal.
+- `blockedReason: 'reverted'` — an ALGORITHM edge case (validation
+  rejected a placement that had space). DIAGNOSTIC ONLY: brief 04
+  MUST NOT reserve layout space for it; it surfaces engine work.
 
 ## Verification
 
@@ -260,9 +320,30 @@ skip-this-corridor signal.
   NOT grouped (two distinct corridors emitted, neither track set
   crosses the box); removing the box asserts they ARE grouped — the
   test fails if the split rule is omitted or inverted.
+- Open-corridor test: a corridor with no bounding obstacle box on
+  one side (and a variant open on both sides) asserts midline,
+  corridorKey, extent, and every track position are defined and
+  finite, no track exceeds `ownExtreme + trackGap` on an open side,
+  and no track leaves the layout bounds.
+- Cross-group contamination test: two distinct corridors just
+  OUTSIDE the capture band, open on their facing sides, each dense
+  enough to spread; assert after nudging that the two committed
+  track sets do not overlap and no route from one group collides
+  with the other — the empirical backstop for the per-group
+  independence claim exactly where it is weakest.
+- Merged-channel test: two legitimately distinct 4px-spaced channels
+  WITHIN the 16px capture band with no obstacle box between them
+  (the split rule cannot fire, so they union into one group); assert
+  the outcome is either a commit with no crossing increase or a
+  clean whole-group revert — never a committed crossing regression.
 - Group-atomicity test: construct a corridor where one member cannot
   move without a box hit; assert the WHOLE group is byte-identical to
   input (no mixed-nudge state) and `coincidentRuns` did not increase.
+- Stub-degeneracy test: a track placement that trims an anchor stub
+  to zero length asserts the collapsed point is removed by the
+  `dedupeCollinear` finish (no zero-length segment emitted) and the
+  polyline stays connected; a placement at the open-side bound
+  asserts stub extension never exceeds `ownExtreme + trackGap`.
 - Multi-bend ordering test: a path with 3+ bends before and after a
   shared corridor, crossing a second corridor, asserting the
   corridor-local sort keys still yield a crossing count that does not
