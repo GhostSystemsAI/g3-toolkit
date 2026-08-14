@@ -38,6 +38,9 @@ Span Gauntlet and Crossing Storm lab scenarios.
    do not escape their compound.
 5. No-legacy: the previous long-span handling path is deleted, not
    kept behind a flag.
+6. Perimeter policy precedence (brief 10): edges that brief 10 marks
+   perimeter-eligible skip interior bend-hint seeding — the outside
+   route outranks the dummy hints for those edges.
 
 ## Verification
 

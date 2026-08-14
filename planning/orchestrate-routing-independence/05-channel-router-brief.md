@@ -33,7 +33,12 @@ crossings created by independent routing remain.
    midline at trackGap spacing; bend points at channel entry/exit;
    `dedupeCollinear` finish. Dummy-chain bend hints (03) pick the
    channel sequence for long spans.
-4. The escalation ladder and its 4px retry are DELETED (no-legacy).
+4. Long-edge perimeter policy (brief 10) is re-expressed natively:
+   perimeter-eligible edges prefer the outermost (boundary) channels;
+   brief 10's accept-site implementation is deleted here with the
+   ladder (no-legacy), the policy and its pinned lab assertion are
+   preserved.
+5. The escalation ladder and its 4px retry are DELETED (no-legacy).
    `routeOrthogonal` (A*) remains only as the off-lattice fallback
    for edges that cannot be expressed as channel traversals (e.g.
    same-layer backedges around a compound), and the 01 nudging pass
