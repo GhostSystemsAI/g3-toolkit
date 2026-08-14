@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.0 (continued): 2026-08-14 label wrapping
+
+- Canvas node labels now word-wrap (`text-wrap: wrap`,
+  `text-max-width: 110px` on the base node rule). Reported against the
+  biomedical shell, where long entity names rendered as single
+  unwrapped lines and overlapped neighboring labels; the fix is in
+  `DEFAULT_STYLESHEET` so every canvas benefits. The style-lab parity
+  oracle covers both style paths with the same base stack, so parity
+  is unaffected.
+
 ## 1.0.0 (continued): register of 2026-08-06 (R-15, R-16, R-17)
 
 - **R-16, generalised as asked**: the editor gated size and nothing

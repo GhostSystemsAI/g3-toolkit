@@ -388,6 +388,11 @@ export const DEFAULT_STYLESHEET: CyStylesheet[] = [
       "font-size": "10px",
       "text-margin-y": 4,
       "min-zoomed-font-size": 8,
+      // Long labels (biomedical names, raw-triple literals) rendered on
+      // one unwrapped line collide with neighboring nodes' labels; wrap
+      // at a width close to the default node footprint instead.
+      "text-wrap": "wrap",
+      "text-max-width": "110px",
       // Bugfix 6: cartographic halo style - readable on light AND dark
       // backgrounds without per-theme branching
       color: "#e0e0e0",
