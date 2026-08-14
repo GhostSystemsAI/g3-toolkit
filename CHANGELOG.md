@@ -9,6 +9,15 @@
   `DEFAULT_STYLESHEET` so every canvas benefits. The style-lab parity
   oracle covers both style paths with the same base stack, so parity
   is unaffected.
+- The override knob for that default: `labelWrapRule(maxWidthPx |
+  false)`, exported from `@g3t/react` and passed through the
+  `stylesheet` prop (a style refresh; positions and camera hold). A
+  number re-widths the wrap, `false` disables it. The biomedical shell
+  demonstrates it live with a "Wrap labels" switch (default on, 90px),
+  recipe in the wiring guide with a CI twin. The demo landing footer
+  now links the wiring guide, llms.txt, and AGENTS.md; both AI guides
+  cover the new surface plus the opt-in `nudge` routing option and the
+  Routing Lab dashboard.
 
 ## 1.0.0 (continued): register of 2026-08-06 (R-15, R-16, R-17)
 

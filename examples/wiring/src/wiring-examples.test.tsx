@@ -739,6 +739,8 @@ describe("programmatic APIs (guide: Programmatic APIs)", () => {
     expect(styleOf(rule)["text-max-width"]).toBe("90px");
     // Default width when called bare.
     expect(styleOf(labelWrapRule())["text-max-width"]).toBe("120px");
+    // false DISABLES the canvas's default 110px wrap.
+    expect(styleOf(labelWrapRule(false))["text-wrap"]).toBe("none");
   });
 
   it("createCameraController drives the cy viewport imperatively", () => {

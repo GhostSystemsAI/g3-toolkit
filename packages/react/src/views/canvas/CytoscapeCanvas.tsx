@@ -665,20 +665,24 @@ export function composeCanvasStylesheet(
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-/** Word-wrap rule for data-driven node labels: long labels (RDF
- *  entity names, protein/disease terms) otherwise render single-line
- *  and overlap neighboring nodes. Append the returned rule via the
- *  `stylesheet` prop; toggling it on/off is a STYLE REFRESH by the
- *  relayout contract, so positions and the camera hold. Scoped to
+/** Label word-wrap override. The base node rule wraps labels by
+ *  DEFAULT (110px, the bio-shell overlap fix); this is the single
+ *  knob over that default: a number re-widths the wrap, `false`
+ *  disables it (text-wrap: none). Append the returned rule via the
+ *  `stylesheet` prop; toggling is a STYLE REFRESH by the relayout
+ *  contract, so positions and the camera hold. Scoped to
  *  `node[label]` (the mapping-warning doctrine: never a bare `node`
  *  rule for data-carried fields). */
-export function labelWrapRule(maxWidthPx = 120): CyStylesheet {
+export function labelWrapRule(maxWidthPx: number | false = 120): CyStylesheet {
   return {
     selector: "node[label]",
-    style: {
-      "text-wrap": "wrap",
-      "text-max-width": `${maxWidthPx}px`,
-    } as never,
+    style:
+      maxWidthPx === false
+        ? ({ "text-wrap": "none" } as never)
+        : ({
+            "text-wrap": "wrap",
+            "text-max-width": `${maxWidthPx}px`,
+          } as never),
   };
 }
 

@@ -639,17 +639,19 @@ const theme = createTheme({ id: "acme", name: "Acme", accentPrimary: "#0af" });
 
 ### Word-wrapping long node labels
 
-Long labels (RDF entity names, protein or disease terms) render
-single-line by default and can overlap neighboring nodes.
-`labelWrapRule` builds the wrap rule; pass it through the `stylesheet`
-prop, which is a style refresh by the relayout contract, so toggling
-wrap on or off never re-runs layout or moves the camera:
+Node labels word-wrap by DEFAULT (110px: long RDF entity names,
+protein or disease terms would otherwise render single-line and
+overlap neighbors). `labelWrapRule` is the single knob over that
+default: a number re-widths the wrap, `false` disables it. Pass it
+through the `stylesheet` prop, which is a style refresh by the
+relayout contract, so toggling never re-runs layout or moves the
+camera:
 
 ```tsx no-check
 import { CytoscapeCanvas, labelWrapRule } from "@g3t/react";
 
 const wrapSheet = useMemo(
-  () => (wrap ? [labelWrapRule(90)] : []), // max width in px; default 120
+  () => [labelWrapRule(wrap ? 90 : false)], // px (default 120) or false = off
   [wrap],
 );
 <CytoscapeCanvas ugm={ugm} stylesheet={wrapSheet} />;

@@ -63,7 +63,8 @@ below), onReady which hands you the Cytoscape Core),
 `SearchBar`, `FacetFilter`, `FilterBuilder`, `ContextMenuManager`,
 `createDefaultMenuManager`, `registerToolkitActions`, `runGraphLayout`,
 `createCameraController`, `createTheme`, `applyEncodingSpec`,
-`labelWrapRule` (word-wrap long node labels; pass via the `stylesheet`
+`labelWrapRule` (labels wrap by default at 110px; this is the override
+knob: a number re-widths, `false` disables; pass via the `stylesheet`
 prop, a position-preserving restyle),
 `captureWorkspace` / `applyWorkspace` / `serializeWorkspace`, plus view
 components: TableView, TreeView, TimelineView, MapView, MatrixView,

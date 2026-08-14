@@ -106,12 +106,14 @@ export function BioShell({ onBack }: { onBack: () => void }) {
   );
   const [chartType, setChartType] = useState<"bar" | "scatter">("bar");
 
-  // Label word-wrap switch. Rides the `stylesheet` prop, which the
-  // relayout contract defines as a style refresh: toggling never
-  // re-runs layout or moves the camera.
+  // Label word-wrap switch. The canvas base rule wraps at 110px by
+  // default; ON tightens to LABEL_WRAP_WIDTH, OFF disables wrap
+  // entirely (labelWrapRule(false)). Rides the `stylesheet` prop,
+  // which the relayout contract defines as a style refresh: toggling
+  // never re-runs layout or moves the camera.
   const [wrapLabels, setWrapLabels] = useState(true);
   const wrapStylesheet = useMemo(
-    () => (wrapLabels ? [labelWrapRule(LABEL_WRAP_WIDTH)] : []),
+    () => [labelWrapRule(wrapLabels ? LABEL_WRAP_WIDTH : false)],
     [wrapLabels],
   );
 

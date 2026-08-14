@@ -137,11 +137,12 @@ docs/wiring-guide.md, and every wiring snippet runs in CI.
 14. Vendored tarballs: `pnpm pack` rewrites `workspace:*`; pin
     `@g3t/core` to one instance via overrides or the theme store
     silently splits between two copies.
-15. Long node labels overlap neighbors unwrapped: append
-    `labelWrapRule(maxWidthPx)` through the `stylesheet` prop (a
-    style refresh, so positions and the camera hold). Do not hand-roll
-    a bare `node { text-wrap }` rule; the helper is `node[label]`
-    scoped to avoid per-frame mapping warnings.
+15. Node labels word-wrap by default (110px). The single override knob
+    is `labelWrapRule(maxWidthPx | false)` appended through the
+    `stylesheet` prop (a style refresh, so positions and the camera
+    hold): a number re-widths, `false` disables. Do not hand-roll a
+    bare `node { text-wrap }` rule; the helper is `node[label]` scoped
+    to avoid per-frame mapping warnings.
 
 When unsure of a signature, read the shipped declaration files
 (`packages/*/dist/*.d.ts` after `pnpm run verify`, or the typedoc at

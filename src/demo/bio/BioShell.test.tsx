@@ -94,11 +94,13 @@ describe("BioShell SPARQL workbench", () => {
     expect(rules?.[0]?.style["text-wrap"]).toBe("wrap");
     const toggle = screen.getByTestId("bio-wrap-toggle");
     expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    // OFF must actually disable wrap (text-wrap: none), not merely
+    // fall back to the canvas base rule's default 110px wrap.
     fireEvent.click(toggle);
-    expect(last()).toHaveLength(0);
+    expect(last()?.[0]?.style["text-wrap"]).toBe("none");
     expect(toggle.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(toggle);
-    expect(last()).toHaveLength(1);
+    expect(last()?.[0]?.style["text-wrap"]).toBe("wrap");
   });
 
   it("carries the production-engine notice and the capability callout", () => {
