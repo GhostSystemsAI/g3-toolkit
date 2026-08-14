@@ -67,15 +67,15 @@ bundle ledger notes the delta.
   implementing exactly the operations UGM uses (audit first; the
   UGM test suite is the gate). Largest Tier-2 item; last.
 
-## Explicitly OUT of scope (Tier 3, separate threads)
+## Tier 3 (superseded 2026-08-14: now IN scope, briefs 08 + 09)
 
-- `cytoscape` itself — renderer independence is the RND-004/ARC-008
-  canvas2d thread (stage 1 already in tree: canvas2d/canvas-adapter
-  .tsx + display-list.ts). It proceeds on its own roadmap.
-- `echarts`/`echarts-for-react` (charts), `vis-timeline`/`vis-data`
-  (timeline, already optional peers), `@tanstack/react-table`,
-  `zustand`, React itself: peer/optional surface, not "extra"
-  engine deps. Revisit only after Tier 1+2 land.
+Owner ruling (Jake, A15): complete independence including the
+renderer. `cytoscape` + `cytoscape-fcose` are brief 08 (native
+renderer on the RND-004 canvas2d foundation); `echarts`,
+`vis-timeline`/`vis-data`, `@tanstack/react-table`, `fuse.js` (W7
+moves there), and the demo-only `n3`/`jsonld` are brief 09. Only
+react, react-dom, zustand, and the dev-time toolchain remain — they
+are the adoption contract, not extra deps (see 08 "kept platform").
 
 ## Verification (every W item)
 
