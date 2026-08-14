@@ -4,7 +4,7 @@
  * Default view (npm run dev): landing page with scenario cards.
  * Clicking a card renders the full app with that dataset.
  *
- * Shells are CODE-SPLIT (G3L Round 49): eight lazy chunks instead
+ * Shells are CODE-SPLIT (G3L Round 49): nine lazy chunks instead
  * of one bundle carrying every example, which was the source of the
  * >500 kB chunk warning. The landing paints from a small chunk; a
  * shell's code loads on selection (the production-smoke spec's
@@ -49,6 +49,9 @@ const StyleLabShell = lazy(() =>
 const AuditShell = lazy(() =>
   import("./audit/AuditShell").then((m) => ({ default: m.AuditShell })),
 );
+const RoutingShell = lazy(() =>
+  import("./routing/RoutingShell").then((m) => ({ default: m.RoutingShell })),
+);
 
 /** Map scenario IDs to dedicated demo shells. */
 const SHELL_MAP: Record<string, React.ComponentType<{ onBack: () => void }>> = {
@@ -60,6 +63,7 @@ const SHELL_MAP: Record<string, React.ComponentType<{ onBack: () => void }>> = {
   scale: ScaleSurface,
   "ontology-workbench": OntologyShell,
   "style-lab": StyleLabShell,
+  "routing-lab": RoutingShell,
 };
 
 export function Demo() {

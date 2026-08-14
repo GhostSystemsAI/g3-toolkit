@@ -42,6 +42,7 @@ describe("DemoLanding", () => {
     expect(CAPABILITY_SURFACES.map((s) => s.id).sort()).toEqual([
       "analytics-dashboard",
       "ontology-workbench",
+      "routing-lab",
       "scale",
       "style-lab",
     ]);
