@@ -89,7 +89,7 @@ export const CAPABILITY_SURFACES: Scenario[] = [
     title: "Routing Lab",
     subtitle: "Hard edge-routing scenarios, graded live",
     description:
-      "Adversarial structural graphs built to stress the layered engine's orthogonal edge routing: long-span edges over populated layers, complete bipartite crossing storms, obstacle mazes, wrong-way ports, and interlocking cycles. Every laid-out scene is graded live: routed coverage, crossings, bends, and hard box violations.",
+      "Adversarial structural graphs built to stress the layered engine's orthogonal edge routing: long-span edges over populated layers, complete bipartite crossing storms (single and double), obstacle fields past the router's 64-box prune threshold, whole rails of back edges, wrong-way ports, and interlocking cycles. Per-edge colors plus hover/click tracing keep one line followable through the crossings, and every laid-out scene is graded live: routed coverage, crossings, bends, and hard box violations.",
     accent: "#fb7185",
     accentGlow: "rgba(251, 113, 133, 0.15)",
     icon: "⎇",

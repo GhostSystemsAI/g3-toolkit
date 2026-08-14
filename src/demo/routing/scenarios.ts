@@ -324,6 +324,138 @@ const cycleTangle: RoutingScenario = {
   },
 };
 
+/** 7. Prune wall: an obstacle field past the router's 64-box prune
+ *  threshold at EVERY size. */
+const pruneWall: RoutingScenario = {
+  id: "prune-wall",
+  title: "Prune Wall",
+  subtitle: "Skip edges over 72-120 obstacles (past the 64-box prune)",
+  description:
+    "A six-row block field with 72+ boxes at every size: past 64 " +
+    "obstacles the grid router prunes to the terminal region and " +
+    "verifies against the full set, so this is the regime where the " +
+    "escalation ladder is most likely to fall back honestly. Skip " +
+    "edges cross the whole field on interleaved rows, plus mid-field " +
+    "vertical ties.",
+  stresses: [
+    "router obstacle count past the prune threshold",
+    "corridor supply across a wide dense field",
+    "escalation-ladder fallback behavior at scale",
+  ],
+  direction: "RIGHT",
+  build(size) {
+    const cols = sizeN(size, 12, 16, 20);
+    const rows = 6;
+    const nodes: StructuralNode[] = [];
+    const edges: StructuralEdge[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        nodes.push(plain(`p${r}_${c}`, `P${r}.${c}`, 78, 36));
+        if (c > 0) {
+          edges.push(edge(`prow${r}_${c}`, `p${r}_${c - 1}`, `p${r}_${c}`));
+        }
+      }
+    }
+    // Full-field skips on interleaved rows, both slants.
+    edges.push(edge("pskip.0", "p0_0", `p5_${cols - 1}`));
+    edges.push(edge("pskip.1", "p5_0", `p0_${cols - 1}`));
+    edges.push(edge("pskip.2", "p1_0", `p4_${cols - 1}`));
+    edges.push(edge("pskip.3", "p4_0", `p1_${cols - 1}`));
+    edges.push(edge("pskip.4", "p2_0", `p3_${cols - 1}`));
+    // Mid-field vertical ties at the third points.
+    const t1 = Math.floor(cols / 3);
+    const t2 = Math.floor((2 * cols) / 3);
+    edges.push(edge("ptie.a", `p0_${t1}`, `p3_${t1}`));
+    edges.push(edge("ptie.b", `p2_${t1}`, `p5_${t1}`));
+    edges.push(edge("ptie.c", `p1_${t2}`, `p4_${t2}`));
+    edges.push(edge("ptie.d", `p3_${t2}`, `p0_${t2}`));
+    return { nodes, edges };
+  },
+};
+
+/** 8. Counterflow ladder: one rail flows WITH the layout, the other
+ *  entirely AGAINST it. */
+const counterflowLadder: RoutingScenario = {
+  id: "counterflow-ladder",
+  title: "Counterflow Ladder",
+  subtitle: "A whole rail of back edges, rungs across the flow",
+  description:
+    "Two rails joined by rungs, but rail B's chain edges all point " +
+    "BACKWARD: cycle removal must reverse a whole rail's worth of " +
+    "edges (or layer against them), and every reversed edge renders " +
+    "as a back edge hugging the boxes it flows against. Diagonal " +
+    "rungs in both slants keep the gap between the rails congested.",
+  stresses: [
+    "bulk edge reversal (a whole rail against the flow)",
+    "back-edge routing pressed against the node rail",
+    "rung congestion between two long rails",
+  ],
+  direction: "RIGHT",
+  build(size) {
+    const n = sizeN(size, 8, 12, 16);
+    const nodes: StructuralNode[] = [];
+    const edges: StructuralEdge[] = [];
+    for (let i = 1; i <= n; i++) {
+      nodes.push(plain(`fa${i}`, `FA-${i}`, 84, 38));
+      nodes.push(plain(`fb${i}`, `FB-${i}`, 84, 38));
+      if (i > 1) {
+        // Rail A forward; rail B REVERSED (fb{i} -> fb{i-1}).
+        edges.push(edge(`fa.chain${i}`, `fa${i - 1}`, `fa${i}`));
+        edges.push(edge(`fb.chain${i}`, `fb${i}`, `fb${i - 1}`));
+      }
+      // Straight rung at every step.
+      edges.push(edge(`rung${i}`, `fa${i}`, `fb${i}`));
+    }
+    // Diagonal rungs, both slants, staggered.
+    for (let i = 1; i + 2 <= n; i += 2) {
+      edges.push(edge(`slant.f${i}`, `fa${i}`, `fb${i + 2}`));
+      edges.push(edge(`slant.b${i}`, `fb${i}`, `fa${i + 2}`));
+    }
+    return { nodes, edges };
+  },
+};
+
+/** 9. Storm sandwich: two complete bipartite gaps back to back, plus
+ *  long spans through both. */
+const stormSandwich: RoutingScenario = {
+  id: "storm-sandwich",
+  title: "Storm Sandwich",
+  subtitle: "K(n,n) twice in a row, spans through both storms",
+  description:
+    "Three banks wired A-to-B and B-to-C completely: two congested " +
+    "layer gaps back to back. Then anti-diagonal A-to-C spans must " +
+    "cross BOTH storms and the populated middle bank: a long-span " +
+    "edge with nowhere quiet to travel. This is the combined problem " +
+    "the single-gap storm and the span gauntlet each pose alone.",
+  stresses: [
+    "two congested channels in sequence",
+    "long spans threaded through occupied gaps",
+    "the middle bank as an obstacle wall",
+  ],
+  direction: "RIGHT",
+  build(size) {
+    const n = sizeN(size, 4, 5, 6);
+    const nodes: StructuralNode[] = [];
+    const edges: StructuralEdge[] = [];
+    for (let i = 1; i <= n; i++) {
+      nodes.push(plain(`sa${i}`, `A-${i}`, 88, 38));
+      nodes.push(plain(`sb${i}`, `B-${i}`, 88, 38));
+      nodes.push(plain(`sc${i}`, `C-${i}`, 88, 38));
+    }
+    for (let i = 1; i <= n; i++) {
+      for (let j = 1; j <= n; j++) {
+        edges.push(edge(`ab${i}_${j}`, `sa${i}`, `sb${j}`));
+        edges.push(edge(`bc${i}_${j}`, `sb${i}`, `sc${j}`));
+      }
+    }
+    // Anti-diagonal long spans through both storms.
+    for (let i = 1; i <= n; i++) {
+      edges.push(edge(`span${i}`, `sa${i}`, `sc${n + 1 - i}`));
+    }
+    return { nodes, edges };
+  },
+};
+
 /** The shell's initial selection (index access would type as possibly
  *  undefined; the named constant keeps the consumer assertion-free). */
 export const DEFAULT_ROUTING_SCENARIO: RoutingScenario = spanGauntlet;
@@ -335,4 +467,7 @@ export const ROUTING_SCENARIOS: RoutingScenario[] = [
   obstacleMaze,
   portStorm,
   cycleTangle,
+  pruneWall,
+  counterflowLadder,
+  stormSandwich,
 ];

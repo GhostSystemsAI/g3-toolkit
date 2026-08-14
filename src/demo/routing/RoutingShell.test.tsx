@@ -16,11 +16,18 @@ import {
 } from "@testing-library/react";
 import type { StructuralGraphInput, StructuralGeometry } from "@g3t/core";
 
+type ClickInfo = {
+  hit: { elementId: string; kind: string; zone: string } | null;
+  point: { x: number; y: number };
+  originalEvent: unknown;
+};
+
 const captured = vi.hoisted(() => ({
   scenes: [] as Array<{
     input: StructuralGraphInput;
     geometry: StructuralGeometry;
   }>,
+  onElementClick: null as ((info: ClickInfo) => void) | null,
 }));
 
 vi.mock("@g3t/react", async (importOriginal) => {
@@ -30,8 +37,10 @@ vi.mock("@g3t/react", async (importOriginal) => {
     StructuralSvgView: (props: {
       input: StructuralGraphInput;
       geometry: StructuralGeometry;
+      onElementClick?: (info: ClickInfo) => void;
     }) => {
       captured.scenes.push({ input: props.input, geometry: props.geometry });
+      captured.onElementClick = props.onElementClick ?? null;
       return <div data-testid="rlab-svg-stub" />;
     },
   };
@@ -42,6 +51,7 @@ import { ROUTING_SCENARIOS } from "./scenarios";
 
 beforeEach(() => {
   captured.scenes.length = 0;
+  captured.onElementClick = null;
 });
 afterEach(cleanup);
 
@@ -93,5 +103,48 @@ describe("RoutingShell", () => {
     render(<RoutingShell onBack={onBack} />);
     fireEvent.click(screen.getByText("← Scenarios"));
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("clicking an edge pins the trace; a non-edge click clears it", async () => {
+    const { act } = await import("@testing-library/react");
+    render(<RoutingShell onBack={() => {}} />);
+    await waitFor(() => expect(captured.onElementClick).not.toBeNull());
+    const firstEdge = ROUTING_SCENARIOS[0]!.build("M").edges[0]!;
+    act(() => {
+      captured.onElementClick!({
+        hit: { elementId: firstEdge.id, kind: "edge", zone: "segment" },
+        point: { x: 0, y: 0 },
+        originalEvent: {},
+      });
+    });
+    const trace = screen.getByTestId("rlab-trace");
+    expect(trace.textContent).toContain(firstEdge.id);
+    expect(trace.textContent).toContain(firstEdge.source);
+    // The generated CSS dims everything but the traced edge.
+    expect(screen.getByTestId("rlab-edge-css").textContent).toContain(
+      `[data-ssv-edge="${firstEdge.id}"]`,
+    );
+    act(() => {
+      captured.onElementClick!({
+        hit: null,
+        point: { x: 0, y: 0 },
+        originalEvent: {},
+      });
+    });
+    expect(screen.getByTestId("rlab-trace").textContent).toContain(
+      "Hover an edge",
+    );
+  });
+
+  it("colors knob: per-edge CSS present by default, gone on monochrome", async () => {
+    render(<RoutingShell onBack={() => {}} />);
+    await waitFor(() => expect(captured.scenes.length).toBeGreaterThan(0));
+    const css = screen.getByTestId("rlab-edge-css").textContent ?? "";
+    const firstEdge = ROUTING_SCENARIOS[0]!.build("M").edges[0]!;
+    expect(css).toContain(`[data-ssv-edge-path="${firstEdge.id}"]`);
+    fireEvent.change(screen.getByTestId("rlab-colors-select"), {
+      target: { value: "mono" },
+    });
+    expect(screen.queryByTestId("rlab-edge-css")).toBeNull();
   });
 });

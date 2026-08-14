@@ -31,15 +31,41 @@ import { CapabilityBubble } from "../components/CapabilityCallout";
 const LAYER_GAPS = { compact: 40, default: 80, wide: 140 } as const;
 type LayerGap = keyof typeof LAYER_GAPS;
 
+/** Categorical palette for per-edge coloring (A9: same-gray edges made
+ *  crossings untraceable). Hues picked for pairwise contrast on the
+ *  near-black canvas; assignment cycles by edge index, deterministic
+ *  because scenario generators are. */
+const EDGE_PALETTE = [
+  "#38bdf8",
+  "#f472b6",
+  "#4ade80",
+  "#fbbf24",
+  "#a78bfa",
+  "#fb7185",
+  "#34d399",
+  "#fb923c",
+  "#e879f9",
+  "#22d3ee",
+  "#facc15",
+  "#818cf8",
+  "#f87171",
+  "#a3e635",
+] as const;
+type ColorMode = "rainbow" | "mono";
+
 /** The SVG preview fills the canvas host via a ResizeObserver on the
  *  wrapper (the MR-11 pattern from the MBSE shell; jsdom has no
  *  ResizeObserver, so the default size carries tests). */
 function SizedStructuralSvg({
   scene,
   direction,
+  onEdgeClick,
 }: {
   scene: { input: StructuralGraphInput; geometry: StructuralGeometry };
   direction: "RIGHT" | "DOWN";
+  /** An edge click reports its id; any other click reports null so
+   *  the shell can clear a pinned trace. */
+  onEdgeClick: (edgeId: string | null) => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({
@@ -67,6 +93,10 @@ function SizedStructuralSvg({
         geometry={scene.geometry}
         width={size.w}
         height={size.h}
+        onElementClick={(info) => {
+          const h = info.hit;
+          onEdgeClick(h !== null && h.kind === "edge" ? h.elementId : null);
+        }}
         data-testid="rlab-structural-svg"
       />
     </div>
@@ -109,11 +139,24 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   const [direction, setDirection] = useState<"auto" | "RIGHT" | "DOWN">("auto");
   const [layerGap, setLayerGap] = useState<LayerGap>("default");
   const [routeEdges, setRouteEdges] = useState(true);
+  const [colorMode, setColorMode] = useState<ColorMode>("rainbow");
+  // A9 (owner: "line crossovers are hard to tail"): a clicked edge
+  // pins a trace (everything else dims); clicking anything that is
+  // not an edge clears it. Hover tracing is pure CSS (ROUTING_STYLES).
+  const [tracedEdge, setTracedEdge] = useState<string | null>(null);
 
   const input: StructuralGraphInput = useMemo(
     () => scenario.build(size),
     [scenario, size],
   );
+  // A new graph invalidates a pinned edge id; drop the trace (the
+  // documented adjust-state-during-render pattern, as in the SVG
+  // view's fit reset).
+  const [lastInput, setLastInput] = useState(input);
+  if (lastInput !== input) {
+    setLastInput(input);
+    setTracedEdge(null);
+  }
   const dir = direction === "auto" ? scenario.direction : direction;
   const options: Omit<StructuralLayoutOptions, "sketch"> = useMemo(
     () => ({
@@ -132,9 +175,49 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
     [scene],
   );
 
+  // Per-edge stroke colors + pinned-trace emphasis as generated CSS.
+  // CSS rules beat SVG presentation attributes, so the demo restyles
+  // the view's data-ssv-* contract without a library change. Arrow
+  // heads take stroke only (a fill rule would solidify hollow heads).
+  const edgeCss = useMemo(() => {
+    const rules: string[] = [];
+    if (scene && colorMode === "rainbow") {
+      scene.input.edges.forEach((e, i) => {
+        const c = EDGE_PALETTE[i % EDGE_PALETTE.length];
+        rules.push(
+          `.rlab-canvas-host [data-ssv-edge-path="${e.id}"],` +
+            `.rlab-canvas-host [data-ssv-arrow^="${e.id}:"]` +
+            `{ stroke: ${c}; }`,
+        );
+      });
+    }
+    if (tracedEdge !== null) {
+      rules.push(
+        `.rlab-canvas-host g[data-ssv-edge]:not([data-ssv-edge="${tracedEdge}"])` +
+          ` path { opacity: 0.1; }`,
+      );
+      rules.push(
+        `.rlab-canvas-host [data-ssv-edge-path="${tracedEdge}"]` +
+          `{ stroke-width: 3.5; }`,
+      );
+    }
+    return rules.join("\n");
+  }, [scene, colorMode, tracedEdge]);
+
+  const tracedMeta = useMemo(
+    () =>
+      tracedEdge !== null
+        ? input.edges.find((e) => e.id === tracedEdge)
+        : undefined,
+    [tracedEdge, input.edges],
+  );
+
   return (
     <div className="rlab-shell">
       <style>{ROUTING_STYLES}</style>
+      {edgeCss.length > 0 && (
+        <style data-testid="rlab-edge-css">{edgeCss}</style>
+      )}
 
       <header className="rlab-topbar">
         <button type="button" className="rlab-back" onClick={onBack}>
@@ -219,10 +302,26 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
                 <option value="off">Endpoint-only</option>
               </select>
             </span>
+            <span>
+              <label htmlFor="rlab-colors">Colors</label>
+              <select
+                id="rlab-colors"
+                data-testid="rlab-colors-select"
+                value={colorMode}
+                onChange={(e) => setColorMode(e.target.value as ColorMode)}
+              >
+                <option value="rainbow">Per-edge</option>
+                <option value="mono">Monochrome</option>
+              </select>
+            </span>
           </div>
           <div className="rlab-canvas-host">
             {scene ? (
-              <SizedStructuralSvg scene={scene} direction={dir} />
+              <SizedStructuralSvg
+                scene={scene}
+                direction={dir}
+                onEdgeClick={setTracedEdge}
+              />
             ) : (
               <div className="rlab-empty">
                 Laying out {scenario.title}
@@ -268,6 +367,28 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
               </>
             ) : (
               <p>Waiting for layout…</p>
+            )}
+          </div>
+
+          <div className="rlab-panel-head">Trace</div>
+          <div className="rlab-section" data-testid="rlab-trace">
+            {tracedMeta !== undefined ? (
+              <>
+                <MetricRow label="Edge" value={tracedMeta.id} />
+                <MetricRow
+                  label="Path"
+                  value={`${tracedMeta.source} → ${tracedMeta.target}`}
+                  tone="ok"
+                />
+                <p style={{ marginTop: 8 }}>
+                  Everything else is dimmed. Click empty canvas to clear.
+                </p>
+              </>
+            ) : (
+              <p>
+                Hover an edge to isolate it through the crossings; click it to
+                pin the trace.
+              </p>
             )}
           </div>
 

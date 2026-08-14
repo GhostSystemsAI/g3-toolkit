@@ -75,6 +75,43 @@ describe("routing scenarios: engine survives the gauntlet", () => {
     });
   }
 
+  // A9 hard trio: the correctness floor must hold at L too, where
+  // prune-wall crosses the router's 64-obstacle prune threshold
+  // (120 boxes) and storm-sandwich runs two K(6,6) gaps in sequence.
+  for (const id of ["prune-wall", "counterflow-ladder", "storm-sandwich"]) {
+    it(`${id} (L): correctness floor holds at full size`, async () => {
+      const sc = ROUTING_SCENARIOS.find((s) => s.id === id)!;
+      const input = sc.build("L");
+      const geometry = await layoutStructural(input, {
+        direction: sc.direction,
+      });
+      const q = gradeRoutes(input, geometry);
+      expect(q.unrouted).toBe(0);
+      expect(q.diagonalSegments).toBe(0);
+      expect(
+        q.violations,
+        `${id} L routes through boxes: ${q.violatingEdges.join(", ")}`,
+      ).toBe(0);
+    });
+  }
+
+  it("prune-wall: every size exceeds the router's 64-obstacle prune", () => {
+    const sc = ROUTING_SCENARIOS.find((s) => s.id === "prune-wall")!;
+    for (const size of SIZES) {
+      expect(sc.build(size).nodes.length).toBeGreaterThan(64);
+    }
+  });
+
+  it("storm-sandwich: both gaps congest (crossings well past one storm)", async () => {
+    const sc = ROUTING_SCENARIOS.find((s) => s.id === "storm-sandwich")!;
+    const input = sc.build("M");
+    const geometry = await layoutStructural(input, { direction: sc.direction });
+    const q = gradeRoutes(input, geometry);
+    // Two K(5,5) gaps plus spans: crossings must exceed a single
+    // K(5,5)'s unavoidable floor by a wide margin.
+    expect(q.crossings).toBeGreaterThan(50);
+  });
+
   it("crossing-storm: crossings are unavoidable and detected", async () => {
     const sc = ROUTING_SCENARIOS.find((s) => s.id === "crossing-storm")!;
     const input = sc.build("M");
