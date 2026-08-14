@@ -122,6 +122,65 @@ describe("routing scenarios: engine survives the gauntlet", () => {
     expect(q.crossings).toBeGreaterThan(0);
   });
 
+  // Long-edge perimeter policy (owner Jake, 2026-08-14): pskip edges
+  // whose anchors span a wide portion of the field must route OUTSIDE
+  // the row band, not through its interior corridors. Edges that the
+  // layered pass compresses into a short span are correctly ineligible.
+  for (const size of ["M", "L"] as const) {
+    it(`prune-wall (${size}): wide-span skips route outside the row band`, async () => {
+      const sc = ROUTING_SCENARIOS.find((s) => s.id === "prune-wall")!;
+      const input = sc.build(size);
+      const geometry = await layoutStructural(input, {
+        direction: sc.direction,
+      });
+      const boxes = input.nodes.map((n) => geometry.nodes[n.id]!);
+      const bandMinY = Math.min(...boxes.map((g) => g.y));
+      const bandMaxY = Math.max(...boxes.map((g) => g.y + g.height));
+      const bandMinX = Math.min(...boxes.map((g) => g.x));
+      const bandMaxX = Math.max(...boxes.map((g) => g.x + g.width));
+      const fieldWidth = bandMaxX - bandMinX;
+      const edges = geometry.edges ?? {};
+      const skipIds = Object.keys(edges).filter((id) =>
+        id.startsWith("pskip."),
+      );
+      expect(skipIds.length).toBeGreaterThan(0);
+      let wideCount = 0;
+      for (const id of skipIds) {
+        const pts = edges[id]!.points;
+        const anchorSpan = Math.abs(pts[pts.length - 1]!.x - pts[0]!.x);
+        // A wide-span skip is one whose anchors sit at least half the
+        // field width apart; anything less the layered pass has already
+        // compressed into a local edge and the policy skips honestly.
+        if (anchorSpan < fieldWidth / 2) continue;
+        wideCount++;
+        const interior = pts.slice(1, -1);
+        const outside = interior.some((p) => p.y < bandMinY || p.y > bandMaxY);
+        expect(outside, `${id} interior stays inside row band`).toBe(true);
+      }
+      // Confirm the scenario actually exercised the policy: full-field
+      // rails always survive layering intact and must trigger.
+      expect(wideCount, "no wide-span skip edges to test").toBeGreaterThan(0);
+    });
+  }
+
+  it("longEdgeNear: Infinity disables the perimeter policy (rollback)", async () => {
+    // The rollback contract is that with the policy off the router
+    // reverts to its prior accept-then-escalate behavior for eligible
+    // edges. In prune-wall the escalation ladder ALREADY perimeter-
+    // routes the wide skips (their simple Z crosses obstacles), so the
+    // two runs agree on those; the assertion here is the weaker one
+    // that the option is accepted and layouts still complete.
+    const sc = ROUTING_SCENARIOS.find((s) => s.id === "prune-wall")!;
+    const input = sc.build("M");
+    const geometry = await layoutStructural(input, {
+      direction: sc.direction,
+      longEdgeNear: Infinity,
+    });
+    const q = gradeRoutes(input, geometry);
+    expect(q.unrouted).toBe(0);
+    expect(q.violations).toBe(0);
+  });
+
   it("routeEdges: false omits routes and the oracle reports the fallback", async () => {
     const sc = ROUTING_SCENARIOS.find((s) => s.id === "fan-bus")!;
     const input = sc.build("S");

@@ -761,6 +761,7 @@ function layoutOptionsKey(options?: StructuralLayoutOptions): string {
       layeringBudgetMs: options?.layeringBudgetMs ?? 80,
       orderingBudgetMs: options?.orderingBudgetMs ?? 60,
       routingBudgetMs: options?.routingBudgetMs ?? 80,
+      longEdgeNear: options?.longEdgeNear ?? 12,
     },
     // Sketch participates in the memo key: a sketched re-layout of the
     // same input+options is a DIFFERENT computation from the

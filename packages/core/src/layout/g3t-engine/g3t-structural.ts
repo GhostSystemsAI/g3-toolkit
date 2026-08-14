@@ -301,6 +301,7 @@ export function g3tLayoutStructural(
       // re-route over geometry the layout had just produced.
       anchor: options?.anchor,
       nudge: options?.nudge,
+      longEdgeNear: options?.longEdgeNear,
     });
   }
   return geometry;

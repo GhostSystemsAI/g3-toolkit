@@ -54,6 +54,12 @@ export interface G3tLayoutOptions {
    *  "target" fixes arrival points first and aligns departures to
    *  them; default "source" is unchanged. */
   anchor?: "source" | "target";
+  /** Long-edge perimeter policy threshold (owner Jake, 2026-08-14):
+   *  edges whose simple-route near-obstacle set contains at least
+   *  this many boxes prefer a perimeter detour over the interior
+   *  corridor, so long lines through dense fields move outside where
+   *  they read cleanly. Default 12; Infinity disables (rollback). */
+  longEdgeNear?: number;
 }
 
 interface FlatNode {

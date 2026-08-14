@@ -103,6 +103,14 @@ export function routeStructuralEdges(
      *  (default false); the brief mandates a follow-up flip to
      *  default true, gated on a baseline re-pin. */
     nudge?: boolean;
+    /** Long-edge perimeter policy (owner Jake, 2026-08-14): edges
+     *  whose simple-route near-obstacle set contains at least this
+     *  many boxes prefer a perimeter detour (VR-9 detourAround) over
+     *  the interior corridor, so long lines through dense fields move
+     *  to the outside where they read cleanly. Default 12; Infinity
+     *  disables (single-line rollback). Ineligible edges are
+     *  byte-identical to before. */
+    longEdgeNear?: number;
   },
 ): Record<string, { points: Pt[] }> {
   // Direction-aware (WS-D D3a fix): under horizontal flow (RIGHT/
@@ -114,7 +122,21 @@ export function routeStructuralEdges(
   const direction = options?.direction ?? "RIGHT";
   const horizontal = direction === "RIGHT" || direction === "LEFT";
   const budgetMs = options?.routingBudgetMs ?? 80;
+  const longEdgeNear = options?.longEdgeNear ?? 12;
   const out: Record<string, { points: Pt[] }> = {};
+  // Perimeter-routed edges collected during the loop; a post-pass
+  // staggers coincident tracks so two long lines sharing a band do
+  // not overlap exactly. (Once 01-nudging lands, its group machinery
+  // treats each staggered band as an ordinary corridor group; this
+  // stagger remains as deterministic pre-ordering.)
+  interface PerimeterRec {
+    edgeId: string;
+    horizontal: boolean;
+    side: "lo" | "hi";
+    cross: number;
+    build: (cross: number) => Pt[];
+  }
+  const perimeterRoutes: PerimeterRec[] = [];
   const topBoxes = Object.entries(geometry.nodes).filter(
     ([, g]) => g.kind !== "row",
   );
@@ -624,6 +646,74 @@ export function routeStructuralEdges(
       (b) =>
         b.x < bx2 && b.x + b.width > bx1 && b.y < by2 && b.y + b.height > by1,
     );
+    // Long-edge perimeter policy (owner ruling 2026-08-14): before
+    // accepting a clean simple route through a dense field, prefer a
+    // perimeter detour so the line reads outside the wall rather than
+    // threading its interior corridors. Eligibility uses the same
+    // near-set the accept check already computed. Null-safe: if no
+    // detour clears, we fall through to the existing accept and the
+    // simple route stands (the policy never converts a legal route
+    // into a violation).
+    if (near.length >= longEdgeNear) {
+      const CLEAR = 16;
+      const horizontalTravel =
+        Math.abs(tTip.x - sTip.x) >= Math.abs(tTip.y - sTip.y);
+      const lo =
+        Math.min(...near.map((b) => (horizontalTravel ? b.y : b.x))) - CLEAR;
+      const hi =
+        Math.max(
+          ...near.map((b) =>
+            horizontalTravel ? b.y + b.height : b.x + b.width,
+          ),
+        ) + CLEAR;
+      const build = (cross: number): Pt[] =>
+        dedupeCollinear(
+          horizontalTravel
+            ? [
+                s.point,
+                sTip,
+                { x: sTip.x, y: cross },
+                { x: tTip.x, y: cross },
+                tTip,
+                t.point,
+              ]
+            : [
+                s.point,
+                sTip,
+                { x: cross, y: sTip.y },
+                { x: cross, y: tTip.y },
+                tTip,
+                t.point,
+              ],
+        );
+      const mid = horizontalTravel
+        ? (sTip.y + tTip.y) / 2
+        : (sTip.x + tTip.x) / 2;
+      const cands: Array<{ side: "lo" | "hi"; cross: number; pts: Pt[] }> = [];
+      const loPts = build(lo);
+      if (!polylineIntersectsBoxes(loPts, near))
+        cands.push({ side: "lo", cross: lo, pts: loPts });
+      const hiPts = build(hi);
+      if (!polylineIntersectsBoxes(hiPts, near))
+        cands.push({ side: "hi", cross: hi, pts: hiPts });
+      const chosen =
+        cands.length === 0
+          ? null
+          : cands.sort(
+              (a, b) => Math.abs(a.cross - mid) - Math.abs(b.cross - mid),
+            )[0];
+      if (chosen !== null && chosen !== undefined) {
+        out[e.id] = { points: chosen.pts };
+        perimeterRoutes.push({
+          edgeId: e.id,
+          horizontal: horizontalTravel,
+          side: chosen.side,
+          cross: chosen.cross,
+          build,
+        });
+        continue;
+      }
+    }
     if (!polylineIntersectsBoxes(simple, near)) {
       out[e.id] = { points: simple };
       continue;
@@ -681,6 +771,31 @@ export function routeStructuralEdges(
     // even the detour cannot clear (extreme containment).
     const detour = detourAround(s.point, sTip, t.point, tTip, near);
     out[e.id] = { points: detour ?? simple };
+  }
+  // Deterministic perimeter stagger: coincident perimeter tracks on
+  // the same side of a band derive an identical cross coordinate; walk
+  // edge-id groups and offset each track beyond the first by index*8
+  // OUTWARD (away from the field). This is input hygiene, not a
+  // substitute for nudging; 01-nudging (when it lands) will subsume
+  // the ordering, but keeping this pre-pass keeps snapshots stable.
+  if (perimeterRoutes.length > 1) {
+    const STAGGER = 8;
+    const groups = new Map<string, PerimeterRec[]>();
+    for (const rec of perimeterRoutes) {
+      const key = `${rec.horizontal ? "H" : "V"}#${rec.side}#${Math.round(rec.cross)}`;
+      const list = groups.get(key) ?? [];
+      list.push(rec);
+      groups.set(key, list);
+    }
+    for (const list of groups.values()) {
+      if (list.length < 2) continue;
+      list.sort((a, b) => (a.edgeId < b.edgeId ? -1 : 1));
+      list.forEach((rec, i) => {
+        if (i === 0) return;
+        const delta = (rec.side === "lo" ? -1 : 1) * i * STAGGER;
+        out[rec.edgeId] = { points: rec.build(rec.cross + delta) };
+      });
+    }
   }
   if (options?.nudge) {
     const { routes } = nudgeRoutes(out, obstacles);
