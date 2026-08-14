@@ -143,9 +143,16 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    farther than one trackGap beyond the group's original extreme
    (bounded corridors are bounded by the boxes themselves), so a
    stub can never grow toward a neighboring node unchecked. A stub
-   trimmed to zero length collapses to a point and is removed by the
-   `dedupeCollinear` finish — no degenerate zero-length segments are
-   emitted.
+   trimmed to zero length produces a degenerate zero-length segment
+   (endpoint equals its neighbor). SOURCE FACT (verified 2026-08-14
+   against g3t-routing.ts:31-47): `dedupeCollinear` removes
+   COLLINEAR INTERMEDIATE points only (the middle of three
+   consecutive same-x or same-y points); it does NOT remove
+   consecutive IDENTICAL points (zero-length segments). The rewrite
+   step must apply a separate explicit filter AFTER `dedupeCollinear`
+   to drop consecutive identical points:
+   `pts.filter((p, i) => i === 0 || p.x !== pts[i-1].x || p.y !== pts[i-1].y)`.
+   No degenerate zero-length segments are emitted.
 5. **Rewrite** with SNAPSHOT-PLAN / ATOMIC-COMMIT semantics. ALL of
    steps 2-4 (grouping, sort keys, track placement) are computed from
    ONE immutable snapshot of the input geometry — no group ever sees
@@ -226,33 +233,54 @@ nudgeRoutes(routes, obstacles, options?) -> { routes, corridorDemand }
    the default (`nudge: false`) AND reverts the re-pin commit —
    that's why re-pins are a separate, cleanly revertible commit; the
    owner (Jake/Zach) decides the flip, no config atom or infra
-   involved.
+   involved. NORMALIZATION CAVEAT: Step 0 applies `dedupeCollinear`
+   normalization to ALL input polylines unconditionally, regardless of
+   the `nudge` flag value. A regression caused by normalization alone
+   (collinear-point removal changing a route's bounding geometry or
+   hit-test behavior) is NOT isolatable by flipping the default. If
+   bisection points to normalization as the root cause, a separate
+   minimal revert (removing the Step 0 call or guarding it behind the
+   `nudge` flag) is required before the default flip; the owner decides.
 
 ### corridorDemand schema (the Phase 2 contract — defined, not opaque)
 
 ```ts
-interface CorridorDemand {
-  axis: 'h' | 'v';          // segment orientation in the corridor
-  corridorKey: string;       // deterministic id, spec below
-  midline: number;           // CLEARANCE-ADJUSTED free-span midline — the
-                             // exact value step 4 centers on (midpoint between
-                             // clearance-adjusted box faces), NOT the raw
-                             // obstacle-face midpoint
-  extent: [number, number];  // corridor span along the segment axis
-  edgeIds: string[];         // members, in final track order
-  tracksRequired: number;    // n = group size
-  spanAvailable: number;     // free span between obstacle boxes minus clearance
-  spanRequired: number;      // (n + 1) * trackGap — same convention as step 4
-  deficit: number;           // max(0, spanRequired - spanAvailable)
-  blocked: boolean;          // true for either blockedReason
-  blockedReason?: 'occluded' | 'reverted';
-                             // 'occluded' = spanAvailable <= 0: a GEOMETRY
-                             // deficiency — brief 04 must reserve space here.
-                             // 'reverted' = space existed but validation
-                             // rejected a member: an ALGORITHM edge case —
-                             // brief 04 must NOT treat it as a space request;
-                             // it is diagnostic, surfaced for engine work.
-}
+// Discriminated union: when blocked is true, blockedReason is REQUIRED.
+// TypeScript enforces this — a consumer checking (entry.blocked &&
+// !entry.blockedReason) is a type error, not a silent undefined fallthrough.
+// Brief 04's dispatch rule ("never on blocked alone") is thus type-safe.
+type CorridorDemand =
+  | {
+      axis: 'h' | 'v';          // segment orientation in the corridor
+      corridorKey: string;       // deterministic id, spec below
+      midline: number;           // CLEARANCE-ADJUSTED free-span midline
+      extent: [number, number];  // corridor span along the segment axis
+      edgeIds: string[];         // members, in final track order
+      tracksRequired: number;    // n = group size
+      spanAvailable: number;     // free span between obstacle boxes minus clearance
+      spanRequired: number;      // (n + 1) * trackGap
+      deficit: number;           // max(0, spanRequired - spanAvailable)
+      blocked: true;
+      blockedReason: 'occluded' | 'reverted';
+                                 // 'occluded' = spanAvailable <= 0: GEOMETRY
+                                 // deficiency — brief 04 must reserve space here.
+                                 // 'reverted' = space existed but validation
+                                 // rejected a member: ALGORITHM edge case —
+                                 // brief 04 must NOT treat it as a space request.
+    }
+  | {
+      axis: 'h' | 'v';
+      corridorKey: string;
+      midline: number;
+      extent: [number, number];
+      edgeIds: string[];
+      tracksRequired: number;
+      spanAvailable: number;
+      spanRequired: number;
+      deficit: number;
+      blocked: false;
+      blockedReason?: never;     // absent on non-blocked entries
+    };
 ```
 
 `corridorKey` QUANTIZATION SPEC (deterministic, versioned with the
@@ -270,6 +298,17 @@ single value is reused for both track placement and the key — no
 caller recomputes the "same" midline via a different arithmetic
 path, so within-pass key identity cannot be broken by FP rounding
 divergence.
+KEY COLLISION EDGE CASE: the split rule separates corridors on
+either side of an obstacle box, but if the box is thin enough that
+the two clearance-adjusted midlines (each calculated from its own
+side of the box) differ by less than 0.5px, `Math.round` produces
+the same integer and the extent ranges may also round identically,
+yielding a key collision within one pass. The implementing worker
+MUST detect this case at construction time and append a per-pass
+index suffix (e.g. `:0`, `:1`) to disambiguate: deduplicate emitted
+keys within the pass and suffix any duplicate, in order of emission.
+Brief 04 matches by key within one pass and must handle suffixed
+keys transparently (the suffix is part of the opaque key string).
 
 `nudgeRoutes` returns `corridorDemand: CorridorDemand[]` sorted by
 deficit descending — brief 04 (corridor supply) consumes exactly this
@@ -283,6 +322,13 @@ above states the same discrimination):
 - `blockedReason: 'reverted'` — an ALGORITHM edge case (validation
   rejected a placement that had space). DIAGNOSTIC ONLY: brief 04
   MUST NOT reserve layout space for it; it surfaces engine work.
+- `blocked: false, deficit > 0` — degradation case (b): ELK-style
+  evenly distributed, positive but below-target spacing. Nudging
+  succeeded but at reduced quality. Brief 04 MAY optionally reserve
+  additional corridor span for these entries (treating deficit as a
+  soft space request), but is NOT required to. The entry's
+  `blockedReason` is absent (`never`), distinguishing it from the
+  two blocked cases above at the type level.
 
 ## Verification
 
@@ -293,11 +339,28 @@ above states the same discrimination):
   Port Storm carry the known-bad counts; the others pin whatever
   their current value is), then assert the nudged value reaches 0
   where corridor width allows and never increases on any scenario.
+  CARVE-OUT: when one route in a coincident pair is a 2-point
+  straight, the 2-point route is excluded from nudging by design —
+  the oracle assertion for such pairs is "count does not increase",
+  not "reaches 0". Any lab scenario containing a coincident 2-point
+  route must have this carve-out applied per pair to avoid false
+  positive failures.
+- **Return-value sense test:** add a direct unit test asserting
+  `polylineIntersectsBoxes` return polarity: a polyline segment that
+  passes through a box interior must return `true`; a polyline that
+  avoids all boxes must return `false`. This test is a guard against
+  inversion during the import — it verifies the convention the
+  validation logic depends on, independent of the nudging pass.
 - Unit tests on the module: order preservation (no new crossings by
   construction — assert crossings metric does not increase on all six
   lab scenarios), box-violation count does not increase, straight
   routes untouched, determinism (two runs byte-identical), drag
   stability (perturb one node 3px, assert track ORDER unchanged).
+- Sort-order test: assert that the returned `corridorDemand` array is
+  sorted by `deficit` descending — `corridorDemand[i].deficit >=
+  corridorDemand[i+1].deficit` for all i. Brief 04's priority-first
+  processing depends on this; a bug emitting corridors in input or
+  key order would silently deprioritize the highest-deficit cases.
 - Degradation-ladder unit tests, one per branch, using the SAME
   boundary convention as step 4: (a) span >= (n+1)*gap asserts
   full-gap spacing exactly `trackGap`, gap-consistent, and every
@@ -330,7 +393,14 @@ above states the same discrimination):
   enough to spread; assert after nudging that the two committed
   track sets do not overlap and no route from one group collides
   with the other — the empirical backstop for the per-group
-  independence claim exactly where it is weakest.
+  independence claim exactly where it is weakest. Use a separation
+  of exactly 16px + 1 (the minimum that satisfies the non-union
+  condition) to exercise the limit case: at this geometry the gap
+  between the outermost tracks of the two groups is 1px, which is
+  formally non-overlapping but below trackGap. The test asserts
+  non-overlap (the correctness guarantee), not 8px spacing (which
+  is a best-effort target, not a guarantee, at near-capture-band
+  separations).
 - Merged-channel test: two legitimately distinct 4px-spaced channels
   WITHIN the 16px capture band with no obstacle box between them
   (the split rule cannot fire, so they union into one group); assert
@@ -340,10 +410,13 @@ above states the same discrimination):
   move without a box hit; assert the WHOLE group is byte-identical to
   input (no mixed-nudge state) and `coincidentRuns` did not increase.
 - Stub-degeneracy test: a track placement that trims an anchor stub
-  to zero length asserts the collapsed point is removed by the
-  `dedupeCollinear` finish (no zero-length segment emitted) and the
-  polyline stays connected; a placement at the open-side bound
-  asserts stub extension never exceeds `ownExtreme + trackGap`.
+  to zero length asserts the explicit identical-point filter (applied
+  after `dedupeCollinear`) removes the degenerate segment (no
+  zero-length segment emitted) and the polyline stays connected.
+  Additionally asserts that `dedupeCollinear` alone does NOT remove
+  the zero-length segment — confirming the filter is necessary. A
+  placement at the open-side bound asserts stub extension never
+  exceeds `ownExtreme + trackGap`.
 - Multi-bend ordering test: a path with 3+ bends before and after a
   shared corridor, crossing a second corridor, asserting the
   corridor-local sort keys still yield a crossing count that does not
