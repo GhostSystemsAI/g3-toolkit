@@ -59,6 +59,17 @@ const BUDGETS = {
   // (R-12a), the renderer-neutral counterpart of the cytoscape one.
   core: 155.5 * 1024, // 184 KB
   // Core ledger:
+  // - NO raise, 2026-08-14 (audit follow-up, nine-helper ruling): the
+  //   new ./internal subpath adds dist/internal.mjs at 193 B. Rollup
+  //   code-split it, so the four SHACL row-label formatters are NOT
+  //   duplicated out of shacl.mjs; the entry is a re-export shim.
+  //   Measured 155.2 KB against the unchanged 155.5 cap.
+  //   WARNING TO THE NEXT ROUND: that is 0.3 KB of headroom, ~100%.
+  //   The next first-party addition of any size trips this gate. Do
+  //   not treat the pass as slack. If a raise is needed, run the
+  //   sourcemap audit described in the 2026-07-03 entry first, because
+  //   at this margin an accidental node_modules inclusion and a real
+  //   feature look identical from the total alone.
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with
   //   buildSubgraph for the neighborhood popout) and the

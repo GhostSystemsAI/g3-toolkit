@@ -48,6 +48,9 @@ export default defineConfig({
         "undo-redo": resolve(__dirname, "src/undo-redo/index.ts"),
         theme: resolve(__dirname, "src/theme/index.ts"),
         "path-analysis": resolve(__dirname, "src/path-analysis/index.ts"),
+        // Shipped but explicitly outside the semver contract. See the
+        // docblock in src/internal/index.ts before adding anything here.
+        internal: resolve(__dirname, "src/internal/index.ts"),
       },
       formats: ["es", "cjs"],
       fileName: (format, entryName) =>

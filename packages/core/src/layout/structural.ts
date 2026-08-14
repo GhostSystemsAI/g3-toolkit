@@ -169,12 +169,23 @@ export type TextMeasure = (
   role: "header" | "row" | "compartmentTitle",
 ) => { width: number; height: number };
 
-/** Deterministic estimator: monospace-ish average char widths per role. */
-/** Deterministic estimator: per-role average char widths. The
- *  header is bold and may carry guillemets («Stereotype»), so it
- *  estimates wider than rows; a small margin keeps labels from
- *  clipping when this estimate undershoots a proportional font (the
- *  canvas can substitute real measurement for pixel-true sizing). */
+/**
+ * Deterministic estimator: per-role average char widths. The header is
+ * bold and may carry guillemets («Stereotype»), so it estimates wider
+ * than rows; a small margin keeps labels from clipping when this
+ * estimate undershoots a proportional font (the canvas can substitute
+ * real measurement for pixel-true sizing).
+ *
+ * PUBLIC ON PURPOSE (reaffirmed 2026-08-14 against an audit finding
+ * that read it as an accidental export). This is the DEFAULT VALUE of
+ * the injectable `measure` seam, not a helper. `TextMeasure` is
+ * exported above and `StructuralLayoutOptions.measure` accepts one, so
+ * a consumer supplying real canvas measurement routinely needs the
+ * default too: to fall back on it when a font has not loaded, to
+ * delegate for roles they do not special-case, or to compare against it
+ * in a test. Exporting the seam's type while hiding its only shipped
+ * implementation would leave the seam half usable.
+ */
 export const estimateTextSize: TextMeasure = (text, role) => {
   const height = role === "header" ? 16 : 13;
   const margin = role === "header" ? 12 : 4;
@@ -373,8 +384,23 @@ interface RowPlan {
 
 /**
  * Pure builder: StructuralGraphInput -> ELK JSON per the validated
- * recipe. Exposed for testability; layoutStructural() runs it through
- * the layout engine (g3t since D3b part 1).
+ * recipe. layoutStructural() runs it through the layout engine (g3t
+ * since D3b part 1).
+ *
+ * PUBLIC ON PURPOSE (reaffirmed 2026-08-14 against an audit finding
+ * that read it as an accidental export). The original reason given here
+ * was "exposed for testability", which does NOT justify a public export:
+ * the one perf test that calls it (tests/perf/prf001-matrix.perf.test.ts)
+ * imports the deep source path, not the barrel, so the barrel export
+ * carries no test weight at all.
+ *
+ * The reason it stays is the other half of the split. This is the pure
+ * half of a two-step pipeline, and it emits ELK JSON: a versioned
+ * document, which is one of the toolkit's three declared integration
+ * channels. A host that wants to run its own ELK configuration, feed a
+ * different layout engine, cache the assembly step, or inspect the
+ * recipe needs the builder without the engine. Collapsing the two steps
+ * into one entry point would close that channel for no gain.
  */
 export function buildStructuralElkGraph(
   input: StructuralGraphInput,

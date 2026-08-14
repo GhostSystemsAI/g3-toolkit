@@ -120,17 +120,18 @@
     "requestLogger",
     "retryOnError"
   ],
-  "@g3t/core/events": ["G3tEventBus", "eventBus"],
+  "@g3t/core/events": [
+    "G3tEventBus",
+    "eventBus"
+  ],
   "@g3t/core/projection": [
     "ProjectionPipeline",
     "RDF",
     "blankNodeCollapse",
-    "castLiteral",
     "checkRenderPermission",
     "createPresetPipeline",
     "listCollapse",
     "literalCollapse",
-    "localPart",
     "reificationCollapse",
     "typeCollapse"
   ],
@@ -147,10 +148,8 @@
   ],
   "@g3t/core/shacl": [
     "ShaclValidator",
-    "cardinalitySuffix",
     "closedShapeIds",
     "parseShaclReport",
-    "propertyRowText",
     "reportFocusNodes",
     "reportFromValidationResults",
     "resultDetail",
@@ -158,17 +157,18 @@
     "resultTargets",
     "resultsForFocusNode",
     "resultsForShape",
-    "severityOverlayId",
     "severityOverlays",
     "shaclResultDrivers",
     "shaclRowId",
     "shaclRowSeverities",
     "shaclShapesToStructural",
     "summarizeValidation",
-    "validateShacl",
-    "valueConstraintCount"
+    "validateShacl"
   ],
-  "@g3t/core/diff": ["computeSchemaHash", "diffGraphs"],
+  "@g3t/core/diff": [
+    "computeSchemaHash",
+    "diffGraphs"
+  ],
   "@g3t/core/layout": [
     "DagreLayout",
     "ForceLayout",
@@ -194,7 +194,9 @@
     "overlayFromPath",
     "parseAlgorithmResult"
   ],
-  "@g3t/core/undo-redo": ["UndoRedoStack"],
+  "@g3t/core/undo-redo": [
+    "UndoRedoStack"
+  ],
   "@g3t/core/theme": [
     "DARK_SHADOWS",
     "DESIGN_TOKENS",
@@ -204,7 +206,16 @@
     "prefersReducedMotion",
     "scaleColor"
   ],
-  "@g3t/core/path-analysis": ["allShortestPaths", "findShortestPath"],
+  "@g3t/core/path-analysis": [
+    "allShortestPaths",
+    "findShortestPath"
+  ],
+  "@g3t/core/internal": [
+    "cardinalitySuffix",
+    "propertyRowText",
+    "severityOverlayId",
+    "valueConstraintCount"
+  ],
   "@g3t/react": [
     "AlgorithmPanel",
     "AnnotationPanel",
@@ -543,5 +554,7 @@
     "registerIconSet",
     "sanitizeIconMarkup"
   ],
-  "@g3t/charts": ["LinkedChart"]
+  "@g3t/charts": [
+    "LinkedChart"
+  ]
 }

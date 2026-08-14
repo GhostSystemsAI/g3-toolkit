@@ -1,5 +1,52 @@
 # Changelog
 
+## 1.0.0 (continued): audit follow-up of 2026-08-14 (public surface)
+
+- **The published runtime API surface is now a golden file.** Every
+  exports-map entry of all three packages is enumerated into
+  `api-surface.json` and any difference fails `verify:surface`. Every
+  gate before it checked the surface one-directionally (declared entries
+  exist, dist is a superset of the source barrel, each subpath imports
+  non-empty), so the namespace could only ever widen and nothing could
+  notice a symbol ARRIVING. 22 entries, 514 runtime exports.
+- **BREAKING, `@g3t/react`: `LayoutOptions` is now `LayoutPanelOptions`.**
+  The name collided with `@g3t/core`'s `LayoutOptions` on the same entry
+  point while meaning something different: core's is what the layout
+  engines accept, react's was the LayoutManager panel's UI state. Code
+  that imported the react type and passed it to `ForceLayout.compute()`
+  type-checked cleanly and silently discarded every force-tuning field.
+  `@g3t/react` now re-exports core's `LayoutOptions` alongside the
+  engines it already re-exports, so that name means the engines' bag.
+- **BREAKING, `@g3t/charts`: `@g3t/core` and `@g3t/react` moved from
+  dependencies to peerDependencies.** As regular dependencies, npm and
+  yarn could resolve a SECOND copy of `@g3t/react` under charts. That is
+  not just duplication: `@g3t/react` ships the Zustand stores that are
+  one of the three declared integration channels, and two module
+  instances means two store singletons, so a chart writes to a store the
+  host never subscribed to. No error, no stack trace, just a chart that
+  will not respond to selection.
+- **BREAKING, `@g3t/core`: nine subpath-reachable helpers reviewed, six
+  moved or removed.** `estimateTextSize` and `buildStructuralElkGraph`
+  stay public and now carry the reason in their jsdoc. The four SHACL
+  row-label formatters (`propertyRowText`, `cardinalitySuffix`,
+  `valueConstraintCount`, `severityOverlayId`) moved to a new
+  `@g3t/core/internal` subpath that is shipped and importable but
+  explicitly outside the semver contract: they encode a rendering
+  opinion, and freezing `[0..*]` notation under 1.0 is the wrong trade.
+  `localPart` and `castLiteral` are off the public surface entirely
+  (generic RDF plumbing, still used inside core).
+- **CI runs on every branch.** `push` was filtered to main with no PR
+  open, so this long-lived branch accumulated gate regressions with
+  nothing to catch them: an unformatted file failed `lint` across
+  several commits. A concurrency group cancels superseded runs to bound
+  the added cost.
+- `planning/g3l/prf-budgets.json` restored to tracking. A commit that
+  gitignored `planning/archive/` untracked it, and `tests/perf` reads it
+  with a bare `readFileSync` and no fallback, so the perf job crashed on
+  this branch only.
+- Docs: `capabilities-and-limits.md` said the incremental-layout symbols
+  are exported from `@g3t/core`. All four are on `@g3t/core/layout`.
+
 ## 1.0.0 (continued): register of 2026-08-06 (R-15, R-16, R-17)
 
 - **R-16, generalised as asked**: the editor gated size and nothing
