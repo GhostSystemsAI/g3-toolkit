@@ -10,7 +10,7 @@ export type {
   ShaclValidationResult,
 } from "./shacl-validator";
 // propertyRowText, cardinalitySuffix and valueConstraintCount moved to
-// @g3t/core/internal (2026-08-14 audit follow-up). They format row
+// @g3t/core/internal (2026-08-14). They format row
 // LABELS, so keeping them here would put a rendering opinion under the
 // 1.0 semver contract. See packages/core/src/internal/index.ts.
 export {

@@ -2,16 +2,17 @@
 /**
  * Release gate: the published runtime API surface is a GOLDEN FILE.
  *
- * Motivated by the 2026-08 audit finding "35 core symbols ship only via
- * subpaths, nine of them internal helpers made public by accident".
+ * Motivated by a 2026-08 review: 35 core symbols ship only via
+ * subpaths, nine of them internal helpers made public by accident.
  * Root cause: every existing gate checks the surface in ONE direction.
  * `verify:package` asserts declared entries exist, `verify:exports`
  * asserts dist is a SUPERSET of the source barrel, and `verify:smoke`
  * asserts each subpath imports non-empty. None of them can notice a
  * symbol ARRIVING, so the namespace could only ever widen.
  *
- * Note the audit's stated mechanism holds for @g3t/react but NOT for
- * @g3t/core. Core's sub-barrels are explicit named lists, so helpers
+ * Note that the star-export mechanism usually blamed for this holds
+ * for @g3t/react but NOT for @g3t/core. Core's sub-barrels are
+ * explicit named lists, so helpers
  * like `localPart`, `cardinalitySuffix` and `estimateTextSize` were
  * typed into an export list by hand: deliberate keystrokes whose intent
  * is worth revisiting, not a star-export accident. React's barrels do

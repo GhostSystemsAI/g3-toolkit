@@ -1,6 +1,72 @@
 # Changelog
 
-## 1.0.0 (continued): audit follow-up of 2026-08-14 (public surface)
+## 1.0.0 (continued): 2026-08-14 (parse boundary, adopter docs, planning tree)
+
+- **`@g3t/core`: `parseGraphDocument` now checks element shape, not
+  just the document envelope.** It declared a
+  `{ error } | { document, diagnostics }` union but only guarded the
+  top level, so `{"version":1,"nodes":[{"id":"a"}],"edges":[null]}`
+  threw a raw `TypeError` out of library internals at a caller who had
+  every reason to expect the error branch, and
+  `{"nodes":[{"id":5}],"edges":[{"id":1,"source":5,"target":5}]}`
+  returned "valid" with zero diagnostics and corrupted the layout
+  stages downstream. Malformed elements are now dropped with a
+  `BAD_SHAPE` diagnostic naming the subject (`nodes[2].width`), which
+  is the degrade-and-report convention `elk-import` already used. The
+  round-trip guarantee is preserved by returning the parsed object
+  itself when nothing was dropped. A test walks
+  `GRAPH_DOCUMENT_SCHEMA` and fails if a declared field has no
+  matching check, so the schema and the checkers cannot drift apart.
+  Checkers are hand-written rather than a JSON Schema engine: an
+  engine would cost more than the whole document module against the
+  bundle budget.
+- **The wiring guide is now gated.** It carried working recipes for a
+  compartment-collapse API removed by ruling on 2026-07-10, and
+  nothing failed. Its 25 fenced snippets are now typechecked against
+  the real package types by `verify:snippets`, so a recipe naming a
+  removed or renamed export fails the build. Fixing the fallout found
+  eight snippets that used a toolkit symbol without showing its
+  import; those now show it, which also makes them copy-pastable.
+  Host-owned placeholders (`ugm`, `cy`, your settings) are declared
+  ambiently by the gate; toolkit symbols deliberately are not, since
+  that is the check. The guide's claim that it "cannot rot silently"
+  is replaced with what is actually enforced.
+- **The three remote query adapters are parameterized.** The published
+  `GraphAdapter` contract takes `nodeId`, `depth` and `edgeTypes` from
+  host state, and Gremlin, Cypher and SPARQL all spliced them straight
+  into query text, so a hostile id could close the literal it sat in
+  and append clauses of its own. The rule now: bind where the protocol
+  has a binding mechanism, validate where it does not. Gremlin moves
+  those values into the `bindings` map it was already sending empty on
+  every request. Cypher's `executeCypher` now sends a `parameters`
+  object, which is also what makes its pre-existing `$nodeId`
+  placeholders real (without it Neo4j answers "Expected parameter(s):
+  nodeId", so `expandNeighborhood` was broken against a live server).
+  SPARQL has no binding mechanism for `application/sparql-query` and
+  these positions are syntax anyway, so ids are validated as absolute
+  IRIs. New `@g3t/core/adapters` exports `AdapterArgumentError`,
+  `coerceDepth`, `assertPlainIdentifier`, `assertSafeIri` and
+  `MAX_TRAVERSAL_DEPTH`, so a host can catch a rejection and tell it
+  apart from a transport failure. Values that cannot be proven safe
+  are rejected rather than escaped: escaping would mean modeling each
+  dialect's quoting rules correctly forever. The new tests pin the
+  GENERATED QUERY TEXT, which nothing did before, so the adapters
+  cannot be rewritten to interpolate again with the suite still green.
+  `adapter.query(q)` is unchanged and still passes text through
+  verbatim, which its docblock now states.
+- **Planning documents that tracked files cite are tracked again.** A
+  commit gitignoring the planning tree left 15 records, plus three
+  `planning/g3l/` documents cited from shipped source
+  (`packages/core/src/index.ts`, `scripts/check-bundle-size.mjs`,
+  `packages/react/.../structural-edge-overlay.test.ts`), unresolvable
+  in a clone. Those are back under `planning/`. Documents nothing
+  cites stay in the untracked `planning/archive/`, and STATUS.md now
+  states that convention. Citations to documents deleted on purpose
+  (the flagship planning set, the visual-acceptance round log) now say
+  so instead of pointing at nothing; STATUS.md's stale "CURRENT FOCUS:
+  the flagship demo" section is retitled as superseded.
+
+## 1.0.0 (continued): 2026-08-14 (public surface)
 
 - **The published runtime API surface is now a golden file.** Every
   exports-map entry of all three packages is enumerated into
