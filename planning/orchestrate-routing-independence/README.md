@@ -17,6 +17,10 @@ dispatch the numbered files):
 | 07 | dependency-independence Tier 1+2 | Tier 1 gated on 03-05; Tier 2 free | Clean-room replacement + deletion of dagre/d3/fcose/utility deps |
 | 08 | renderer-independence (Tier 3a) | 07 Tier 1 (native layouts), 05 (routing) | Native canvas renderer on RND-004 foundation; cytoscape + fcose deleted at S6 cutover (v2.0.0 breaking: `cy` handle) |
 | 09 | widget-independence (Tier 3b) | 08 display-list maturity | echarts, vis-timeline/vis-data, tanstack table, fuse.js, demo n3/jsonld replaced and deleted |
+| 10 | long-edge-perimeter | 01 (both touch routeStructuralEdges) | Long skip edges prefer perimeter routes over legal-but-ugly interior corridors (Prune Wall) |
+| 11 | cluster-collapse-counts | — | interiorEdgeCount/boundaryEdgeCount on supernodes + count badge + auto-collapse wiring |
+| 12 | holon-boundary-projection | — (iterating with Jake before dispatch) | Boundary = structural block perimeter, portals = declared ports, projectHolonBoundary drill level |
+| 13 | holon-rdf12-examples | 12 direction settled | Holonic TriG dataset (RDF 1.2 + reified twin) + two worked examples |
 
 Kept platform (owner-overridable only): react, react-dom, zustand —
 they ARE the adopter contract (CLAUDE.md three channels) — plus the
