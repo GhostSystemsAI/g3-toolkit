@@ -67,3 +67,8 @@ tests/perf/last-results.json
 
 # 
 planning/archive/
+
+# AI
+.devcontainer/
+.mcp.json
+audit/
