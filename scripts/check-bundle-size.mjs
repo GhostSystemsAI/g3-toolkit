@@ -259,7 +259,23 @@ const BUDGETS = {
   // Round 21 (2026-08-05): +1.5 KB for R-12 (structural node
   // styles, controlled drag offsets, the renderer-neutral editor
   // target) and R-13.3 (one legend serving both renderers).
-  react: 386 * 1024, // 420 KB
+  react: 390 * 1024,
+  // React ledger:
+  // - 386 -> 390 KB, 2026-08-14 (render-failure containment):
+  //   views/error/ViewErrorBoundary.tsx, measured 387.2 KB, +1.4 KB.
+  //   The package shipped no error boundary at all, and there is no
+  //   hook form of one, so a render-phase throw under any view (a
+  //   code-split chunk that fails to fetch, a malformed document
+  //   reaching a renderer) unmounted the whole tree to a blank page
+  //   with nothing in the UI to act on. This is the one component a
+  //   host cannot write around the library's own views without
+  //   wrapping every one of them itself. Sourcemap audit run first as
+  //   the 2026-07-03 core entry requires: ZERO node_modules source
+  //   bytes in react's dist, so all 1.4 KB is first-party, most of it
+  //   the docblock explaining why a class component is here (budgets
+  //   are unminified by deliberate policy). It is a tree-shakeable
+  //   named export, so hosts that never reference it pay nothing.
+  //   New headroom is 2.8 KB, set modestly on purpose.
   // - 384 -> 420 KB, 2026-07-07 (review remediation round 2): measured
   //   379.9 KB (99% of cap) after the emphasis/effects layer
   //   (emphasis store + class application), useStructuralCollapse,

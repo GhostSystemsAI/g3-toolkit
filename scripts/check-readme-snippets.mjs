@@ -87,6 +87,7 @@ const PLACEHOLDERS = {
   cy: "any",
   DossierLookup: "any",
   initialSpec: "any",
+  logError: "any",
   navigate: "any",
   orgSettings: "any",
   processEngine: "any",

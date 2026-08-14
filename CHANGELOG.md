@@ -1,6 +1,27 @@
 # Changelog
 
-## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, adopter docs, planning tree)
+## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, adopter docs, planning tree)
+
+- **`@g3t/react`: a render failure no longer takes the whole page
+  down.** Two holes, one theme. `useStructuralLayout` started a
+  layout promise with no rejection handler, so an engine throw or a
+  failed dynamic-chunk import surfaced only as an
+  `unhandledrejection`; the hook kept returning `structural: null`,
+  which is indistinguishable from "still laying out", and the host
+  spun a loading state forever. It now returns
+  `{ structural, error }`, with the error keyed to the input that
+  produced it and cleared by a later successful layout. Separately,
+  the package shipped no error boundary at all (there is no hook form
+  of one), so any render-phase throw under a view unmounted the tree
+  to a blank page. `ViewErrorBoundary` is new: a `fallback` render
+  prop receiving the error and a `retry`, an `onError` callback
+  receiving React's component stack, and a built-in message-plus-retry
+  fallback styled inline so it stays legible even when the failure was
+  the stylesheet. It is a tree-shakeable named export. The demo shell
+  loader is wired through it, and holds its shells as loaders rather
+  than module-level `lazy` components, because a rejected `React.lazy`
+  caches its rejection forever and can only re-throw: retry has to
+  build a new one.
 
 - **`@g3t/core`: both export sinks encode for their consumer, not just
   for their format.** `exportSubgraphTurtle` escaped every term through

@@ -60,12 +60,15 @@ const all = [...scenarios, ...capabilities];
 // fallback), so it must not be advertised here.
 const shellMap = literalBody(
   demoSrc,
-  "const SHELL_MAP: Record<string, React.ComponentType<{ onBack: () => void }>> = {",
+  "const SHELL_MAP: Record<string, ShellLoader> = {",
   "\n};",
   "src/demo/Demo.tsx",
 );
+// Exactly two spaces of indent: the entries are loader arrows now, and
+// the `default:` inside each one sits deeper. Prettier owns this file's
+// indentation, so the depth is stable.
 const shellIds = new Set(
-  [...shellMap.matchAll(/^\s*"?([\w-]+)"?:/gm)].map(([, id]) => id),
+  [...shellMap.matchAll(/^ {2}"?([\w-]+)"?:/gm)].map(([, id]) => id),
 );
 if (shellIds.size === 0) fail("no entries parsed out of SHELL_MAP");
 

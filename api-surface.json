@@ -310,6 +310,7 @@
     "Toolbar",
     "TreeView",
     "UndoRedoStack",
+    "ViewErrorBoundary",
     "VisualEncodingManager",
     "WorkingSetManager",
     "ZoomControls",

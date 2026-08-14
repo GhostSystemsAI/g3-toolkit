@@ -579,6 +579,63 @@ of planning/large-graph-design.md; Approach 4 (worker layout with
 viewport culling, for drilled sets past ~5k) is designed but not yet
 implemented.
 
+## When a view fails to render
+
+A render-phase throw unmounts every React ancestor, so without a
+boundary somewhere above the canvas the user gets a blank page: no
+message, no reload, nothing to act on. There is no hook form of an
+error boundary, so the toolkit ships the component.
+
+```tsx
+import { ViewErrorBoundary, CytoscapeCanvas } from "@g3t/react";
+
+export function Panel() {
+  return (
+    <ViewErrorBoundary
+      // Your reporting. `info.componentStack` locates the throw in a
+      // production build, where the message alone will not.
+      onError={(error, info) => logError(error, info.componentStack)}
+      fallback={({ error, retry }) => (
+        <div>
+          <p>The graph could not render: {error.message}</p>
+          <button onClick={retry}>Try again</button>
+        </div>
+      )}
+    >
+      <CytoscapeCanvas ugm={ugm} />
+    </ViewErrorBoundary>
+  );
+}
+```
+
+Omit `fallback` for a built-in message and retry button. `retry`
+remounts the subtree, which is enough for a transient failure; it is
+NOT enough for a `React.lazy` whose import rejected, because lazy
+caches its rejection permanently. If you code-split a view, build a
+new lazy from the loader when `retry` fires.
+
+An ASYNC failure never reaches a boundary, so the hooks report it
+themselves. `useStructuralLayout` returns an error channel alongside
+the scene, because a rejected layout and a layout still in flight both
+leave `structural` null and a host that only checks for null spins a
+loading state forever:
+
+```tsx
+import type { StructuralGraphInput } from "@g3t/core";
+import { useStructuralLayout } from "@g3t/react";
+
+export function StructuralPanel({ input }: { input: StructuralGraphInput }) {
+  const { structural, error } = useStructuralLayout(input);
+  if (error) return <p>Layout failed: {error.message}</p>;
+  if (!structural) return <p>Laying out…</p>;
+  return <pre>{JSON.stringify(structural.geometry.nodes, null, 2)}</pre>;
+}
+```
+
+The error belongs to the input that produced it: switching inputs
+clears it, and a later successful layout of the same input clears it
+too.
+
 ## Programmatic APIs
 
 Every snippet here runs under CI in

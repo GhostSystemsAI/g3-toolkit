@@ -54,6 +54,11 @@ export * from "./views/timeline";
 export * from "./views/map";
 export * from "./views/tree";
 export * from "./views/schema";
+export { ViewErrorBoundary } from "./views/error/ViewErrorBoundary";
+export type {
+  ViewErrorBoundaryProps,
+  ViewErrorFallbackArgs,
+} from "./views/error/ViewErrorBoundary";
 export { FloatingLegend } from "./views/legend/FloatingLegend";
 export { FloatingPanel } from "./views/popout/FloatingPanel";
 export type { FloatingPanelProps } from "./views/popout/FloatingPanel";
