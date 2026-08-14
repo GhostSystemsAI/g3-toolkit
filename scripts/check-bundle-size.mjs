@@ -57,9 +57,24 @@ const BUDGETS = {
   // oracle-pinned.
   // Round 21 (2026-08-05): +1 KB for the structural style applier
   // (R-12a), the renderer-neutral counterpart of the cytoscape one.
-  core: 155.5 * 1024, // 184 KB
+  core: 160.0 * 1024,
   // Core ledger:
-  // - NO raise, 2026-08-14 (audit follow-up, nine-helper ruling): the
+  // - 155.5 -> 160 KB, 2026-08-14 (adapter query-argument safety):
+  //   adapter/query-safety.ts plus the
+  //   call sites in the Gremlin, Cypher and SPARQL adapters,
+  //   measured 157.1 KB. This is the raise the previous entry warned
+  //   was coming; it is a security fix, not the style/route program,
+  //   so it does not renegotiate that program's standing
+  //   recommendation (extract @g3t/layout, ARC-009, and bring core
+  //   back under its original envelope). Sourcemap audit run first,
+  //   as that entry requires: ZERO node_modules source bytes in
+  //   core's dist, so all 1.9 KB is first-party. Most of it is the
+  //   module's jsdoc, which stays: budgets are unminified by
+  //   deliberate policy and the reasoning about what is bound versus
+  //   validated is the part a future reader needs. New headroom is
+  //   2.9 KB, set modestly on purpose so ordinary creep still trips
+  //   the gate.
+  // - NO raise, 2026-08-14 (nine-helper ruling): the
   //   new ./internal subpath adds dist/internal.mjs at 193 B. Rollup
   //   code-split it, so the four SHACL row-label formatters are NOT
   //   duplicated out of shacl.mjs; the entry is a re-export shim.

@@ -107,10 +107,15 @@
     "virtualizeRelationalData"
   ],
   "@g3t/core/adapters": [
+    "AdapterArgumentError",
     "CypherAdapter",
     "GremlinAdapter",
     "HolonicAdapter",
-    "SparqlAdapter"
+    "MAX_TRAVERSAL_DEPTH",
+    "SparqlAdapter",
+    "assertPlainIdentifier",
+    "assertSafeIri",
+    "coerceDepth"
   ],
   "@g3t/core/middleware": [
     "apiKeyHeader",

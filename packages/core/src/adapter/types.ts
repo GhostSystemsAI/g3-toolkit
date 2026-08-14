@@ -34,6 +34,16 @@ export interface SchemaModel {
 
 /**
  * Interface that all data source adapters implement.
+ *
+ * ARGUMENT SAFETY. `nodeId`, `depth` and `edgeTypes` typically come
+ * from host state (a node click, a search result, a server payload),
+ * so the remote adapters treat them as untrusted: values are bound
+ * through the protocol's own mechanism where one exists, and
+ * validated by `./query-safety` where it does not. A value that
+ * cannot be placed safely raises `AdapterArgumentError` before any
+ * request is sent. `query(q)` is the exception and is NOT sanitized:
+ * its argument is query text by definition, so hosts must not build
+ * it from untrusted input.
  */
 export interface GraphAdapter {
   /** Human-readable name (e.g., "SPARQL Endpoint"). */

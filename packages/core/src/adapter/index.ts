@@ -5,3 +5,10 @@ export { HolonicAdapter } from "./holonic-adapter";
 export { GremlinAdapter } from "./gremlin-adapter";
 export type { Holon, Portal, HolonicDataset } from "./holonic-adapter";
 export type { GremlinAdapterConfig } from "./gremlin-adapter";
+export {
+  AdapterArgumentError,
+  MAX_TRAVERSAL_DEPTH,
+  assertPlainIdentifier,
+  assertSafeIri,
+  coerceDepth,
+} from "./query-safety";

@@ -18,6 +18,7 @@ import {
   type Middleware,
   type AdapterRequest,
 } from "../middleware/middleware";
+import { assertSafeIri, coerceDepth } from "./query-safety";
 
 /** A single binding row from a SPARQL SELECT result. */
 interface SparqlBinding {
@@ -91,18 +92,27 @@ export class SparqlAdapter implements GraphAdapter {
     depth: number,
     edgeTypes?: string[],
   ): Promise<UGM> {
-    const typeFilter = edgeTypes
-      ? `FILTER(?p IN (${edgeTypes.map((t) => `<${t}>`).join(", ")}))`
-      : "";
+    // SPARQL has no binding mechanism for a query sent as
+    // application/sparql-query, and these positions are syntax in any
+    // case: an IRI inside angle brackets and a property-path
+    // quantifier. Both are validated instead.
+    const safeId = assertSafeIri(nodeId, "nodeId");
+    const typeFilter =
+      edgeTypes && edgeTypes.length > 0
+        ? `FILTER(?p IN (${edgeTypes
+            .map((t) => `<${assertSafeIri(t, "edgeTypes")}>`)
+            .join(", ")}))`
+        : "";
 
     // Build a property path for N-hop traversal
-    const pathExpr = depth === 1 ? "?p" : `?p{1,${depth}}`;
+    const safeDepth = coerceDepth(depth);
+    const pathExpr = safeDepth === 1 ? "?p" : `?p{1,${safeDepth}}`;
     const sparql = `
       SELECT ?s ?p ?o WHERE {
-        <${nodeId}> (${pathExpr}) ?neighbor .
+        <${safeId}> (${pathExpr}) ?neighbor .
         ?s ?p ?o .
-        FILTER(?s = <${nodeId}> || ?s = ?neighbor)
-        FILTER(?o = <${nodeId}> || ?o = ?neighbor)
+        FILTER(?s = <${safeId}> || ?s = ?neighbor)
+        FILTER(?o = <${safeId}> || ?o = ?neighbor)
         ${typeFilter}
       }
     `;
@@ -130,7 +140,7 @@ export class SparqlAdapter implements GraphAdapter {
   async getNodeProperties(nodeId: string): Promise<PropertyMap> {
     const sparql = `
       SELECT ?p ?o WHERE {
-        <${nodeId}> ?p ?o .
+        <${assertSafeIri(nodeId, "nodeId")}> ?p ?o .
       }
     `;
     const result = await this.executeSparql(sparql);
