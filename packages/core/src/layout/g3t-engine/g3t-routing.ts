@@ -31,6 +31,65 @@ import {
   type ChannelPlan,
 } from "./g3t-channel-router";
 
+/** VR-10 (owner Jake, 2026-08-14): the obstacle set a perimeter or
+ *  detour route must be JUDGED against.
+ *
+ *  Both shapes sweep out past the field on the CROSS axis and run the
+ *  whole TRAVEL axis, so their footprint is NOT the simple route's
+ *  bounding box. Verifying them against the caller's `near` set (which
+ *  is filtered by the simple route's bbox) shipped a full-field rail
+ *  straight through an entire node row: prune-wall/L under DOWN flow,
+ *  edge pskip.0. That row sat LEFT of the simple route's bbox, so it
+ *  was invisible BOTH to the band bounds (`lo` landed inside the
+ *  field, at the source column) and to the collision check (which
+ *  never saw those 19 boxes).
+ *
+ *  A perimeter/detour polyline's extent on the travel axis is exactly
+ *  the min/max of its defining points, so filtering the FULL obstacle
+ *  set to that interval is provably equivalent to checking every box,
+ *  at one linear pass per edge: no grid, no quadratic term, the
+ *  PRF-002 budget is untouched. */
+function travelBand(
+  points: readonly Pt[],
+  horizontalTravel: boolean,
+  obstacles: readonly RouteBox[],
+): RouteBox[] {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const p of points) {
+    const v = horizontalTravel ? p.x : p.y;
+    lo = Math.min(lo, v);
+    hi = Math.max(hi, v);
+  }
+  return obstacles.filter((b) =>
+    horizontalTravel
+      ? b.x < hi && b.x + b.width > lo
+      : b.y < hi && b.y + b.height > lo,
+  );
+}
+
+/** VR-10: cross-axis bounds that clear every box in `set`, padded by
+ *  CLEAR. Offered as CANDIDATES, never as a replacement: a bound
+ *  derived from a WIDER set sweeps further out, which clears more
+ *  boxes on the cross axis but lengthens the two perpendicular runs
+ *  that connect the rail to the tips -- and those can cross boxes the
+ *  narrower bound never reached. Collect both, verify each, keep the
+ *  one nearest the midline. */
+function crossBounds(
+  set: readonly RouteBox[],
+  horizontalTravel: boolean,
+  clear: number,
+): { lo: number; hi: number } | null {
+  if (set.length === 0) return null;
+  return {
+    lo: Math.min(...set.map((b) => (horizontalTravel ? b.y : b.x))) - clear,
+    hi:
+      Math.max(
+        ...set.map((b) => (horizontalTravel ? b.y + b.height : b.x + b.width)),
+      ) + clear,
+  };
+}
+
 /** VR-9 (owner IBD screenshots, 2026-07-28): when the router fails
  *  in a dense corridor, the old fallback surrendered to the
  *  obstacle-blind simple template: mid-height edges ran straight
@@ -44,18 +103,28 @@ export function detourAround(
   sTip: Pt,
   tPoint: Pt,
   tTip: Pt,
-  near: readonly RouteBox[],
+  obstacles: readonly RouteBox[],
+  /** VR-10: the caller's simple-route near-set, when it has one. Its
+   *  bounds stay in the candidate list (they are often the tighter,
+   *  better-reading detour); they are just no longer TRUSTED without a
+   *  full-band check. Defaults to `obstacles` so the 5-arg form is a
+   *  band-only detour. */
+  near: readonly RouteBox[] = obstacles,
 ): Pt[] | null {
-  if (near.length === 0) return null;
+  if (obstacles.length === 0) return null;
   const CLEAR = 16;
   const horizontalTravel =
     Math.abs(tTip.x - sTip.x) >= Math.abs(tTip.y - sTip.y);
-  const lo =
-    Math.min(...near.map((b) => (horizontalTravel ? b.y : b.x))) - CLEAR;
-  const hi =
-    Math.max(
-      ...near.map((b) => (horizontalTravel ? b.y + b.height : b.x + b.width)),
-    ) + CLEAR;
+  // VR-10: verification runs against the band the detour actually
+  // sweeps -- the FULL obstacle set over this route's travel span --
+  // not the caller's simple-route near-set, which by construction
+  // omits the boxes a detour leaves that bbox to reach.
+  const band = travelBand(
+    [sPoint, sTip, tTip, tPoint],
+    horizontalTravel,
+    obstacles,
+  );
+  if (band.length === 0) return null;
   const mk = (cross: number): Pt[] =>
     dedupeCollinear(
       horizontalTravel
@@ -77,9 +146,19 @@ export function detourAround(
           ],
     );
   const mid = horizontalTravel ? (sTip.y + tTip.y) / 2 : (sTip.x + tTip.x) / 2;
-  const candidates = [mk(lo), mk(hi)].filter(
-    (pts) => !polylineIntersectsBoxes(pts, near),
-  );
+  const crosses: number[] = [];
+  for (const bounds of [
+    crossBounds(near, horizontalTravel, CLEAR),
+    crossBounds(band, horizontalTravel, CLEAR),
+  ]) {
+    if (bounds === null) continue;
+    for (const cross of [bounds.lo, bounds.hi]) {
+      if (!crosses.includes(cross)) crosses.push(cross);
+    }
+  }
+  const candidates = crosses
+    .map((cross) => mk(cross))
+    .filter((pts) => !polylineIntersectsBoxes(pts, band));
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => {
     const detourOf = (pts: Pt[]): number => {
@@ -797,14 +876,20 @@ export function routeStructuralEdges(
       const CLEAR = 16;
       const horizontalTravel =
         Math.abs(tTip.x - sTip.x) >= Math.abs(tTip.y - sTip.y);
-      const lo =
-        Math.min(...near.map((b) => (horizontalTravel ? b.y : b.x))) - CLEAR;
-      const hi =
-        Math.max(
-          ...near.map((b) =>
-            horizontalTravel ? b.y + b.height : b.x + b.width,
-          ),
-        ) + CLEAR;
+      // VR-10 (owner Jake, 2026-08-14): eligibility is still judged on
+      // the simple route's near-set (unchanged, so ineligible edges
+      // stay byte-identical), but the perimeter rail is VERIFIED
+      // against the travel band from the FULL obstacle set. `near`
+      // omits everything outside the simple route's bbox, and a
+      // perimeter rail leaves that bbox by definition -- that gap put
+      // pskip.0 through 19 boxes of row p0 while passing its own
+      // check. Both bound sets stay on offer (near ⊆ band, so the
+      // near-derived rail is the tighter of the two when it verifies).
+      const band = travelBand(
+        [s.point, sTip, tTip, t.point],
+        horizontalTravel,
+        obstacles,
+      );
       const build = (cross: number): Pt[] =>
         dedupeCollinear(
           horizontalTravel
@@ -829,12 +914,21 @@ export function routeStructuralEdges(
         ? (sTip.y + tTip.y) / 2
         : (sTip.x + tTip.x) / 2;
       const cands: Array<{ side: "lo" | "hi"; cross: number; pts: Pt[] }> = [];
-      const loPts = build(lo);
-      if (!polylineIntersectsBoxes(loPts, near))
-        cands.push({ side: "lo", cross: lo, pts: loPts });
-      const hiPts = build(hi);
-      if (!polylineIntersectsBoxes(hiPts, near))
-        cands.push({ side: "hi", cross: hi, pts: hiPts });
+      const seenCross = new Set<number>();
+      for (const bounds of [
+        crossBounds(near, horizontalTravel, CLEAR),
+        crossBounds(band, horizontalTravel, CLEAR),
+      ]) {
+        if (bounds === null) continue;
+        for (const side of ["lo", "hi"] as const) {
+          const cross = side === "lo" ? bounds.lo : bounds.hi;
+          if (seenCross.has(cross)) continue;
+          seenCross.add(cross);
+          const pts = build(cross);
+          if (band.length > 0 && polylineIntersectsBoxes(pts, band)) continue;
+          cands.push({ side, cross, pts });
+        }
+      }
       const chosen =
         cands.length === 0
           ? null
@@ -966,7 +1060,7 @@ export function routeStructuralEdges(
     // VR-9: the router failed everywhere; detour around the band
     // rather than drawing through it. Straight-simple only when
     // even the detour cannot clear (extreme containment).
-    const detour = detourAround(s.point, sTip, t.point, tTip, near);
+    const detour = detourAround(s.point, sTip, t.point, tTip, obstacles, near);
     out[e.id] = {
       points: detour ?? simple,
       ...(hintsForEdge ? { intermediate: [...hintsForEdge] } : {}),

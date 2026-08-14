@@ -95,6 +95,33 @@ describe("routing scenarios: engine survives the gauntlet", () => {
     });
   }
 
+  // VR-10 regression (owner Jake, 2026-08-14, Routing Lab screenshot):
+  // the correctness floor must hold under EVERY flow, not just each
+  // scenario's declared direction. The perimeter rail and the VR-9
+  // detour were verified against the SIMPLE route's near-set, which by
+  // construction omits every box outside that route's bbox -- and both
+  // shapes leave that bbox by definition. Under DOWN flow prune-wall's
+  // full-field skip pskip.0 took a rail at x = (source column - 16),
+  // inside the field, and sliced through all 19 boxes of row p0 while
+  // passing its own collision check. RIGHT flow happened to hide it.
+  // Every flow is now pinned; the Lab's flow selector is the surface
+  // that found this.
+  for (const sc of ROUTING_SCENARIOS) {
+    for (const direction of ["DOWN", "RIGHT", "UP", "LEFT"] as const) {
+      it(`${sc.id} (L, ${direction}): no box violations under any flow`, async () => {
+        const input = sc.build("L");
+        const geometry = await layoutStructural(input, { direction });
+        const q = gradeRoutes(input, geometry);
+        expect(q.unrouted, `${sc.id}/${direction} unrouted`).toBe(0);
+        expect(q.diagonalSegments, `${sc.id}/${direction} diagonals`).toBe(0);
+        expect(
+          q.violations,
+          `${sc.id}/${direction} routes through boxes: ${q.violatingEdges.join(", ")}`,
+        ).toBe(0);
+      });
+    }
+  }
+
   it("prune-wall: every size exceeds the router's 64-obstacle prune", () => {
     const sc = ROUTING_SCENARIOS.find((s) => s.id === "prune-wall")!;
     for (const size of SIZES) {
