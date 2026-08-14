@@ -582,6 +582,47 @@ The biomedical playground shell renders this live: its canvas toggle
 shows the raw triple view beside the projected one, and its caption
 lists the preset's step names straight from `getSteps()`.
 
+## RDF 1.2 hyperarcs (triple terms)
+
+CI-executed in `examples/wiring/src/wiring-examples.test.tsx`
+("rdf 1.2 hyperarcs" describe). RDF 1.2 lets a statement be a term
+(`« s p o »`), so you can annotate a fact with who stated it,
+confidence, time. `SparqlAdapter` parses the SPARQL-1.2-JSON `triple`
+binding shape; `tripleTermToValue` folds it losslessly to a JSON
+value; two projections shape it for a canvas —
+`projectTripleTermsAsEdges` (haunt g-xplore style, one dashed `star`
+edge per annotation) and `projectTripleTermsAsHyperarcs` (reification
+onto a diamond `_Statement` pseudo-node). The hyperarc render is the
+one that survives NESTING (`« « s p o » p2 o2 »`) — a UGM edge cannot
+have an edge as an endpoint; a node can.
+
+```ts
+import {
+  projectTripleTermsAsHyperarcs,
+  projectTripleTermsAsEdges,
+  type TripleTermAnnotation,
+} from "@g3t/core";
+
+const rows: TripleTermAnnotation[] = [/* from your SPARQL results */];
+const hyperarcUgm = projectTripleTermsAsHyperarcs(rows);
+// _Statement nodes carry `_rdfStatement: true`; a `confidence`
+// annotation folds onto the node as `_confidence`. Scope the opacity
+// rule to `[_confidence]` so nodes without the field don't flood
+// Cytoscape with per-frame warnings.
+const stylesheet = [
+  { selector: "node[?_rdfStatement]", style: { shape: "diamond" } },
+  { selector: "node[_confidence]",  style: { opacity: "data(_confidence)" } },
+];
+
+// Same rows, edge render — one dashed star edge per annotation:
+const edgeUgm = projectTripleTermsAsEdges(rows);
+```
+
+The RDF 1.2 shell in `src/demo/rdf12/` toggles between the two live
+over a small constellation fixture with a nested review — the
+statement-to-statement link is the shape the edge render cannot
+express.
+
 ## Holon boundary views (holarchy → boundary → interior)
 
 CI-executed in `examples/wiring/src/wiring-examples.test.tsx` ("holon

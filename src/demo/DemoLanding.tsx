@@ -96,6 +96,17 @@ export const CAPABILITY_SURFACES: Scenario[] = [
     tags: ["layoutStructural", "edge routes", "quality metrics"],
   },
   {
+    id: "rdf12-hyperarcs",
+    title: "RDF 1.2 Hyperarcs",
+    subtitle: "Quoted triples as pseudo-nodes vs annotation edges",
+    description:
+      "A spacecraft constellation authored in RDF 1.2 triple-term syntax: each base fact is a quoted triple annotated with who stated it, how confident they are, and when it was recorded. A live toggle switches between two projections of the same rows — a diamond `_Statement` pseudo-node with rdf:subject/object arcs (the only shape that survives nested `« « … » p o »`), and the haunt g-xplore convention of one dashed `star` edge per annotation. Confidence drives edge/node opacity in both.",
+    accent: "#38bdf8",
+    accentGlow: "rgba(56, 189, 248, 0.15)",
+    icon: "≪",
+    tags: ["RDF 1.2", "triple terms", "hyperarc", "holon"],
+  },
+  {
     id: "ontology-workbench",
     title: "Ontology Workbench",
     subtitle: "Protege-style browsing, SHACL, SPARQL, and a demo reasoner",

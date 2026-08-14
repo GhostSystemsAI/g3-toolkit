@@ -42,8 +42,14 @@ import {
   buildSubgraph,
   G3tEventBus,
   HolonicAdapter,
+  projectTripleTermsAsEdges,
+  projectTripleTermsAsHyperarcs,
+  STAR_EDGE_TYPE,
+  RDF_STATEMENT_FLAG,
   type HolonicDataset,
   type RDFGraph,
+  type RdfTerm,
+  type TripleTermAnnotation,
 } from "@g3t/core";
 import {
   usePositionPinStore,
@@ -876,5 +882,70 @@ describe("holon boundary (guide: Holon boundary views)", () => {
       .find((i) => i.id === "open-holon-boundary")
       ?.action({ type: "node", id: "space", position: { x: 0, y: 0 } });
     expect(opened).toEqual(["boundary:space"]);
+  });
+});
+
+describe("wiring guide: rdf 1.2 hyperarcs", () => {
+  const EX = "http://example.org/sat#";
+  const XSD = "http://www.w3.org/2001/XMLSchema#";
+  const uri = (l: string): RdfTerm & { type: "uri" } => ({
+    type: "uri",
+    value: `${EX}${l}`,
+  });
+  const lit = (v: string, dt?: string): RdfTerm => ({
+    type: "literal",
+    value: v,
+    ...(dt ? { datatype: `${XSD}${dt}` } : {}),
+  });
+  const quote = (
+    s: RdfTerm,
+    p: RdfTerm,
+    o: RdfTerm,
+  ): RdfTerm & { type: "triple" } => ({
+    type: "triple",
+    value: { subject: s, predicate: p, object: o },
+  });
+
+  const massFact = quote(uri("aquila1"), uri("hasMass"), lit("950", "decimal"));
+  const rows: TripleTermAnnotation[] = [
+    { stmt: massFact, ann: uri("statedBy"), val: uri("engineering") },
+    { stmt: massFact, ann: uri("confidence"), val: lit("0.9", "decimal") },
+    // Nested review OF the mass-confidence assertion — only the
+    // hyperarc render can express it.
+    {
+      stmt: quote(
+        quote(massFact, uri("confidence"), lit("0.9", "decimal")),
+        uri("reviewedBy"),
+        uri("qa"),
+      ),
+      ann: uri("statedBy"),
+      val: uri("qa"),
+    },
+  ];
+
+  it("hyperarc render reifies each unique « s p o » to a diamond pseudo-node", () => {
+    const ugm = projectTripleTermsAsHyperarcs(rows);
+    const stmts = ugm
+      .getNodeIds()
+      .filter((id) => ugm.getNode(id)?.types.includes("_Statement"));
+    // massFact + outer review + inner (mass, confidence 0.9) = 3
+    expect(stmts.length).toBe(3);
+    for (const s of stmts) {
+      expect(ugm.getNode(s)?.properties[RDF_STATEMENT_FLAG]).toBe(true);
+    }
+    // Numeric confidence folds onto the statement node for opacity.
+    const confidences = stmts
+      .map((s) => ugm.getNode(s)?.properties._confidence)
+      .filter((c): c is number => typeof c === "number");
+    expect(confidences).toContain(0.9);
+  });
+
+  it("edge render emits one dashed `star` edge per annotation row", () => {
+    const ugm = projectTripleTermsAsEdges(rows);
+    let stars = 0;
+    ugm.forEachEdge((_id, attrs) => {
+      if (attrs.type === STAR_EDGE_TYPE) stars++;
+    });
+    expect(stars).toBe(rows.length);
   });
 });

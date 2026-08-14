@@ -52,6 +52,9 @@ const AuditShell = lazy(() =>
 const RoutingShell = lazy(() =>
   import("./routing/RoutingShell").then((m) => ({ default: m.RoutingShell })),
 );
+const Rdf12Shell = lazy(() =>
+  import("./rdf12/Rdf12Shell").then((m) => ({ default: m.Rdf12Shell })),
+);
 
 /** Map scenario IDs to dedicated demo shells. */
 const SHELL_MAP: Record<string, React.ComponentType<{ onBack: () => void }>> = {
@@ -64,6 +67,7 @@ const SHELL_MAP: Record<string, React.ComponentType<{ onBack: () => void }>> = {
   "ontology-workbench": OntologyShell,
   "style-lab": StyleLabShell,
   "routing-lab": RoutingShell,
+  "rdf12-hyperarcs": Rdf12Shell,
 };
 
 export function Demo() {

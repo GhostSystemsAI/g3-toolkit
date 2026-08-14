@@ -40,7 +40,8 @@ export type {
 
 // ── Adapters ────────────────────────────────────────────────────────
 export type { GraphAdapter, SchemaModel } from "./adapter";
-export { SparqlAdapter } from "./adapter";
+export { SparqlAdapter, tripleTermToValue } from "./adapter";
+export type { RdfTerm, TripleTerm } from "./adapter";
 export { CypherAdapter } from "./adapter";
 export { HolonicAdapter } from "./adapter";
 export type { GremlinAdapterConfig } from "./adapter";
@@ -179,6 +180,20 @@ export type {
   ViewTarget,
   RenderRequest,
 } from "./projection";
+// Brief 14: RDF 1.2 triple terms as hyperarcs. Two pure UGM
+// projections over quoted-triple annotation rows (edges vs
+// pseudo-node reification), the pedagogical toggle in the RDF 1.2
+// playground shell.
+export {
+  projectTripleTermsAsEdges,
+  projectTripleTermsAsHyperarcs,
+  tripleLabel,
+  termLabel,
+  localName,
+  STAR_EDGE_TYPE,
+  RDF_STATEMENT_FLAG,
+} from "./projection";
+export type { TripleTermAnnotation } from "./projection";
 
 // ── Diff ────────────────────────────────────────────────────────────
 export { diffGraphs, computeSchemaHash } from "./diff";

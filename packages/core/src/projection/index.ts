@@ -36,6 +36,17 @@ export type {
   JunctionMap,
 } from "./pseudo-nodes";
 
+export {
+  projectTripleTermsAsEdges,
+  projectTripleTermsAsHyperarcs,
+  tripleLabel,
+  termLabel,
+  localName,
+  STAR_EDGE_TYPE,
+  RDF_STATEMENT_FLAG,
+} from "./hyperarc";
+export type { TripleTermAnnotation } from "./hyperarc";
+
 export { createPresetPipeline, checkRenderPermission } from "./presets";
 export type {
   PresetName,
