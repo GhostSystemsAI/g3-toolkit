@@ -5,6 +5,29 @@ export { G3tLayeredLayout } from "./g3t-ugm-layout";
 // RTE-011 (LR-15): the pure edge router, exported so views can
 // re-route live during drags against an offset geometry.
 export { routeStructuralEdges } from "./g3t-engine/g3t-routing";
+// PRF-003 brief 05a (owner Jake, 2026-08-14): channel router
+// additive slice. Pure module + fallback classifier; the
+// `useChannelRouter` flag on `routeStructuralEdges` is off by default,
+// so shipped routing is unchanged. 05b flips the flag and deletes the
+// escalation ladder.
+export {
+  assignTracks,
+  emitChannelRoute,
+  routeChannelOverflow,
+} from "./g3t-engine/g3t-channel-router";
+export type {
+  Channel,
+  ChannelPlan,
+  ChannelEdge,
+  TrackAssignment,
+} from "./g3t-engine/g3t-channel-router";
+export { classifyFallback } from "./g3t-engine/g3t-fallback-classifier";
+export type {
+  FallbackNodeInfo,
+  FallbackEdge,
+  FallbackReason,
+  FallbackClassification,
+} from "./g3t-engine/g3t-fallback-classifier";
 export type {
   LayoutEngine,
   LayoutResult,

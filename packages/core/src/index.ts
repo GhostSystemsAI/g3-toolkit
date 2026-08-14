@@ -193,6 +193,24 @@ export type {
   Position,
 } from "./layout";
 export type { IncrementalLayoutOptions } from "./layout/incremental-layout";
+// PRF-003 brief 05a: channel router additive slice (off-by-default
+// flag on routeStructuralEdges); 05b flips the flag on.
+export {
+  assignTracks,
+  emitChannelRoute,
+  routeChannelOverflow,
+  classifyFallback,
+} from "./layout";
+export type {
+  Channel,
+  ChannelPlan,
+  ChannelEdge,
+  TrackAssignment,
+  FallbackNodeInfo,
+  FallbackEdge,
+  FallbackReason,
+  FallbackClassification,
+} from "./layout";
 // ── Layout quality metrics (G3L:QLT-002): the falsifiability oracle
 //    for engine comparisons and stability assertions ────────────────
 export type {

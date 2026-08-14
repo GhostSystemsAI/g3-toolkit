@@ -24,6 +24,12 @@ import {
 } from "../../route/orthogonal-router";
 import { dedupeCollinear, type Pt } from "./g3t-polyline-utils";
 import { nudgeRoutes } from "./g3t-nudging";
+import {
+  assignTracks,
+  emitChannelRoute,
+  routeChannelOverflow,
+  type ChannelPlan,
+} from "./g3t-channel-router";
 
 /** VR-9 (owner IBD screenshots, 2026-07-28): when the router fails
  *  in a dense corridor, the old fallback surrendered to the
@@ -119,6 +125,24 @@ export function routeStructuralEdges(
      *  edges skip seeding by policy (the perimeter detour is the
      *  right shape for a long line through a dense field). */
     bendHints?: ReadonlyMap<string, readonly Pt[]>;
+    /** PRF-003 brief 05a (owner Jake, 2026-08-14): route via the
+     *  additive channel router (g3t-channel-router.ts) instead of the
+     *  ladder. TRANSIENT SCAFFOLDING: 05a lands the module + unit
+     *  oracles behind an off-by-default flag so 05b can flip it, delete
+     *  the ladder, and re-pin the six-scenario baseline in one commit
+     *  with an OBSERVED (not blind) after-value. Default false =>
+     *  byte-identical to today. When true AND `channelPlan` is
+     *  supplied, edges route through the channel model; when true but
+     *  no plan is supplied, the flag has no effect (the ladder still
+     *  runs). NO-LEGACY: 05b removes this flag when it lands the
+     *  wire-up. */
+    useChannelRouter?: boolean;
+    /** PRF-003 brief 05a: channel/track plan the additive router
+     *  consumes. Callers derive this from their layered layout
+     *  (g3tLayoutStructural / g3tLayoutFlat carry the layer + corridor
+     *  info); 05a keeps it caller-supplied so this brief lands without
+     *  touching the layout pipeline. */
+    channelPlan?: ChannelPlan;
   },
 ): Record<string, { points: Pt[]; intermediate?: Pt[] }> {
   // Direction-aware (WS-D D3a fix): under horizontal flow (RIGHT/
@@ -136,6 +160,9 @@ export function routeStructuralEdges(
   // (g3tLayoutStructural preserves the historical default of 12).
   const longEdgeNear = options?.longEdgeNear ?? Infinity;
   const bendHints = options?.bendHints;
+  const useChannelRouter =
+    (options?.useChannelRouter ?? false) && options?.channelPlan !== undefined;
+  const channelPlan = useChannelRouter ? options?.channelPlan : undefined;
   const out: Record<string, { points: Pt[]; intermediate?: Pt[] }> = {};
   // Perimeter-routed edges collected during the loop; a post-pass
   // staggers coincident tracks so two long lines sharing a band do
@@ -434,6 +461,30 @@ export function routeStructuralEdges(
         };
   };
 
+  // PRF-003 brief 05a: pre-compute channel/track assignment before the
+  // per-edge loop. Entry/exit cross-coord for the divergence sort uses
+  // node centers (deterministic, geometry-only); the emitter reads this
+  // per edge inside the loop. When `useChannelRouter` is off (default)
+  // this whole block is dead code (channelPlan === undefined).
+  const channelAssignment = channelPlan
+    ? assignTracks(
+        edges.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          entryCross:
+            channelPlan.direction === "RIGHT" || channelPlan.direction === "LEFT"
+              ? centerY(e.source)
+              : centerX(e.source),
+          exitCross:
+            channelPlan.direction === "RIGHT" || channelPlan.direction === "LEFT"
+              ? centerY(e.target)
+              : centerX(e.target),
+        })),
+        channelPlan,
+      )
+    : null;
+
   const t0 = Date.now();
   for (const e of edges) {
     const s = anchorOf(e, "s");
@@ -594,6 +645,79 @@ export function routeStructuralEdges(
             : { x: a.point.x, y: a.point.y - STUB };
     const sTip = outward(s);
     const tTip = outward(t);
+    // PRF-003 brief 05a: channel router branch. When the flag is on
+    // AND a plan is supplied, route via the channel model; overflow
+    // (edges beyond a channel's demand) delegates to routeOrthogonal.
+    // If both fail, fall through to `simple` so no edge disappears.
+    if (channelPlan !== undefined && channelAssignment !== null) {
+      const isOverflow = channelAssignment.overflow.has(e.id);
+      if (!isOverflow) {
+        const points = emitChannelRoute(
+          {
+            id: e.id,
+            source: e.source,
+            target: e.target,
+          },
+          {
+            source: s,
+            sourceTip: sTip,
+            target: t,
+            targetTip: tTip,
+          },
+          channelPlan,
+          channelAssignment,
+        );
+        out[e.id] = { points };
+        continue;
+      }
+      const overflowRoute = routeChannelOverflow(
+        {
+          source: s,
+          sourceTip: sTip,
+          target: t,
+          targetTip: tTip,
+        },
+        obstacles,
+      );
+      if (overflowRoute !== null) {
+        out[e.id] = { points: overflowRoute };
+        continue;
+      }
+      // Overflow router refused: emit an honest simple template. The
+      // channel-router path does NOT fall back to the escalation ladder
+      // (05b deletes the ladder outright); dropping here mirrors the
+      // ladder's end state and keeps the edge in the output.
+      const sEwOF = s.side === "EAST" || s.side === "WEST";
+      const tEwOF = t.side === "EAST" || t.side === "WEST";
+      const simpleOF =
+        sEwOF && tEwOF
+          ? dedupeCollinear([
+              s.point,
+              sTip,
+              { x: (sTip.x + tTip.x) / 2, y: sTip.y },
+              { x: (sTip.x + tTip.x) / 2, y: tTip.y },
+              tTip,
+              t.point,
+            ])
+          : !sEwOF && !tEwOF
+            ? dedupeCollinear([
+                s.point,
+                sTip,
+                { x: sTip.x, y: (sTip.y + tTip.y) / 2 },
+                { x: tTip.x, y: (sTip.y + tTip.y) / 2 },
+                tTip,
+                t.point,
+              ])
+            : dedupeCollinear([
+                s.point,
+                sTip,
+                sEwOF ? { x: tTip.x, y: sTip.y } : { x: sTip.x, y: tTip.y },
+                tTip,
+                t.point,
+              ]);
+      out[e.id] = { points: simpleOF };
+      continue;
+    }
     // Gap route: jog once at the midline between the two anchor
     // borders, along the flow axis: a vertical jog in the gap under
     // horizontal flow, a horizontal jog under vertical flow.
