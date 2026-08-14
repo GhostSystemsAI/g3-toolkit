@@ -4,8 +4,9 @@ import { describe, it, expect } from "vitest";
 import { overridesToStructuralStyles } from "./structural-style";
 import type { NodeStyleOverride } from "./style-override";
 
-const o = (x: Partial<NodeStyleOverride> & { scope: NodeStyleOverride["scope"] }) =>
-  x as NodeStyleOverride;
+const o = (
+  x: Partial<NodeStyleOverride> & { scope: NodeStyleOverride["scope"] },
+) => x as NodeStyleOverride;
 
 describe("overridesToStructuralStyles", () => {
   it("maps presentational fields and IGNORES size (layout input)", () => {
