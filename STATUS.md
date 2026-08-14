@@ -640,7 +640,7 @@ or MR-5 freeze when CI numbers arrive.)
 **As of:** 2026-07-12 (active: G3L Round 28 executed: PRF-001
 sharpened (warm 12.6 s; crossing minimization dominates; detuned
 elkjs still misses target; record at
-planning/g3l/prf-001-measurement.md) and LAY-020 shipped
+planning/archive/g3l/prf-001-measurement.md) and LAY-020 shipped
 (layoutStructuralWithChangeSet: local region splice with verbatim
 carryover pinned by object identity, global-sketch fallback, reroute
 reporting; five oracles). The incremental chain MOD-010 -> LAY-020
@@ -700,7 +700,7 @@ engineering); MR-11 background fix shipped, at re-review. Owner
 queue at two items: MR-11 re-review, MR-4 FTO. Next engineering:
 MR-5 bench harness, F1 continuation, or WS-E per owner priority.)
 
-**Owner queue:** planning/g3l/owner-queue.md is the single list of
+**Owner queue:** planning/archive/g3l/owner-queue.md is the single list of
 items blocked on the owner, each with the exact ask and what it
 unblocks.
 
@@ -709,7 +709,7 @@ zero-label e2e failure fixed at the shell (data-derived label text
 merged into the F1 attribute maps; adapter stays attributes-only).
 MR-9's browser pin passed in the owner's run (closed-loop return
 worked); MR-9 itself remains held for owner review. Owner queue
-established at planning/g3l/owner-queue.md.)
+established at planning/archive/g3l/owner-queue.md.)
 
 ## PRIOR SNAPSHOT (Round 21)
 
@@ -893,7 +893,7 @@ the standing recommendation.)
 layout stability (A1, criterion met at zero displacement), drag-route
 oracles (B1, 4 pass-pins + 2 expected-fail pins on the RTE-011 gap),
 and the layout-metrics module (D1, exported from @g3t/core). Governing
-documents: planning/g3l/requirements-specification.md and
+documents: planning/archive/g3l/requirements-specification.md and
 planning/g3l/implementation-plan.md. G3L Round 2 executed: B2 SVG
 overlay edge layer shipped behind `structuralEdgeLayer` with the MBSE
 shell as the ruled first opt-in surface; manual/human review tasks now
@@ -952,11 +952,17 @@ planning/rdf-lpg-virtualization-audit.md for the full
 shipped-vs-gap accounting and the reconciliation.
 
 This document is the current-state snapshot for humans; agents start
-at CLAUDE.md. The authoritative round-by-round history is
-planning/archive/visual-acceptance-1.md (surface retired 2026-07-04); per-area design records live in
-roadmap/design/; milestone-era tracking (the former PROGRESS.md and
-planning/status.md) is archived verbatim in
+at CLAUDE.md. The authoritative round-by-round history is the CHANGELOG
+(the former planning/visual-acceptance-1.md round log was deleted with
+the visual-acceptance surface on 2026-07-04); per-area design records
+live in roadmap/design/; milestone-era tracking (the former PROGRESS.md
+and planning/status.md) is archived verbatim in
 planning/milestone-history.md.
+
+**Where planning documents live.** `planning/` holds the records that
+tracked files cite, so every such citation resolves in a clone.
+`planning/archive/` is retained in the maintainer's working copy and is
+NOT published: a path under it is a local reference, not a link.
 
 ## PRIOR FOCUS (2026-06-21, superseded 2026-07-03): structural-view rendering + Storybook reshape
 
@@ -1020,7 +1026,14 @@ Patterns, plus a Reference group for supporting material. State:
   D2), and the DS2 chart-rendering sub-part; plus DS5 (a minimal starter
   example), open.
 
-## CURRENT FOCUS (2026-06-17): the flagship demo
+## PRIOR FOCUS (2026-06-17, superseded 2026-07-03): the flagship demo
+
+NOTE (2026-08-14): the flagship demo was RETIRED on 2026-07-03 and its
+planning documents were deleted with it. The four reading-order entries
+below are kept for the record; only `planning/rdf-lpg-virtualization-audit.md`
+still resolves. What the flagship alone demonstrated was folded into
+the shells and the wiring guide first; the audit of that fold is
+`planning/flagship-retirement.md`.
 
 The library is feature-stable at v1.0.0-rc.2. Active work has shifted
 from library features to a **cinematic flagship demonstration** of the

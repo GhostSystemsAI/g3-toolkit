@@ -82,9 +82,10 @@ src/
 3. Write tests (unit for D6; RTL for D13)
 4. Add to the barrel export (`src/index.ts`)
 5. Add a Storybook story (if D13)
-6. Record the work: planning/visual-acceptance-1.md round entry,
-   CHANGELOG entry, and a STATUS.md refresh if numbers moved
-   (PROGRESS.md is retired; see planning/milestone-history.md)
+6. Record the work: a CHANGELOG entry and a STATUS.md refresh if
+   numbers moved (PROGRESS.md and the visual-acceptance round log are
+   both retired; the milestone-era record is
+   planning/milestone-history.md)
 
 ## Adding a New Adapter
 
