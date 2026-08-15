@@ -109,9 +109,7 @@ function tryNumber(term: RdfTerm): number {
  * that this render cannot express those shapes (use the hyperarc
  * projection when it matters).
  */
-export function projectTripleTermsAsEdges(
-  rows: TripleTermAnnotation[],
-): UGM {
+export function projectTripleTermsAsEdges(rows: TripleTermAnnotation[]): UGM {
   const ugm = new UGM();
   const assertedKeys = new Set<string>();
 
@@ -144,7 +142,10 @@ export function projectTripleTermsAsEdges(
     if (term.type === "bnode") {
       const id = `_:${term.value}`;
       if (!ugm.hasNode(id)) {
-        ugm.addNode(id, { types: ["_Bnode"], properties: { name: term.value } });
+        ugm.addNode(id, {
+          types: ["_Bnode"],
+          properties: { name: term.value },
+        });
       }
       return id;
     }
@@ -165,7 +166,9 @@ export function projectTripleTermsAsEdges(
     const sId = ensureTermEndpoint(tt.subject);
     const oId = ensureTermEndpoint(tt.object);
     const predLabel =
-      tt.predicate.type === "uri" ? localName(tt.predicate.value) : termLabel(tt.predicate);
+      tt.predicate.type === "uri"
+        ? localName(tt.predicate.value)
+        : termLabel(tt.predicate);
 
     // Assert the base triple once per unique statement key.
     const key = tripleKey(tt);
@@ -236,7 +239,8 @@ export function projectTripleTermsAsHyperarcs(
       return id;
     }
     // uri or bnode: local name for URIs, `_:<label>` for blanks.
-    const id = term.type === "bnode" ? `_:${term.value}` : localName(term.value);
+    const id =
+      term.type === "bnode" ? `_:${term.value}` : localName(term.value);
     if (!ugm.hasNode(id)) {
       ugm.addNode(id, {
         types: [term.type === "bnode" ? "_Bnode" : "Resource"],

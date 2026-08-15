@@ -24,11 +24,18 @@
  * the field).
  */
 import { useMemo, useState } from "react";
-import { CytoscapeCanvas, type CyStylesheet } from "@g3t/react";
+import {
+  CytoscapeCanvas,
+  DetailInspector,
+  useSelectionStore,
+  type CyStylesheet,
+} from "@g3t/react";
 import {
   projectTripleTermsAsEdges,
   projectTripleTermsAsHyperarcs,
+  RDF_STATEMENT_FLAG,
   STAR_EDGE_TYPE,
+  UGM,
 } from "@g3t/core";
 import { publishCanvas } from "../testing/e2e-hooks";
 import { CapabilityBubble } from "../components/CapabilityCallout";
@@ -148,6 +155,39 @@ const EDGE_STYLE: CyStylesheet[] = [
   },
 ];
 
+/**
+ * The interior of a hyperarc IS a graph: a reified `_Statement`
+ * diamond plus its outgoing rdf:subject / rdf:object term links and
+ * annotation edges. Given the full hyperarc UGM and a statement node
+ * id, return a self-contained sub-UGM of just that statement's
+ * interior, so the canvas can drill into a single fact-about-a-fact.
+ * A nested statement endpoint re-appears as its own diamond, so the
+ * same drill recurses.
+ */
+export function buildStatementInterior(full: UGM, stmtId: string): UGM {
+  const sub = new UGM();
+  const copyNode = (id: string) => {
+    if (sub.hasNode(id)) return;
+    const attrs = full.getNode(id);
+    if (!attrs) return;
+    sub.addNode(id, { types: attrs.types, properties: attrs.properties });
+  };
+  copyNode(stmtId);
+  for (const edgeId of full.getNodeEdges(stmtId)) {
+    const ends = full.getEdgeEndpoints(edgeId);
+    const attrs = full.getEdge(edgeId);
+    if (!ends || !attrs || ends.source !== stmtId) continue;
+    copyNode(ends.source);
+    copyNode(ends.target);
+    sub.addEdge(ends.source, ends.target, {
+      type: attrs.type,
+      properties: attrs.properties,
+      ...attrs.meta,
+    });
+  }
+  return sub;
+}
+
 export function Rdf12Shell({ onBack }: { onBack: () => void }) {
   const reducedMotion = usePrefersReducedMotion();
   const [mode, setMode] = useState<ViewMode>("hyperarc");
@@ -160,6 +200,41 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
   );
   const stylesheet = mode === "hyperarc" ? HYPERARC_STYLE : EDGE_STYLE;
   const groups = useGrouped();
+
+  // Holon drill: a hyperarc can be a graph itself. `drill` is the
+  // stack of statement ids entered; the deepest is the interior shown
+  // on the canvas (only meaningful in hyperarc mode).
+  const [drill, setDrill] = useState<string[]>([]);
+  const focusId =
+    mode === "hyperarc" ? (drill[drill.length - 1] ?? null) : null;
+  const displayUgm = useMemo(
+    () => (focusId ? buildStatementInterior(ugm, focusId) : ugm),
+    [ugm, focusId],
+  );
+
+  const selectedNodeId = useSelectionStore(
+    (s) => [...s.selectedNodeIds][0] ?? null,
+  );
+  const selectedEdgeId = useSelectionStore(
+    (s) => [...s.selectedEdgeIds][0] ?? null,
+  );
+  const selection = selectedEdgeId
+    ? ({ type: "edge", id: selectedEdgeId } as const)
+    : selectedNodeId
+      ? ({ type: "node", id: selectedNodeId } as const)
+      : null;
+  const selectedIsStatement =
+    selection?.type === "node" &&
+    displayUgm.getNode(selection.id)?.properties[RDF_STATEMENT_FLAG] === true;
+
+  const enterInterior = (id: string) => {
+    setDrill((d) => [...d, id]);
+    useSelectionStore.getState().clearSelection();
+  };
+  const popTo = (depth: number) => {
+    setDrill((d) => d.slice(0, depth));
+    useSelectionStore.getState().clearSelection();
+  };
 
   return (
     <div
@@ -193,8 +268,8 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
         <div style={{ display: "flex", flexDirection: "column" }}>
           <b style={{ fontSize: 15 }}>RDF 1.2 Hyperarcs</b>
           <span style={{ fontSize: 12, color: "#8b949e" }}>
-            quoted triples as hyperarcs — pseudo-node reification vs
-            haunt-style annotation edges
+            quoted triples as hyperarcs — pseudo-node reification vs haunt-style
+            annotation edges
           </span>
         </div>
         <div
@@ -209,7 +284,11 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
               role="tab"
               aria-selected={mode === m}
               data-testid={`rdf12-view-${m}`}
-              onClick={() => setMode(m)}
+              onClick={() => {
+                setMode(m);
+                setDrill([]);
+                useSelectionStore.getState().clearSelection();
+              }}
               className="g3t-btn"
               style={{
                 fontSize: 12,
@@ -284,7 +363,12 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
         </aside>
 
         <main
-          style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+          }}
         >
           <div
             data-testid="rdf12-legend"
@@ -305,16 +389,20 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
                   statement (« s p o »)
                 </span>
                 <span>
-                  <strong style={{ color: "#c9d1d9" }}>rdf:subject / rdf:object</strong>:
-                  term links
+                  <strong style={{ color: "#c9d1d9" }}>
+                    rdf:subject / rdf:object
+                  </strong>
+                  : term links
                 </span>
                 <span>
-                  <strong style={{ color: "#c9d1d9" }}>dashed</strong>: annotation
-                  (statedBy / confidence / recordedAt)
+                  <strong style={{ color: "#c9d1d9" }}>dashed</strong>:
+                  annotation (statedBy / confidence / recordedAt)
                 </span>
                 <span>
-                  <strong style={{ color: "#c9d1d9" }}>statement → statement</strong>:
-                  nested quoted triple
+                  <strong style={{ color: "#c9d1d9" }}>
+                    statement → statement
+                  </strong>
+                  : nested quoted triple
                 </span>
               </>
             ) : (
@@ -324,8 +412,8 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
                   base triple
                 </span>
                 <span>
-                  <strong style={{ color: "#c9d1d9" }}>dashed</strong>: annotation
-                  edge (one per row, label = ann predicate)
+                  <strong style={{ color: "#c9d1d9" }}>dashed</strong>:
+                  annotation edge (one per row, label = ann predicate)
                 </span>
                 <span>
                   <strong style={{ color: "#c9d1d9" }}>opacity</strong>: driven
@@ -334,9 +422,63 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
               </>
             )}
           </div>
+          {focusId && drill.length > 0 && (
+            <div
+              data-testid="rdf12-breadcrumb"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                fontSize: 11,
+                borderBottom: "1px solid #21262d",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                className="g3t-btn"
+                data-testid="rdf12-breadcrumb-root"
+                onClick={() => popTo(0)}
+                style={{
+                  fontSize: 11,
+                  borderColor: "#30363d",
+                  color: "#c9d1d9",
+                }}
+              >
+                Full graph
+              </button>
+              {drill.map((id, i) => {
+                const label = ugm.getNode(id)?.properties.name ?? id;
+                const last = i === drill.length - 1;
+                return (
+                  <span
+                    key={id}
+                    style={{ display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <span style={{ color: "#6e7681" }}>{"›"}</span>
+                    <button
+                      type="button"
+                      className="g3t-btn"
+                      onClick={() => popTo(i + 1)}
+                      disabled={last}
+                      style={{
+                        fontSize: 11,
+                        borderColor: last ? ACCENT : "#30363d",
+                        color: last ? ACCENT : "#c9d1d9",
+                        fontFamily: "var(--g3t-font-mono, monospace)",
+                      }}
+                    >
+                      {String(label)}
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
           <div style={{ flex: 1, minHeight: 0 }}>
             <CytoscapeCanvas
-              ugm={ugm}
+              ugm={displayUgm}
               layout="fcose"
               stylesheet={stylesheet}
               onReady={publishCanvas("rdf12")}
@@ -364,6 +506,47 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
             />
           </div>
         </main>
+
+        <aside
+          data-testid="rdf12-inspector"
+          style={{
+            width: 300,
+            flex: "0 0 300px",
+            borderLeft: "1px solid #21262d",
+            overflowY: "auto",
+            padding: "8px 0",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              color: "#8b949e",
+              padding: "4px 12px 8px",
+            }}
+          >
+            Inspector
+          </div>
+          {selectedIsStatement && selection && (
+            <button
+              type="button"
+              className="g3t-btn"
+              data-testid="rdf12-enter-interior"
+              onClick={() => enterInterior(selection.id)}
+              style={{
+                margin: "0 12px 8px",
+                fontSize: 12,
+                borderColor: ACCENT,
+                color: ACCENT,
+              }}
+            >
+              {"◉"} Enter interior
+            </button>
+          )}
+          <DetailInspector ugm={displayUgm} selection={selection} />
+        </aside>
       </div>
     </div>
   );

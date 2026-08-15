@@ -15,10 +15,7 @@
  * only shapes the fixture and re-exports the label helpers the
  * shell's left rail uses.
  */
-import {
-  type TripleTermAnnotation,
-  type RdfTerm,
-} from "@g3t/core";
+import { type TripleTermAnnotation, type RdfTerm } from "@g3t/core";
 
 export { termLabel, tripleLabel, localName } from "@g3t/core";
 

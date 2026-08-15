@@ -86,7 +86,10 @@ describe("projectTripleTermsAsEdges (haunt-style)", () => {
     const ugm = projectTripleTermsAsEdges(ROWS);
     const confidences: number[] = [];
     ugm.forEachEdge((_id, attrs) => {
-      if (attrs.type === STAR_EDGE_TYPE && attrs.properties.annP === "confidence") {
+      if (
+        attrs.type === STAR_EDGE_TYPE &&
+        attrs.properties.annP === "confidence"
+      ) {
         const c = attrs.properties._confidence;
         if (typeof c === "number") confidences.push(c);
       }
