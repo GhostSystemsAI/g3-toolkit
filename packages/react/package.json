@@ -42,6 +42,11 @@
       "import": "./dist/icons.mjs",
       "require": "./dist/icons.cjs"
     },
+    "./timeline": {
+      "types": "./dist/views/timeline/index.d.ts",
+      "import": "./dist/timeline.mjs",
+      "require": "./dist/timeline.cjs"
+    },
     "./style.css": {
       "types": "./style.css.d.ts",
       "default": "./dist/style.css"

@@ -306,7 +306,6 @@
     "TemporalRangeFilter",
     "TemporalSlider",
     "ThemeSwitcher",
-    "TimelineView",
     "Toolbar",
     "TreeView",
     "UndoRedoStack",
@@ -421,7 +420,6 @@
     "ShaclShapeBrowser",
     "StatsPanel",
     "TableView",
-    "TimelineView",
     "TreeView",
     "buildTypeVisualMap",
     "coerceWidgetValue",
@@ -559,6 +557,9 @@
     "registerIcon",
     "registerIconSet",
     "sanitizeIconMarkup"
+  ],
+  "@g3t/react/timeline": [
+    "TimelineView"
   ],
   "@g3t/charts": [
     "LinkedChart"

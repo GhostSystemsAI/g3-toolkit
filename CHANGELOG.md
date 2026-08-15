@@ -1,6 +1,36 @@
 # Changelog
 
-## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, adopter docs, planning tree)
+## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, adopter docs, planning tree)
+
+- **BREAKING for `@g3t/react`: `TimelineView` moved from the root barrel
+  to `@g3t/react/timeline`, because the documented install did not
+  resolve.** `vis-timeline` and `vis-data` are declared optional in
+  `peerDependenciesMeta`, so a package manager does not install them,
+  and the README told adopters to install the required peers only.
+  `TimelineView` imports both statically, and rollup had hoisted it into
+  a chunk that the root and `./views` entries import. Module resolution
+  runs before tree-shaking, so the first line of the quick start,
+  `import { CytoscapeCanvas } from "@g3t/react"`, threw
+  `ERR_MODULE_NOT_FOUND` for `vis-timeline` for every adopter who took
+  the documented install, whether or not they used a timeline. The
+  component now has its own rollup entry and its own subpath; nothing
+  else moved, and the other seven entries resolve with no optional peer
+  present. Adopters using `TimelineView` change one import and add
+  `vis-timeline` and `vis-data` to their manifest. A new gate,
+  `verify:peers`, walks the emitted import graph out of every declared
+  subpath and fails the build if an optional peer becomes reachable from
+  an entry not on its allowlist, so this cannot come back through a
+  barrel edit or a chunking change. `verify:typeref` was widened in the
+  same round: it walked only the package's root type entry, so moving a
+  component to a subpath silently dropped its prop types from the gate.
+  It now judges every declared type entry against its own namespace,
+  which surfaced eight pre-existing holes in `./views` and `./controls`
+  (prop types nameable only via the root barrel); those are fixed with
+  type-only re-exports, adding no runtime exports. ARCHITECTURE.md,
+  both READMEs, `docs/consuming-g3t.md`, the capability index, and
+  RELEASE.md's post-tag recipe were corrected; the recipe had also been
+  omitting `echarts`, a required peer, so it would have failed on first
+  run.
 
 - **Lint and format now cover the whole tree, and `lint:fix` fixes what
   `lint` checks.** `lint` named five source directories, so

@@ -61,9 +61,22 @@ companion, state hooks (selection, theme, view filter).
 
 Regular dependencies: `@g3t/core`, `@tanstack/react-table`, `fuse.js`.
 Peer dependencies (consumer must install): `react`, `react-dom`,
-`cytoscape`, `cytoscape-fcose`, `zustand`, `echarts`, `vis-timeline`,
-`vis-data`. The peer set is broad because each view brings its own
-runtime; consumers tree-shake by importing only the views they use.
+`cytoscape`, `cytoscape-fcose`, `zustand`, `echarts`. Optional peers
+(declared in `peerDependenciesMeta`, so a package manager does not
+install them): `vis-timeline`, `vis-data`. The peer set is broad
+because each view brings its own runtime; consumers tree-shake by
+importing only the views they use.
+
+Optional peers constrain the module graph, not just the bundle.
+Module resolution runs BEFORE tree-shaking, so a barrel that
+re-exports a component whose optional peers are absent is
+unresolvable even for a consumer who never names that component.
+`TimelineView` therefore ships on its own subpath,
+`@g3t/react/timeline`, and is deliberately absent from the root and
+`./views` barrels. `scripts/check-optional-peers.mjs` walks the
+emitted import graph out of every declared subpath and fails the
+build if an optional peer becomes statically reachable from any
+entry not on its allowlist.
 `@tanstack/react-table` is a regular dep (not peer) because it is
 directly imported by `TableView` and would otherwise resolve to an
 empty virtual module under Vite when consumers don't explicitly

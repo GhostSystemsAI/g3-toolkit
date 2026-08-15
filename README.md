@@ -100,7 +100,7 @@ g3t does **not** provide a complete application shell, workflow engine, or sessi
 | `CytoscapeCanvas`   | Graph layout (7 engines) with animated transitions, edge styles (bezier/straight/taxi), selection, context menu, lasso |
 | `TableView`         | Sortable, paginated data table with multi-select (ctrl+click, shift+click)                                             |
 | `DetailInspector`   | Property panel for selected node/edge                                                                                  |
-| `TimelineView`      | Temporal visualization (vis-timeline)                                                                                  |
+| `TimelineView`      | Temporal visualization. Ships on `@g3t/react/timeline`, not the root barrel: it needs the optional peers `vis-timeline` and `vis-data` |
 | `MapView`           | Geographic markers with edges between geo-positioned nodes                                                             |
 | `TreeView`          | Expandable containment hierarchy with breadcrumb                                                                       |
 | `SchemaView`        | Ontology class hierarchy with SHACL constraint badges                                                                  |

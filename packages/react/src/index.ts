@@ -50,7 +50,14 @@ export type { StructuralLayoutResult } from "./views/canvas/use-structural-layou
 export * from "./views/canvas";
 export * from "./views/table";
 export * from "./views/inspector";
-export * from "./views/timeline";
+// NOT re-exported here: ./views/timeline. TimelineView statically imports
+// vis-timeline and vis-data, which package.json declares OPTIONAL peers, so
+// a package manager does not install them. Module resolution runs before
+// tree-shaking, which means a re-export from this barrel makes the very
+// first `import { CytoscapeCanvas } from "@g3t/react"` fail to resolve for
+// every consumer who took the documented install. TimelineView ships on its
+// own subpath instead: `@g3t/react/timeline`. Enforced by
+// scripts/check-optional-peers.mjs.
 export * from "./views/map";
 export * from "./views/tree";
 export * from "./views/schema";

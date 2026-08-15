@@ -261,6 +261,16 @@ const BUDGETS = {
   // target) and R-13.3 (one legend serving both renderers).
   react: 390 * 1024,
   // React ledger:
+  // - NO RAISE, 2026-08-14 (timeline moved to its own subpath):
+  //   387.2 -> 387.7 KB, +0.5 KB, headroom 2.8 -> 2.3 KB. TimelineView
+  //   statically imports the two OPTIONAL peers, and rollup had hoisted
+  //   it into a chunk the root barrel imported, so the documented
+  //   install produced an unresolvable `import { CytoscapeCanvas } from
+  //   "@g3t/react"`. Splitting it to its own entry costs one 2.5 KB
+  //   entry file and returns most of that from the chunk it left; it
+  //   still shares EmptyState and selection-store. Recorded here rather
+  //   than passed over because the previous entry set this headroom
+  //   deliberately, and a fix that eats a fifth of it should say so.
   // - 386 -> 390 KB, 2026-08-14 (render-failure containment):
   //   views/error/ViewErrorBoundary.tsx, measured 387.2 KB, +1.4 KB.
   //   The package shipped no error boundary at all, and there is no

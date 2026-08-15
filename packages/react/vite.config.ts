@@ -14,7 +14,18 @@ const external = externalsFromPackageJson(resolve(__dirname, "package.json"));
  *   dist/state.{mjs,cjs}      ← ./state
  *   dist/theme.{mjs,cjs}      ← ./theme
  *   dist/a11y.{mjs,cjs}       ← ./a11y
+ *   dist/timeline.{mjs,cjs}   ← ./timeline (opt-in; see below)
  *   dist/style.css            ← extracted CSS (from index entry)
+ *
+ * `timeline` is its own entry for a packaging reason, not an
+ * organisational one. TimelineView statically imports vis-timeline and
+ * vis-data, which are OPTIONAL peers, and rollup will hoist a module
+ * shared by two entries into a common chunk. While it was reachable from
+ * both `index` and `views` it landed in a chunk both of those imported,
+ * so `import "@g3t/react"` failed to resolve for anyone who took the
+ * documented install. A dedicated entry keeps the bare specifiers behind
+ * a subpath nobody reaches by accident. scripts/check-optional-peers.mjs
+ * fails the build if they leak back out.
  */
 
 export default defineConfig({
@@ -41,6 +52,7 @@ export default defineConfig({
         theme: resolve(__dirname, "src/theme/index.ts"),
         a11y: resolve(__dirname, "src/a11y/index.ts"),
         icons: resolve(__dirname, "src/icons/index.ts"),
+        timeline: resolve(__dirname, "src/views/timeline/index.ts"),
       },
       formats: ["es", "cjs"],
       fileName: (format, entryName) =>

@@ -14,8 +14,22 @@ pnpm add @g3t/charts
 
 Peer dependencies are NOT installed for you. `@g3t/react` peers:
 `react`, `react-dom`, `cytoscape`, `cytoscape-fcose`, `zustand`,
-`echarts`, `vis-timeline`, `vis-data`. `@g3t/charts` peers:
-`react`, `echarts`. `@g3t/core` peers: `graphology`.
+`echarts`. `@g3t/charts` peers: `react`, `echarts`. `@g3t/core`
+peers: `graphology`.
+
+`@g3t/react` also declares two OPTIONAL peers, `vis-timeline` and
+`vis-data`. Install them only if you use `TimelineView`, which is
+the sole consumer:
+
+```bash
+pnpm add vis-timeline vis-data
+```
+
+`TimelineView` is reachable exclusively from `@g3t/react/timeline`
+for this reason. Importing it from the root barrel or from
+`@g3t/react/views` will not work, by design: those barrels are
+resolvable without the optional peers installed, and they can only
+stay that way by not referencing the component that needs them.
 
 ## Import the stylesheet, first
 
@@ -214,6 +228,6 @@ theme store silently splits:
 - Typed CJS consumption (`require` from a `.cts` file) is not
   supported pending declaration bundling. Runtime CJS works and is
   smoke-tested; ESM and bundler resolution are gated in CI.
-- `vis-timeline` and `vis-data` are statically imported by the
-  react bundle, so they must be installed even when no timeline
-  view is used. Subpath isolation is planned.
+- `TimelineView` is only importable from `@g3t/react/timeline`, and
+  that subpath requires the optional peers `vis-timeline` and
+  `vis-data`. Every other entry point resolves without them.
