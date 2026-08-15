@@ -8,8 +8,11 @@ g3t is a **component library**, not an application framework. You install it, im
 
 - [Playground](https://zwelz3.github.io/g3-toolkit/playground/): four
   domain shells (provenance auditing, an MBSE workbench, a supply-chain
-  digital thread, a biomedical knowledge graph) plus the two capability
-  dashboards, live in the browser.
+  digital thread, a biomedical knowledge graph) plus three capability
+  surfaces (analytics, an ontology workbench, and an 8,000-node scale
+  demo), live in the browser. A fourth, Style Lab, is dev-server only;
+  `src/demo/DemoLanding.tsx` is the register and decides which appear
+  where.
 - [Storybook](https://zwelz3.github.io/g3-toolkit/storybook/): every
   component and control in isolation.
 - [API reference](https://zwelz3.github.io/g3-toolkit/api/): typedoc,
@@ -288,6 +291,20 @@ planning/           ← Milestones, audits, evaluations; retired-effort
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the toolkit/application boundary.
+
+## Security
+
+Report vulnerabilities privately, not as public issues. See
+[SECURITY.md](SECURITY.md), which also covers the one question every
+adopter connecting a browser to a graph store should read first: what
+the auth middleware does and does not protect.
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) for setup and the PR process,
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the standard everyone here
+is held to, [ARCHITECTURE.md](ARCHITECTURE.md) for where a change
+belongs.
 
 ## Security
 

@@ -2,6 +2,30 @@
 
 ## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, adapter request hygiene, security policy, perf gate inputs, adopter docs, planning tree)
 
+- **Added the community files the repository was missing, and corrected
+  the docs that described a surface it no longer has.** New:
+  CODE_OF_CONDUCT.md, `.github/CODEOWNERS`, a pull-request template, and
+  bug-report and feature-request issue templates with a contact link
+  routing suspected vulnerabilities to the private channel instead of a
+  public issue. The CODEOWNERS blocks name one maintainer, so their
+  value is not routing but marking which paths carry a decision that
+  outlived the round it was made in: the published surface and its
+  golden file, the gates, the specs, and the standing-decision
+  documents. Separately, the Schema Dashboard was retired on 2026-07-07
+  with `MatrixView` and `SankeyView` folded into the Analytics
+  dashboard, and three places kept describing it as shipped:
+  `examples/decision-dashboards/README.md` documented it in a section of
+  its own, that package's barrel comment claimed a structure dashboard
+  it does not export, and CLAUDE.md listed it. All three now describe
+  what ships, and CLAUDE.md points at `src/demo/DemoLanding.tsx` as the
+  register to count from rather than carrying its own count, since that
+  is the number that has drifted repeatedly. CLAUDE.md also said
+  `pnpm run gates` was four steps when it runs five, which understates
+  the gate by the three Python spec scripts, and still called the
+  library v1.0.0-rc.2 after the manifests moved to 1.0.0. The README's
+  playground description was corrected the same way, including which
+  surfaces are environment-gated.
+
 - **The versioned-JSON channel has one failure convention and one error
   hierarchy.** Seven parsers across two packages failed in four
   mutually incompatible ways with no shared error type, so a host

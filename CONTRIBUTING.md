@@ -1,5 +1,9 @@
 # Contributing to g3-toolkit
 
+By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+Suspected vulnerabilities go through the private channel in
+[SECURITY.md](SECURITY.md), never a public issue.
+
 ## Setup
 
 Three prerequisites, all load-bearing:
@@ -181,6 +185,10 @@ Use GitHub Issues for bug reports and feature requests. Include:
 - Steps to reproduce (for bugs)
 - Expected vs actual behavior
 - Browser/OS/Node version
+
+Not for security. A suspected vulnerability goes through the private
+advisory form described in [SECURITY.md](SECURITY.md), which also
+states what is in scope.
 
 Not for security. A suspected vulnerability goes through the private
 advisory form described in [SECURITY.md](SECURITY.md), which also
