@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { UGM } from "@g3t/core";
 import { SpecLegend } from "./SpecLegend";
 import type { EncodingSpec } from "./encoding-spec";
-import { OKABE_ITO } from "./palette-bridge";
+import { CANVAS_CATEGORICAL } from "./palette-bridge";
 
 function graph(): UGM {
   const ugm = new UGM();
@@ -52,7 +52,7 @@ describe("SpecLegend", () => {
     const org = screen.getByTestId("legend-color-Org");
     const orgSwatch = org.querySelector(".g3t-legend-swatch") as HTMLElement;
     expect(orgSwatch.style.background.toLowerCase()).toBe(
-      hexToRgb(OKABE_ITO[1] ?? ""),
+      hexToRgb(CANVAS_CATEGORICAL[1] ?? ""),
     );
     expect(screen.getByTestId("legend-size").textContent).toContain("14px");
     expect(screen.getByTestId("legend-size").textContent).toContain("34px");

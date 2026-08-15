@@ -11,12 +11,12 @@
  */
 
 import {
-  OKABE_ITO,
+  CANVAS_CATEGORICAL,
   NODE_SHAPES,
   SEQUENTIAL_SCALE,
   DIVERGING_SCALE,
   scaleColor,
-  contrastRatioCore,
+  contrastRatioOrNull,
 } from "./palette-bridge";
 import type { UGM } from "@g3t/core";
 import {
@@ -143,7 +143,7 @@ function paletteArray(
       return DIVERGING_SCALE;
     case "okabe-ito":
     default:
-      return OKABE_ITO;
+      return CANVAS_CATEGORICAL;
   }
 }
 
@@ -435,7 +435,7 @@ export function warnOnCustomPalette(
 ): string[] {
   const warnings: string[] = [];
   const low = palette
-    .map((c) => ({ c, r: contrastRatioCore(c, canvasBg) }))
+    .map((c) => ({ c, r: contrastRatioOrNull(c, canvasBg) }))
     .filter(({ r }) => r !== null && r < 1.6)
     .map(({ c, r }) => `${c} (${(r as number).toFixed(2)}:1)`);
   if (low.length > 0) {

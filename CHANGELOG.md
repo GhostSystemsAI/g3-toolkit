@@ -1,6 +1,63 @@
 # Changelog
 
-## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, adapter request hygiene, security policy, perf gate inputs, adopter docs, planning tree)
+## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, adapter request hygiene, security policy, cross-package name collisions, archive accuracy, perf gate inputs, adopter docs, planning tree)
+
+- **BREAKING for `@g3t/react` types: three names meant two different
+  things across `@g3t/core` and `@g3t/react`, and each now means one.**
+  None of the three was catchable by the existing gates.
+  `check-api-surface.mjs` compares name SETS per entry point, so two
+  entries exporting the same name with different meanings look correct,
+  and `check-type-reachability.mjs` only asks whether a name is
+  reachable, not whether it is the same name.
+  - `ShaclShape` was core's validator model AND a structurally
+    incompatible display-only type in `SchemaView` (core keys its
+    constraint list `properties`, the view keyed it `constraints`), so
+    an adopter who imported `ShaclShape` and built an array for
+    `ShaclShapeBrowser` got a type `SchemaView` rejected, and vice
+    versa. The view's type is now `SchemaViewShape`, the react barrels
+    re-export core's `ShaclShape`, and `SchemaView`'s `shapes` prop
+    accepts EITHER form, so no runtime value that worked before stops
+    working. Core's constraint type is a superset of what the view
+    draws, so the projection loses nothing rendered.
+  - `contrastRatio` returned `number` from `@g3t/core` and
+    `number | null` from `@g3t/react` and `@g3t/react/theme`. The
+    difference is behavioral, not cosmetic: `createTheme` depends on
+    the null, because a theme may carry an `rgba()` value that must be
+    SKIPPED rather than scored, and core's would score it. The
+    null-returning one is now `contrastRatioOrNull`, named for the
+    thing that differs, and `contrastRatio` on the react entries is
+    core's function.
+  - `OKABE_ITO` was core's unmodified Okabe-Ito palette, and
+    `palette-bridge` re-exported the canvas palette under the same
+    name. Those two DIFFER: the canvas substitutes grey for the
+    published palette's black, because a filled black node reads as a
+    hole on a light canvas. The name hid a value difference rather than
+    a spelling one. The bridge now exports it as `CANVAS_CATEGORICAL`,
+    and `packages/react/src/views/canvas/palette.ts` no longer cites
+    Okabe & Ito (2008) as though it were unmodified. Palette VALUES are
+    unchanged: whether the canvas should adopt core's black is a visual
+    decision for review, not a rename.
+
+  `packages/react/src/cross-package-names.test.ts` pins all of this at
+  the value level, including that no react entry may export `OKABE_ITO`
+  bound to the canvas palette.
+
+- **`ARCHIVE.md` said 27 symbols were gone from the API when they still
+  ship.** The 2026-07-12 "archive, don't delete" ruling removed symbols
+  from `@g3t/core`'s ROOT barrel, and the document described that as
+  "they no longer ship in dist or appear in the API". Leaving the root
+  barrel is not leaving the API: `@g3t/core` publishes thirteen
+  subpaths, and 27 of the 38 listed symbols are exported from one,
+  including every symbol in the middleware, SHACL-report,
+  pipeline-registry and incremental-layout clusters. The genuinely
+  absent set is 11. The document now carries a status and an entry-point
+  list per symbol, and a new gate, `verify:archive`, cross-references
+  every row against `api-surface.json` and fails the build when they
+  disagree in either direction. Negative-tested on five mutations,
+  including one that caught a substring-matching bug in the checker's
+  first draft: entry names nest, so a row listing only `@g3t/core/x`
+  appeared to cover `@g3t/core` too.
+
 
 - **Added the community files the repository was missing, and corrected
   the docs that described a surface it no longer has.** New:

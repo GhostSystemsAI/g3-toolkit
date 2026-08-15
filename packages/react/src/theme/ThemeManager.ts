@@ -248,9 +248,19 @@ function relativeLuminance(hex: string): number | null {
   return 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
 }
 
-/** WCAG contrast ratio between two hex colors (1..21); null if either
- *  color is not plain hex (e.g. rgba() strings are skipped, not failed). */
-export function contrastRatio(a: string, b: string): number | null {
+/**
+ * WCAG contrast ratio between two hex colors (1..21); null if either
+ * color is not plain hex (e.g. rgba() strings are skipped, not failed).
+ *
+ * Named for the null, because `@g3t/core` exports a `contrastRatio`
+ * that returns a plain `number` and the two used to share that name
+ * across the two packages. They are not interchangeable: this one is
+ * what `createTheme` needs, since a theme may legitimately carry an
+ * rgba() value that has to be SKIPPED rather than scored. Swapping in
+ * core's would silently score such a pair instead of skipping it, so
+ * the difference is behavioral and the names say so.
+ */
+export function contrastRatioOrNull(a: string, b: string): number | null {
   const la = relativeLuminance(a);
   const lb = relativeLuminance(b);
   if (la === null || lb === null) return null;
@@ -279,7 +289,7 @@ export function createTheme(
   ];
   const failures = checks
     .map(([label, fg, bg, min]) => {
-      const ratio = contrastRatio(fg, bg);
+      const ratio = contrastRatioOrNull(fg, bg);
       return ratio !== null && ratio < min
         ? `${label} ${ratio.toFixed(2)}:1 (needs ${min}:1)`
         : null;

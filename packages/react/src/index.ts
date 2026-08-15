@@ -73,6 +73,15 @@ export { NeighborhoodPopout } from "./views/popout/NeighborhoodPopout";
 export type { NeighborhoodPopoutProps } from "./views/popout/NeighborhoodPopout";
 export { ShaclShapeBrowser } from "./views/schema/ShaclShapeBrowser";
 export type { ShaclShapeBrowserProps } from "./views/schema/ShaclShapeBrowser";
+// The validator's shape model, re-exported alongside the components
+// that consume it so `ShaclShape` on this entry means one thing. A
+// display-only type in SchemaView used to own this name here, and it
+// was structurally incompatible (it keys its constraint list
+// `constraints`, core keys it `properties`), so an adopter who imported
+// ShaclShape and built an array for ShaclShapeBrowser got a type the
+// component rejected. That type is now SchemaViewShape, and SchemaView
+// accepts either form.
+export type { ShaclShape } from "@g3t/core";
 export * from "./views/matrix";
 export * from "./views/sankey";
 export * from "./views/query";
