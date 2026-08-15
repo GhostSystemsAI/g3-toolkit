@@ -57,8 +57,26 @@ const BUDGETS = {
   // oracle-pinned.
   // Round 21 (2026-08-05): +1 KB for the structural style applier
   // (R-12a), the renderer-neutral counterpart of the cytoscape one.
-  core: 166.0 * 1024,
+  core: 169.0 * 1024,
   // Core ledger:
+  // - 166 -> 169 KB, 2026-08-15 (versioned-JSON failure convention):
+  //   measured 167.6 KB, +3.0 KB for model/document-errors.ts and the
+  //   parser call sites that now use it. Sourcemap audit run first:
+  //   ZERO node_modules source bytes, and the new module is CODE-SPLIT
+  //   into its own chunk (document-errors-*.js) rather than duplicated
+  //   into each of the entries that import it, which was the specific
+  //   risk worth checking for a module three subpaths depend on.
+  //   Most of the weight is the module docblock, which states the
+  //   three-arm rule for when a parser throws, returns diagnostics, or
+  //   returns an error list. That reasoning is the deliverable: the
+  //   defect being fixed was seven parsers failing four different ways
+  //   with nothing written down, so deleting the explanation to save
+  //   bytes would reintroduce half the problem. Headroom is 1.4 KB,
+  //   held tight on purpose. FOURTH raise this session, all four
+  //   hardening rather than feature work. The standing recommendation
+  //   is unchanged and is now overdue: extract @g3t/layout (ARC-009)
+  //   and bring core back under its original envelope instead of
+  //   raising a fifth time.
   // - 162 -> 166 KB, 2026-08-15 (adapter request hygiene): measured
   //   164.6 KB, +4.2 KB. Four things, all first-party:
   //   adapter/adapter-error.ts (new; AdapterHttpError plus the shared

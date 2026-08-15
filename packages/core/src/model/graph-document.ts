@@ -26,6 +26,12 @@
  * `elk-import.ts` uses.
  */
 import type { StructuralGeometry } from "../layout/structural";
+import {
+  InvalidJsonError,
+  MalformedDocumentError,
+  UnsupportedVersionError,
+  type DocumentParseError,
+} from "./document-errors";
 import type {
   StructuralEdge,
   StructuralGraphInput,
@@ -76,6 +82,16 @@ export interface GraphDocument {
   geometry?: StructuralGeometry;
 }
 
+/**
+ * An element-level problem that did NOT stop the parse.
+ *
+ * `BAD_SHAPE` is the shared code from `./document-errors.ts`; the rest
+ * are graph-specific and have no counterpart in the common vocabulary.
+ * `BAD_VERSION` predates that vocabulary, where the same condition is
+ * called `UNSUPPORTED_VERSION`; it keeps its name because renaming a
+ * published diagnostic code would break any host matching on it, and
+ * the two never appear in the same place.
+ */
 export interface DocumentDiagnostic {
   code:
     | "BAD_VERSION"
@@ -403,26 +419,60 @@ function checkEdge(
   return raw as unknown as DocEdge;
 }
 
+/**
+ * Parse a graph document.
+ *
+ * RETURNS its failure rather than throwing, which is the deliberate
+ * half of the versioned-JSON convention documented in
+ * `./document-errors.ts`: a graph document describes independent
+ * elements, so one malformed edge must not cost the caller the other
+ * nine hundred. Element-level problems become diagnostics and the good
+ * elements come back; only a document that cannot be read at all
+ * produces the `error` branch.
+ *
+ * The `error` branch carries `detail`, the same typed error the
+ * throwing parsers raise, so a host can branch on `code` and
+ * `documentKind` uniformly across the whole channel without
+ * string-matching a message.
+ */
 export function parseGraphDocument(
   text: string,
 ):
   | { document: GraphDocument; diagnostics: DocumentDiagnostic[] }
-  | { error: string } {
+  | { error: string; detail: DocumentParseError } {
+  const fail = (detail: DocumentParseError) => ({
+    error: detail.message,
+    detail,
+  });
+
   let raw: unknown;
   try {
     raw = JSON.parse(text);
-  } catch (e) {
-    return { error: `invalid JSON: ${String(e)}` };
+  } catch (cause) {
+    return fail(new InvalidJsonError("graph", cause));
   }
-  if (typeof raw !== "object" || raw === null) {
-    return { error: "not an object" };
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return fail(
+      new MalformedDocumentError({
+        documentKind: "graph",
+        code: "NOT_OBJECT",
+        message: `root is ${Array.isArray(raw) ? "an array" : String(raw)}, expected an object`,
+      }),
+    );
   }
   const doc = raw as Partial<GraphDocument>;
   if (doc.version !== 1) {
-    return { error: "not a version-1 graph document" };
+    return fail(new UnsupportedVersionError("graph", doc.version));
   }
   if (!Array.isArray(doc.nodes) || !Array.isArray(doc.edges)) {
-    return { error: "nodes/edges arrays missing" };
+    return fail(
+      new MalformedDocumentError({
+        documentKind: "graph",
+        code: "MISSING_FIELD",
+        message: "nodes and edges must both be arrays",
+        path: !Array.isArray(doc.nodes) ? "/nodes" : "/edges",
+      }),
+    );
   }
   const rawNodes: unknown[] = doc.nodes;
   const rawEdges: unknown[] = doc.edges;
@@ -455,8 +505,18 @@ export function parseGraphDocument(
 
     diagnostics.push(...validateGraphDocument(document));
     return { document, diagnostics };
-  } catch (e) {
-    return { error: `could not validate document: ${String(e)}` };
+  } catch (cause) {
+    // The last-resort net. Everything past the top-level guards runs
+    // inside the declared failure union, so a throw escaping here would
+    // be a contract violation rather than merely a bug; it is reported
+    // through the same typed error as every other failure, with the
+    // original as `cause`.
+    return fail(
+      new MalformedDocumentError({
+        documentKind: "graph",
+        message: `could not validate document: ${String(cause)}`,
+      }),
+    );
   }
 }
 

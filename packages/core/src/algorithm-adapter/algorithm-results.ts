@@ -28,6 +28,11 @@
  */
 
 import type { UGM } from "../ugm";
+import {
+  MalformedDocumentError,
+  parseJsonObject,
+  requireVersion,
+} from "../model/document-errors";
 
 // ── Interchange contract (version 1) ─────────────────────────────────
 
@@ -49,29 +54,46 @@ export interface AlgorithmResultDocument {
 
 const KINDS = new Set(["nodeProperties", "edgeProperties", "overlay"]);
 
+const KIND = "algorithm-result" as const;
+
+/**
+ * Parse an algorithm-result document.
+ *
+ * Throws rather than degrading: a result document is a single object
+ * with no partial reading worth having. See `model/document-errors.ts`
+ * for the rule and for the error hierarchy every failure here uses.
+ */
 export function parseAlgorithmResult(json: string): AlgorithmResultDocument {
-  const raw = JSON.parse(json) as Record<string, unknown>;
-  if (raw["version"] !== 1) {
-    throw new Error(
-      `Unsupported algorithm-result version ${String(raw["version"])}; this build reads version 1`,
-    );
-  }
+  const raw = parseJsonObject(KIND, json);
+  requireVersion(KIND, raw);
   const kind = raw["kind"];
   if (typeof kind !== "string" || !KINDS.has(kind)) {
-    throw new Error(
-      `Unknown result kind ${String(kind)}; expected nodeProperties, edgeProperties, or overlay`,
-    );
+    throw new MalformedDocumentError({
+      documentKind: KIND,
+      message: `unknown result kind ${JSON.stringify(kind)}; expected nodeProperties, edgeProperties, or overlay`,
+      path: "/kind",
+    });
   }
   if (kind === "overlay") {
     const overlay = raw["overlay"] as Record<string, unknown> | undefined;
     if (!overlay || typeof overlay["id"] !== "string") {
-      throw new Error("overlay results require overlay.id");
+      throw new MalformedDocumentError({
+        documentKind: KIND,
+        code: "MISSING_FIELD",
+        message: "overlay results require overlay.id",
+        path: "/overlay/id",
+      });
     }
   } else if (
     typeof raw["properties"] !== "object" ||
     raw["properties"] === null
   ) {
-    throw new Error(`${kind} results require a properties object`);
+    throw new MalformedDocumentError({
+      documentKind: KIND,
+      code: "MISSING_FIELD",
+      message: `${kind} results require a properties object`,
+      path: "/properties",
+    });
   }
   return raw as unknown as AlgorithmResultDocument;
 }
@@ -90,7 +112,11 @@ export function overlayFromDocument(
   doc: AlgorithmResultDocument,
 ): StructuralOverlay {
   if (doc.kind !== "overlay" || !doc.overlay) {
-    throw new Error("not an overlay-kind result document");
+    throw new MalformedDocumentError({
+      documentKind: KIND,
+      message: "not an overlay-kind result document",
+      path: "/kind",
+    });
   }
   return {
     id: doc.overlay.id,

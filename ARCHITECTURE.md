@@ -103,13 +103,13 @@ The following patterns are useful but application-specific. They
 are provided as reference implementations in `examples/`, not as
 published API surface:
 
-| Pattern | Why it's application-level | Where to find it |
-|---------|---------------------------|-----------------|
-| Full workspace layout (FlexLayout) | Adopters have their own page layout | `examples/full-workspace/` |
-| Workflow engine (step sequences) | Adopters have their own analysis pipelines | `examples/full-workspace/` |
-| Session persistence (save/load) | Adopters have their own storage layer | `examples/full-workspace/` |
-| Configuration factory (`createG3Toolkit()`) | Removes composability; too opinionated | `examples/full-workspace/` |
-| Demo landing page / scenarios | Marketing; not functionality | `demo/` |
+| Pattern                                     | Why it's application-level                 | Where to find it           |
+| ------------------------------------------- | ------------------------------------------ | -------------------------- |
+| Full workspace layout (FlexLayout)          | Adopters have their own page layout        | `examples/full-workspace/` |
+| Workflow engine (step sequences)            | Adopters have their own analysis pipelines | `examples/full-workspace/` |
+| Session persistence (save/load)             | Adopters have their own storage layer      | `examples/full-workspace/` |
+| Configuration factory (`createG3Toolkit()`) | Removes composability; too opinionated     | `examples/full-workspace/` |
+| Demo landing page / scenarios               | Marketing; not functionality               | `demo/`                    |
 
 **The test:** if an adopter would need to configure, disable, or
 replace it, it's application-level and belongs in examples.
@@ -141,6 +141,30 @@ level and belongs in the package.
 3. You pass the UGM to whichever components you want
 4. Components share selection state via `useSelectionStore`
 5. You handle everything else (layout, routing, auth, persistence)
+
+### How the versioned-JSON parsers fail
+
+Versioned JSON documents are the third integration channel, and their
+parsers do not all fail the same way. The shape of each one tracks what
+the document can usefully say when it fails, and the rule is stated in
+full in `@g3t/core`'s `model/document-errors.ts`:
+
+- A document that can degrade element-wise returns partial results plus
+  diagnostics (`parseGraphDocument`, `parseChangeSet`). Throwing would
+  discard the good elements, which is the value.
+- A hand-authored document returns `{ ok, errors }` with every problem
+  at once (`parseStyleConfig`). A throw carries one error; a config file
+  deserves all of them.
+- Everything else throws (`parseEncodingSpec`, `parseWorkspace`,
+  `parseAlgorithmResult`, `parseShaclReport`). There is no half an
+  encoding spec.
+
+What IS uniform is the error vocabulary. Every failure carries the same
+`code`, names the same `documentKind`, and points at a `path`.
+`DocumentParseError` is the base class for the throwing parsers, and
+`parseGraphDocument`'s failure branch carries the same typed error as
+`detail`, so one handler covers the channel without matching on
+messages.
 
 ## Module Boundary: D6 vs D13
 
@@ -230,12 +254,17 @@ const riskByRole: DataPipeline<CategoricalData> = {
   id: "risk-by-role",
   name: "Average Risk by Role",
   query: (ugm) => {
-    const groups = new Map<string, { sum: number; count: number; ids: string[] }>();
+    const groups = new Map<
+      string,
+      { sum: number; count: number; ids: string[] }
+    >();
     ugm.forEachNode((id, attrs) => {
       const role = String(attrs.properties.role ?? "Unknown");
       const risk = Number(attrs.properties.risk ?? 0);
       const g = groups.get(role) ?? { sum: 0, count: 0, ids: [] };
-      g.sum += risk; g.count++; g.ids.push(id);
+      g.sum += risk;
+      g.count++;
+      g.ids.push(id);
       groups.set(role, g);
     });
     return {
@@ -247,7 +276,7 @@ const riskByRole: DataPipeline<CategoricalData> = {
     };
   },
   reverseMap: (selection, data) => {
-    const cat = data.categories.find(c => c.label === selection.category);
+    const cat = data.categories.find((c) => c.label === selection.category);
     return cat?.nodeIds ?? [];
   },
 };

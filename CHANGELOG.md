@@ -2,6 +2,38 @@
 
 ## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, adapter request hygiene, security policy, perf gate inputs, adopter docs, planning tree)
 
+- **The versioned-JSON channel has one failure convention and one error
+  hierarchy.** Seven parsers across two packages failed in four
+  mutually incompatible ways with no shared error type, so a host
+  integrating through this channel wrote a different handler per
+  document and matched on message strings to tell one failure from
+  another. Four of them also called `JSON.parse` bare and then indexed
+  the result, so malformed text escaped as a raw `SyntaxError` and the
+  literal `"null"`, which is valid JSON, escaped as a `TypeError` from
+  reading `version` off `null`. Both were failures of the declared
+  contract rather than of the caller. There is now a
+  `DocumentParseError` hierarchy in `@g3t/core`: `InvalidJsonError`
+  (keeping the `SyntaxError` as `cause`), `UnsupportedVersionError`
+  (carrying the version actually found, so a message can name it
+  instead of saying "unsupported version undefined"), and
+  `MalformedDocumentError`. Every failure carries the same `code`,
+  names its `documentKind`, and points at a `path`. All of them still
+  answer to `instanceof Error`, so nothing that catches broadly
+  changes. What was deliberately NOT unified is the return shape,
+  because forcing seven parsers into one would be breaking in exchange
+  for losing information three of them need. The rule, now written down
+  in `model/document-errors.ts` and summarized in ARCHITECTURE.md, has
+  three arms: a document that degrades element-wise returns partial
+  results plus diagnostics, since one malformed edge must not cost the
+  caller the other nine hundred; a hand-authored document returns every
+  problem at once, since handing back all five mistakes beats handing
+  back the first one five times; everything else throws, since there is
+  no half an encoding spec. `parseGraphDocument`'s failure branch gained
+  a `detail` field carrying the same typed error, so one handler now
+  covers the channel without string-matching. `ReservedChannelError`
+  extends `MalformedDocumentError` and keeps its own identity and
+  message.
+
 - **Adapter requests time out, can be cancelled, and now report what
   the server actually said.** `fetch` has no timeout of its own and the
   adapters added none, so an endpoint that accepted a connection and

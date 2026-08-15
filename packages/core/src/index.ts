@@ -352,6 +352,19 @@ export type {
 } from "./model/graph-document";
 export { importElkJson } from "./model/elk-import";
 export type { ElkJsonNode, ElkJsonEdge } from "./model/elk-import";
+// One failure convention for the versioned-JSON channel. The module
+// docblock states the rule: documents that can degrade return partial
+// results plus diagnostics, documents that cannot degrade throw, and
+// both halves use the same error codes.
+export {
+  DocumentParseError,
+  InvalidJsonError,
+  UnsupportedVersionError,
+  MalformedDocumentError,
+  parseJsonObject,
+  requireVersion,
+} from "./model/document-errors";
+export type { DocumentKind, DocumentErrorCode } from "./model/document-errors";
 export { layoutStructuralWithChangeSet } from "./layout/change-driven-layout";
 export type {
   ChangeDrivenLayoutResult,
