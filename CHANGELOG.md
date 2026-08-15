@@ -1,6 +1,22 @@
 # Changelog
 
-## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, adopter docs, planning tree)
+## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, perf gate inputs, adopter docs, planning tree)
+
+- **The perf suite now fails by name when its budgets file is missing
+  or malformed, instead of by ENOENT or not at all.** `prf-budgets.json`
+  is a tracked input holding frozen CI measurements, and it went missing
+  once already in a bulk move of planning records; the suite read it
+  with a bare `readFileSync`, so the CI perf job died with a raw ENOENT
+  that reads like a broken test rather than a missing input. The absent
+  case now raises a named error that says the file is tracked and should
+  be restored from git rather than recreated, keeping the ENOENT as
+  `cause`. The more dangerous case was the quiet one: a file that parses
+  but is not this shape leaves `status` undefined, which makes the
+  `status === "frozen"` test false for every key, so the job passes
+  while asserting no budget at all. Unrecognized `status` and a missing
+  `budgets` object are now failures rather than defaults, on the
+  reasoning that a perf gate enforcing nothing is worse than one that is
+  red.
 
 - **The release path can now be rehearsed, and it checks what it
   publishes.** No tag has ever been pushed, so a first publish of three
