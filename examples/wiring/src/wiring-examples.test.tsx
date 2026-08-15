@@ -57,6 +57,7 @@ import {
   useOverlayStore,
   useThemeStore,
   runGraphLayout,
+  buildImageExport,
   DEFAULT_LAYOUT_OPTIONS,
   ContextMenuManager,
   captureWorkspace,
@@ -747,6 +748,24 @@ describe("programmatic APIs (guide: Programmatic APIs)", () => {
     const header = csv.split("\n")[0] ?? "";
     expect(header).toContain("name");
     expect(csv.split("\n").length).toBeGreaterThan(3);
+  });
+
+  it("buildImageExport(cy) returns a PNG blob artifact via cy.png", () => {
+    // jsdom cannot rasterize, so the wiring twin verifies the
+    // delegation contract with a stub Core (real browser confirms
+    // pixels via Zach's visual pass).
+    const png = vi.fn(() => new Blob(["fake"], { type: "image/png" }));
+    const cy = { png } as unknown as Core;
+    const art = buildImageExport(cy, { scale: 2 });
+    expect(png).toHaveBeenCalledWith({
+      output: "blob",
+      full: true,
+      scale: 2,
+      bg: undefined,
+    });
+    expect(art.filename).toBe("g3t-graph.png");
+    expect(art.mime).toBe("image/png");
+    expect(art.blob).toBeInstanceOf(Blob);
   });
 
   it("applyEncodingSpec resolves a spec into per-element visual patches", () => {

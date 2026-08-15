@@ -755,6 +755,31 @@ const csv = exportSubgraphCsv(ugm, selection); // or a selection
 Turtle export (`exportSubgraphTurtle`) is demonstrated in
 `examples/decision-dashboards`.
 
+### Image export (PNG snapshot)
+
+The toolbar's Export menu ships a PNG entry ("Image (PNG)"). The same
+helper is exported for programmatic use, so a host can bind snapshot
+export to a keyboard shortcut, a Save-to-case action, or a headless
+capture path:
+
+```ts
+import { buildImageExport } from "@g3t/react";
+// cy comes from CytoscapeCanvas onReady.
+const { filename, mime, blob } = buildImageExport(cy, { scale: 2 });
+const url = URL.createObjectURL(blob);
+// download it, upload it, or hand it to your image pipeline
+URL.revokeObjectURL(url);
+```
+
+Options: `full` (default `true`) exports the whole graph regardless
+of the current viewport; `full: false` snapshots what the user sees.
+`scale` (default `2`) multiplies pixel density. `bg` sets a solid
+background colour (Cytoscape defaults to transparent).
+
+SVG export is not bundled — it needs the `cytoscape-svg` extension
+(new dependency + bundle-ledger entry). Add it in your host if you
+need vector snapshots.
+
 ### Applying an encoding spec without the panel
 
 ```ts
