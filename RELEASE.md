@@ -3,10 +3,48 @@
 ## What the tag does
 
 `.github/workflows/publish.yml` fires on `v*` tags. It installs
-frozen, runs typecheck, verify, and test, then publishes in
-peer-dependency order (core, react, charts) with npm provenance.
-`pnpm --filter ... publish` rewrites `workspace:*` ranges to real
-versions, so nothing needs hand-editing before the tag.
+frozen, runs the FULL `pnpm run gates` (typecheck, lint, verify, test,
+and the three Python spec gates), runs the release preflight, then
+publishes in peer-dependency order (core, react, charts) with npm
+provenance. `pnpm --filter ... publish` rewrites `workspace:*` ranges
+to real versions, so nothing needs hand-editing before the tag.
+
+## Rehearse it first
+
+The release path is only correct if it has been run. Trigger
+`Publish Packages` from the Actions tab with `dry_run` left on: every
+step executes, including all three publishes, against `--dry-run`. A
+manual dispatch with `dry_run` turned OFF fails immediately by design,
+so the rehearsal cannot become an accidental release. Do this before
+the first tag of any version.
+
+## Why a publish cannot be rolled back, and what stands in for one
+
+npm has no transactions and does not allow republishing a version.
+Three sequential publishes therefore have two windows in which a
+failure leaves a partial version triple: `@g3t/core` out at 1.2.3,
+`@g3t/react` not, and no way to complete the set under that number.
+The only repair is to bump all four manifests and re-tag.
+
+There is no rollback to add, so the mitigation is to move every check
+that CAN fail in front of the first publish. That is
+`scripts/check-release-preflight.mjs`, which asserts the tag and all
+four manifests name the same version, that none of the three
+`package@version` pairs already exists on the registry, and that the
+working tree is clean. The registry check is the one that matters
+most: after a partial publish it fails BEFORE the first publish
+instead of after it.
+
+Each package's `prepack` runs `scripts/check-dist-fresh.mjs`, which
+refuses to build a tarball whose `dist` is missing a file the manifest
+promises, or is older than `src`. That closes the hollow-tarball case,
+including for a publish run by hand from a laptop.
+
+`--no-git-checks` stays on the publish commands, and is not a bypass:
+a tag build is a detached HEAD, where pnpm's branch check cannot pass
+on any input. The preflight is its replacement and is stricter, since
+it also covers version agreement and registry state, which pnpm never
+checked.
 
 ## Before tagging
 
@@ -24,6 +62,11 @@ versions, so nothing needs hand-editing before the tag.
    code block typechecks as written).
 3. `NPM_TOKEN` is present in repository secrets.
 4. CHANGELOG has an entry for the version.
+5. `node scripts/check-release-preflight.mjs` is green locally. It is
+   the same script the workflow runs, so a failure here is a failure
+   you get to fix for free. Outside CI it skips only the tag check,
+   since there is no tag yet.
+6. The dry run described above has been executed on this commit.
 
 ## After tagging
 

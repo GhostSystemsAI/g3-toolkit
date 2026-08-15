@@ -1,6 +1,33 @@
 # Changelog
 
-## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, adopter docs, planning tree)
+## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, adopter docs, planning tree)
+
+- **The release path can now be rehearsed, and it checks what it
+  publishes.** No tag has ever been pushed, so a first publish of three
+  packages would have been the debut run of every step in
+  `publish.yml`, and that workflow ran a strict subset of the gate: no
+  `lint`, and none of the three Python spec gates, either of which could
+  have been red at the moment of a publish that npm never lets you take
+  back. It now runs `pnpm run gates` in full, with a Python toolchain in
+  the job to support it. A `workflow_dispatch` trigger runs the entire
+  workflow, all three publishes included, against `--dry-run`; a manual
+  dispatch with the dry run turned off fails on purpose, so the
+  rehearsal cannot become an accidental release. npm has no transactions
+  and no republish, so a failure between the three sequential publishes
+  leaves a partial version triple that only a version bump can repair.
+  There is no rollback to add, so a new preflight moves every check that
+  can fail in front of the first publish: the tag and all four manifests
+  must name the same version, none of the three `package@version` pairs
+  may already exist on the registry, and the tree must be clean. A
+  registry lookup that fails to answer counts as a failure rather than
+  as permission. Each package also gained a `prepack` guard that refuses
+  to build a tarball missing a file its own manifest promises, or whose
+  `dist` is older than `src`, which closes the hollow-tarball case for
+  hand-run publishes too. `--no-git-checks` stays, and RELEASE.md now
+  says why it is not a bypass: a tag build is a detached HEAD, where
+  pnpm's branch check cannot pass on any input, and the preflight
+  replaces it with a stricter set covering version agreement and
+  registry state that pnpm never examined.
 
 - **BREAKING for `@g3t/react`: `TimelineView` moved from the root barrel
   to `@g3t/react/timeline`, because the documented install did not

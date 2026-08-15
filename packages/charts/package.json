@@ -39,6 +39,7 @@
   "homepage": "https://github.com/zwelz3/g3-toolkit/tree/main/packages/charts#readme",
   "scripts": {
     "build": "vite build",
+    "prepack": "node ../../scripts/check-dist-fresh.mjs",
     "test": "pnpm -w exec vitest run packages/charts/src",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "clean": "tsc --build --clean && rm -rf dist"
