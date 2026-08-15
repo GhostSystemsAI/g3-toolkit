@@ -2,6 +2,35 @@
 
 ## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, adapter request hygiene, security policy, cross-package name collisions, archive accuracy, perf gate inputs, adopter docs, planning tree)
 
+- **The bundle gate was measuring publish weight and calling it what
+  consumers pull. It now measures both, separately.** Its docblock said
+  unminified dist "is what consumers actually pull through their own
+  bundlers", and the ledger had been proposing, across four budget
+  raises, that layout be extracted into a separate `@g3t/layout` package
+  to bring core back under its original envelope. Bundling real imports
+  against the built packages showed the premise was false: every package
+  declares `sideEffects: false`, so a consumer downloads what it
+  references. Importing only `UGM` costs 4.8 KB of first-party code with
+  zero layout in it (no dagre, no elk, no quadtree, no force
+  simulation), against the 164 KB the package weighs. Layout costs
+  roughly 35 KB of first-party code when referenced, 106 KB with its own
+  dependencies, and nothing at all when it is not. The extraction would
+  have moved the number without changing one adopter's page load, while
+  adding a fourth tarball and a fourth publish to a release sequence
+  that already has two unrecoverable failure windows, so **that
+  recommendation is retired** with the measurements recorded as the
+  reason. A new gate, `verify:consumer-cost`, bundles five imports an
+  adopter actually writes (bare `UGM`, `UGM` plus an adapter, the layout
+  engines, core's root barrel, and `CytoscapeCanvas`) through the same
+  rollup that emits the packages, and budgets what each one costs.
+  Third-party dependencies are external, because a 200 KB graphology
+  baseline would hide a 3 KB first-party regression. `verify:bundle`
+  stays and keeps budgeting publish weight, which catches things the
+  other cannot and catches them cheaply, and its docblock now says which
+  question it answers. The layout scenario is deliberately adjacent to
+  the bare-`UGM` one: if those two ever converge, tree-shaking has
+  broken, which is the regression the extraction was aimed at.
+
 - **BREAKING for `@g3t/core`: 15 undocumented symbols withdrawn from the
   subpath barrels.** Once `verify:archive` made it visible that 27 of
   the 38 supposedly-archived symbols still shipped, the maintainer

@@ -55,7 +55,11 @@ checked.
    the spec gates. `verify` includes `verify:package` (every entry
    point in every package's exports map exists after a build, and
    files[] claims nothing absent), `verify:types` (consumer type
-   resolution under node16 AND bundler), `verify:smoke` (runtime
+   resolution under node16 AND bundler), `verify:consumer-cost` (what
+   an adopter's bundle grows by per import, as distinct from
+   `verify:bundle`, which budgets the package's publish weight),
+   `verify:archive` (ARCHIVE.md's per-symbol status still matches the
+   published surface), `verify:smoke` (runtime
    subpath resolution through Node), `verify:peers` (no optional
    peer is statically reachable from an entry point that is not
    documented as requiring it), and `verify:snippets` (every README

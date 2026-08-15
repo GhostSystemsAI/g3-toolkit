@@ -1,18 +1,37 @@
 #!/usr/bin/env node
 /**
- * Bundle-size budget (P6).
+ * PUBLISH-WEIGHT budget (P6). Read the next paragraph before citing a
+ * number from this file.
  *
  * For each published package, compute the total ESM dist size and
  * compare against a budget. Fails if any package exceeds its budget.
+ *
+ * **This is publish weight, NOT what an adopter downloads.** Every
+ * package here declares `sideEffects: false` (asserted by
+ * verify:treeshake), so a bundler drops what the consumer does not
+ * reference. Measured 2026-08-15: importing only `UGM` costs 4.8 KB of
+ * first-party code, against the 164 KB this file reports for the whole
+ * package. The two numbers differ by a factor of thirty and answer
+ * different questions.
+ *
+ * `scripts/check-consumer-cost.mjs` budgets what an adopter actually
+ * pays, per import. This file stays because publish weight catches
+ * things that one cannot and catches them cheaply: an accidental
+ * node_modules inclusion, a dependency swap, a build that stopped
+ * splitting chunks. Keep both, and do not read a raise here as a
+ * regression somebody's page load will feel; check the other gate for
+ * that.
  *
  * The "total ESM" is the sum of every `.mjs` and `.js` file in the
  * package's `dist/` directory, EXCLUDING `.cjs` (CommonJS) and `.map`
  * (source maps). Shared chunks Rollup extracts during the multi-entry
  * build count.
  *
- * Budgets are unminified bytes; this is intentional because the
- * unminified surface is what consumers actually pull through their own
- * bundlers. Consumers minify in production.
+ * Budgets are unminified bytes. Consumers minify in production. The
+ * previous wording here said unminified dist "is what consumers
+ * actually pull through their own bundlers", which was the assumption
+ * that made this file look like a consumer-cost gate for a year. It is
+ * not: consumers pull what they reference.
  *
  * Headroom: each budget is set ~25% above the current measured size.
  * If a legitimate change pushes any package over its budget, raise the
@@ -59,6 +78,36 @@ const BUDGETS = {
   // (R-12a), the renderer-neutral counterpart of the cytoscape one.
   core: 169.0 * 1024,
   // Core ledger:
+  // - NO RAISE, 2026-08-15 (the @g3t/layout recommendation is RETIRED,
+  //   and 15 subpath exports were withdrawn). Measured 164.0 KB against
+  //   the unchanged 169.0 cap, so headroom went 1.4 -> 5.0 KB. Two
+  //   things happened and neither was a raise.
+  //
+  //   FIRST: the standing recommendation carried by the four entries
+  //   below, "extract @g3t/layout (ARC-009) and bring core back under
+  //   its original envelope", IS WITHDRAWN. It was chasing THIS number,
+  //   and this number is publish weight. Every package declares
+  //   `sideEffects: false`, so a consumer downloads what it references.
+  //   Measured by bundling real imports: `UGM` alone costs 4.8 KB of
+  //   first-party code with ZERO layout in it (no dagre, no elk, no
+  //   quadtree, no force simulation); importing the layout engines adds
+  //   roughly 35 KB of first-party code, or 106 KB with their own
+  //   dependencies. Layout already costs nothing to anyone who does not
+  //   use it, so the extraction would have moved this number without
+  //   changing one adopter's page load, while adding a fourth tarball
+  //   and a fourth publish to a release sequence that already has two
+  //   unrecoverable failure windows. Do not reinstate it on the
+  //   strength of a number from this file. If layout ever becomes
+  //   unconditionally reachable, the core-ugm scenario in
+  //   check-consumer-cost.mjs is what will say so.
+  //
+  //   SECOND: the withdrawal (maintainer ruling) removed 15 symbols
+  //   that no adopter document named and nothing here used, across the
+  //   middleware, SHACL-report, pipeline, algorithms and projection
+  //   subpaths. That is where the 3.6 KB came from. The cap stays at
+  //   169.0 rather than being tightened to the new measurement: the
+  //   headroom was earned by removing surface, and spending it
+  //   immediately on a tighter cap would just force the next raise.
   // - 166 -> 169 KB, 2026-08-15 (versioned-JSON failure convention):
   //   measured 167.6 KB, +3.0 KB for model/document-errors.ts and the
   //   parser call sites that now use it. Sourcemap audit run first:

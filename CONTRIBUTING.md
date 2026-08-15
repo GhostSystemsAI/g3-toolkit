@@ -37,8 +37,18 @@ pnpm run gates
 That is typecheck, lint, verify, test and the three Python spec gates, in
 the exact order ci.yml runs them. `verify` builds the packages first and
 then checks the published dist, the exports map, the wiring-guide
-snippets, typedoc and the bundle-size ledger, so a change is not verified
-by unit tests alone.
+snippets, typedoc and the two size gates, so a change is not verified by
+unit tests alone.
+
+The two size gates measure different things and both matter.
+`verify:bundle` budgets PUBLISH WEIGHT, the whole `dist/` of each
+package. `verify:consumer-cost` bundles imports an adopter actually
+writes and budgets what THEIR bundle grows by. The packages declare
+`sideEffects: false`, so the two diverge sharply: importing only `UGM`
+costs 4.8 KB of first-party code against the 164 KB the package weighs.
+Raising either needs a written reason in the same commit; a raise in
+the consumer-cost gate is the more serious one, because that number is
+somebody's page load.
 
 Playwright is not part of `gates`; it runs in its own CI job and needs a
 one-time browser install (see E2E tests below).
