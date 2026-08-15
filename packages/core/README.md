@@ -93,6 +93,26 @@ To cancel an in-flight request, pass an `AbortSignal` on the request
 through middleware; the default transport honors it alongside its own
 timeout.
 
+Building a middleware chain by hand needs a base transport at the end
+of it. `createDefaultFetch` is that transport, and it takes the same
+timeout the adapters do:
+
+```ts
+import {
+  composeMiddleware,
+  createDefaultFetch,
+  bearerAuth,
+  DEFAULT_TIMEOUT_MS,
+} from "@g3t/core/middleware";
+
+const fetcher = composeMiddleware(
+  [bearerAuth(() => sessionStorage.getItem("token") ?? "")],
+  createDefaultFetch({ timeoutMs: DEFAULT_TIMEOUT_MS }),
+);
+
+void fetcher;
+```
+
 Before wiring a browser directly to a graph store, read
 [SECURITY.md](https://github.com/zwelz3/g3-toolkit/blob/main/SECURITY.md)
 on what the auth middleware does and does not protect.

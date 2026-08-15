@@ -11,11 +11,27 @@ so the code cannot rot silently.
 **Leaving the root barrel is not leaving the API.** `@g3t/core`
 publishes thirteen subpaths, and a symbol dropped from `src/index.ts`
 is still public if any subpath barrel exports it. This document said
-"they no longer ship in dist or appear in the API" for a year, and that
-was wrong for most of the list: **27 of the 38 symbols ship from a
-subpath**, including every symbol in the middleware, SHACL-report,
-pipeline-registry and incremental-layout clusters. The genuinely absent
-set is 11.
+"they no longer ship in dist or appear in the API", and that was wrong
+for most of the list: 27 of the 38 symbols shipped from a subpath,
+including every symbol in the middleware, SHACL-report,
+pipeline-registry and incremental-layout clusters.
+
+**Withdrawal round, 2026-08-15 (maintainer ruling).** Of those 27,
+**14 were withdrawn** and 13 kept. The 14 were the ones named in NO
+adopter document and used nowhere in this repository. The 13 kept are
+load-bearing prose: `RestAdapter`, `GremlinAdapter`, `bearerAuth` and
+`apiKeyHeader` appear in README.md and SECURITY.md's credentials
+section, `parseShaclReport` in ARCHITECTURE.md and the wiring guide,
+and the incremental-layout trio in `docs/capabilities-and-limits.md`,
+which lists it as **Shipped** with its import path. Withdrawing those
+would have broken documented promises.
+
+`RetryExhaustedError` left with `retryOnError` rather than on its own
+merits: it is that middleware's error type, and an error nothing
+reachable can throw is dead surface. It is the one row here that was
+never part of the 2026-07-12 ruling.
+
+Current count: **13 ship, 26 absent**, of 39 tracked symbols.
 
 That is not a defect in the ruling, which was about the root barrel and
 about not deleting code. It is a defect in how this document described
@@ -36,46 +52,47 @@ which row to update. Nothing else is required; no files moved.
 
 ## Status by symbol
 
-| Symbol                          | Cluster | Status | Exported from                 |
-| ------------------------------- | --- | ------ | ----------------------------- |
-| `GremlinAdapter`                | T2a | SHIPS  | @g3t/core/adapters            |
-| `RestAdapter`                   | T2a | SHIPS  | @g3t/core, @g3t/core/adapters |
-| `composeMiddleware`             | T2a | SHIPS  | @g3t/core/middleware          |
-| `defaultFetch`                  | T2a | SHIPS  | @g3t/core/middleware          |
-| `bearerAuth`                    | T2a | SHIPS  | @g3t/core/middleware          |
-| `apiKeyHeader`                  | T2a | SHIPS  | @g3t/core/middleware          |
-| `retryOnError`                  | T2a | SHIPS  | @g3t/core/middleware          |
-| `requestLogger`                 | T2a | SHIPS  | @g3t/core/middleware          |
-| `parseShaclReport`              | T2b | SHIPS  | @g3t/core/shacl               |
-| `resultsForShape`               | T2b | SHIPS  | @g3t/core/shacl               |
-| `resultTargets`                 | T2b | SHIPS  | @g3t/core/shacl               |
-| `resultsForFocusNode`           | T2b | SHIPS  | @g3t/core/shacl               |
-| `extractProvOProperties`        | T2c | ABSENT | -                             |
-| `PROVO_MAPPINGS`                | T2c | ABSENT | -                             |
-| `literalCollapse`               | T2c | SHIPS  | @g3t/core/projection          |
-| `blankNodeCollapse`             | T2c | SHIPS  | @g3t/core/projection          |
-| `listCollapse`                  | T2c | SHIPS  | @g3t/core/projection          |
-| `reificationCollapse`           | T2c | SHIPS  | @g3t/core/projection          |
-| `overlayFromDocument`           | T2c | SHIPS  | @g3t/core/algorithms          |
-| `PipelineRegistry`              | T2d | SHIPS  | @g3t/core/pipeline            |
-| `createCountByProperty`         | T2d | SHIPS  | @g3t/core/pipeline            |
-| `createEdgeTypeBreakdown`       | T2d | SHIPS  | @g3t/core/pipeline            |
-| `createActivityTimeline`        | T2d | SHIPS  | @g3t/core/pipeline            |
-| `createCommunityBreakdown`      | T2d | SHIPS  | @g3t/core/pipeline            |
-| `IncrementalLayout`             | T2e | SHIPS  | @g3t/core/layout              |
-| `applyIncrementalLayout`        | T2e | SHIPS  | @g3t/core/layout              |
-| `computeIncrementalUpdate`      | T2e | SHIPS  | @g3t/core/layout              |
-| `ingestEdgeAlgorithmResults`    | T2e | SHIPS  | @g3t/core/algorithms          |
-| `parseStyleConfig`              | T2f | ABSENT | -                             |
-| `serializeStyleConfig`          | T2f | ABSENT | -                             |
-| `STYLE_CONFIG_SCHEMA`           | T2f | ABSENT | -                             |
-| `serializeOverrides`            | T2f | ABSENT | -                             |
-| `deserializeOverrides`          | T2f | ABSENT | -                             |
-| `TypeMenuProvider`              | T2f | ABSENT | -                             |
-| `createDefaultTypeMenuProvider` | T2f | ABSENT | -                             |
-| `checkRenderPermission`         | T2f | SHIPS  | @g3t/core/projection          |
-| `unpinAll`                      | T2f | ABSENT | -                             |
-| `DARK_TOKENS`                   | T2f | ABSENT | -                             |
+| Symbol                           | Cluster | Status | Exported from                 |
+| -------------------------------- | --- | ------ | ----------------------------- |
+| `GremlinAdapter`                 | T2a | SHIPS  | @g3t/core/adapters            |
+| `RestAdapter`                    | T2a | SHIPS  | @g3t/core, @g3t/core/adapters |
+| `composeMiddleware`              | T2a | SHIPS  | @g3t/core/middleware          |
+| `defaultFetch`                   | T2a | ABSENT | -                             |
+| `bearerAuth`                     | T2a | SHIPS  | @g3t/core/middleware          |
+| `apiKeyHeader`                   | T2a | SHIPS  | @g3t/core/middleware          |
+| `retryOnError`                   | T2a | ABSENT | -                             |
+| `requestLogger`                  | T2a | ABSENT | -                             |
+| `parseShaclReport`               | T2b | SHIPS  | @g3t/core/shacl               |
+| `resultsForShape`                | T2b | ABSENT | -                             |
+| `resultTargets`                  | T2b | ABSENT | -                             |
+| `resultsForFocusNode`            | T2b | ABSENT | -                             |
+| `extractProvOProperties`         | T2c | ABSENT | -                             |
+| `PROVO_MAPPINGS`                 | T2c | ABSENT | -                             |
+| `literalCollapse`                | T2c | SHIPS  | @g3t/core/projection          |
+| `blankNodeCollapse`              | T2c | SHIPS  | @g3t/core/projection          |
+| `listCollapse`                   | T2c | SHIPS  | @g3t/core/projection          |
+| `reificationCollapse`            | T2c | SHIPS  | @g3t/core/projection          |
+| `overlayFromDocument`            | T2c | ABSENT | -                             |
+| `PipelineRegistry`               | T2d | ABSENT | -                             |
+| `createCountByProperty`          | T2d | ABSENT | -                             |
+| `createEdgeTypeBreakdown`        | T2d | ABSENT | -                             |
+| `createActivityTimeline`         | T2d | ABSENT | -                             |
+| `createCommunityBreakdown`       | T2d | ABSENT | -                             |
+| `IncrementalLayout`              | T2e | SHIPS  | @g3t/core/layout              |
+| `applyIncrementalLayout`         | T2e | SHIPS  | @g3t/core/layout              |
+| `computeIncrementalUpdate`       | T2e | SHIPS  | @g3t/core/layout              |
+| `ingestEdgeAlgorithmResults`     | T2e | ABSENT | -                             |
+| `parseStyleConfig`               | T2f | ABSENT | -                             |
+| `serializeStyleConfig`           | T2f | ABSENT | -                             |
+| `STYLE_CONFIG_SCHEMA`            | T2f | ABSENT | -                             |
+| `serializeOverrides`             | T2f | ABSENT | -                             |
+| `deserializeOverrides`           | T2f | ABSENT | -                             |
+| `TypeMenuProvider`               | T2f | ABSENT | -                             |
+| `createDefaultTypeMenuProvider`  | T2f | ABSENT | -                             |
+| `checkRenderPermission`          | T2f | ABSENT | -                             |
+| `unpinAll`                       | T2f | ABSENT | -                             |
+| `DARK_TOKENS`                    | T2f | ABSENT | -                             |
+| `RetryExhaustedError`            | T2a | ABSENT | -                             |
 
 Clusters, for the names used above:
 

@@ -22,7 +22,10 @@ export {
   reificationCollapse,
 } from "./transforms";
 
-export { createPresetPipeline, checkRenderPermission } from "./presets";
+// WITHDRAWN 2026-08-15: checkRenderPermission. Undocumented and
+// unused; the module and its tests stay in the tree. See
+// packages/core/ARCHIVE.md.
+export { createPresetPipeline } from "./presets";
 export type {
   PresetName,
   HolonicProjectionPipeline,

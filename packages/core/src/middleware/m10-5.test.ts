@@ -7,12 +7,16 @@ import {
   composeMiddleware,
   bearerAuth,
   apiKeyHeader,
-  retryOnError,
-  requestLogger,
   type AdapterRequest,
   type AdapterResponse,
   type Middleware,
 } from "../middleware";
+// retryOnError and requestLogger were withdrawn from the barrel on
+// 2026-08-15 (undocumented, unused). Per the archive convention the
+// modules and their tests STAY IN THE TREE AND KEEP RUNNING, so this
+// imports them relatively rather than through the public entry. That is
+// what stops withdrawn code rotting silently.
+import { retryOnError, requestLogger } from "./middleware";
 import { RestAdapter } from "../adapter/rest-adapter";
 import { G3tEventBus } from "../event-bus";
 

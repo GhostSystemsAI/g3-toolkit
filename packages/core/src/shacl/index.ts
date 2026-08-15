@@ -24,23 +24,23 @@ export type { ShaclToStructuralOptions } from "./shacl-to-structural";
 // formatters above; it mints an overlay id string, which is the same
 // class of rendering detail. severityOverlays (plural) stays: it returns
 // the overlay DOCUMENTS, which are a versioned integration channel.
+// WITHDRAWN 2026-08-15: resultsForShape (and resultTargets,
+// resultsForFocusNode below). No adopter document named them and
+// nothing here used them. The report channel stays usable: the parser,
+// the adapter from validation results, and the focus-node and driver
+// accessors all remain. Modules and tests stay in the tree; see
+// packages/core/ARCHIVE.md.
 export {
   parseShaclReport,
   reportFromValidationResults,
   severityOverlays,
   shaclResultDrivers,
   reportFocusNodes,
-  resultsForShape,
 } from "./shacl-report";
 export type {
   ShaclReportDocument,
   ShaclReportResult,
   ShaclSeverity,
 } from "./shacl-report";
-export {
-  resultTargets,
-  resultSelectionIds,
-  resultDetail,
-  resultsForFocusNode,
-} from "./shacl-links";
+export { resultSelectionIds, resultDetail } from "./shacl-links";
 export type { ShaclResultTargets, ShaclResultDetail } from "./shacl-links";

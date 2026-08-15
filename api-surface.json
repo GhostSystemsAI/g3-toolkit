@@ -131,14 +131,10 @@
   "@g3t/core/middleware": [
     "AdapterTimeoutError",
     "DEFAULT_TIMEOUT_MS",
-    "RetryExhaustedError",
     "apiKeyHeader",
     "bearerAuth",
     "composeMiddleware",
-    "createDefaultFetch",
-    "defaultFetch",
-    "requestLogger",
-    "retryOnError"
+    "createDefaultFetch"
   ],
   "@g3t/core/events": [
     "G3tEventBus",
@@ -148,7 +144,6 @@
     "ProjectionPipeline",
     "RDF",
     "blankNodeCollapse",
-    "checkRenderPermission",
     "createPresetPipeline",
     "listCollapse",
     "literalCollapse",
@@ -156,14 +151,9 @@
     "typeCollapse"
   ],
   "@g3t/core/pipeline": [
-    "PipelineRegistry",
-    "createActivityTimeline",
     "createCentralityVsProperty",
-    "createCommunityBreakdown",
-    "createCountByProperty",
     "createCountByType",
     "createDegreeDistribution",
-    "createEdgeTypeBreakdown",
     "createPropertyCorrelation"
   ],
   "@g3t/core/shacl": [
@@ -174,9 +164,6 @@
     "reportFromValidationResults",
     "resultDetail",
     "resultSelectionIds",
-    "resultTargets",
-    "resultsForFocusNode",
-    "resultsForShape",
     "severityOverlays",
     "shaclResultDrivers",
     "shaclRowId",
@@ -209,8 +196,6 @@
     "connectedComponents",
     "degreeCentrality",
     "ingestAlgorithmResults",
-    "ingestEdgeAlgorithmResults",
-    "overlayFromDocument",
     "overlayFromPath",
     "parseAlgorithmResult"
   ],

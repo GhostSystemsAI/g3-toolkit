@@ -2,6 +2,38 @@
 
 ## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, adapter request hygiene, security policy, cross-package name collisions, archive accuracy, perf gate inputs, adopter docs, planning tree)
 
+- **BREAKING for `@g3t/core`: 15 undocumented symbols withdrawn from the
+  subpath barrels.** Once `verify:archive` made it visible that 27 of
+  the 38 supposedly-archived symbols still shipped, the maintainer
+  ruling was to withdraw the ones nothing promised and keep the ones
+  something did. Withdrawn: `defaultFetch`, `retryOnError`,
+  `requestLogger` and `RetryExhaustedError` from `@g3t/core/middleware`;
+  `resultsForShape`, `resultTargets` and `resultsForFocusNode` from
+  `@g3t/core/shacl`; `PipelineRegistry`, `createCountByProperty`,
+  `createEdgeTypeBreakdown`, `createActivityTimeline` and
+  `createCommunityBreakdown` from `@g3t/core/pipeline`;
+  `overlayFromDocument` and `ingestEdgeAlgorithmResults` from
+  `@g3t/core/algorithms`; and `checkRenderPermission` from
+  `@g3t/core/projection`. Each was named in no adopter document and used
+  nowhere in this repository. `RetryExhaustedError` left with
+  `retryOnError` rather than on its own merits: it is that middleware's
+  error type, and an error nothing reachable can throw is dead surface.
+  Every remaining channel is still complete end to end, which is why the
+  other 12 middleware, SHACL and pipeline symbols stayed:
+  `createDefaultFetch` is the documented way to get a base fetch for
+  `composeMiddleware`, the report parser and its focus-node accessors
+  remain, and the four pipeline creators the root barrel exports are
+  untouched. Thirteen symbols were kept BECAUSE documentation promises
+  them: `RestAdapter`, `GremlinAdapter`, `bearerAuth` and `apiKeyHeader`
+  appear in README.md and SECURITY.md's credentials section,
+  `parseShaclReport` in ARCHITECTURE.md and the wiring guide, and the
+  incremental-layout trio in `docs/capabilities-and-limits.md`, which
+  lists it as Shipped with its import path. Per the standing
+  archive-don't-delete ruling the modules and their tests remain in the
+  tree and keep running, importing relatively rather than through the
+  public entry, so withdrawn code cannot rot silently. Core measures
+  164.0 KB, down 4.4 KB, taking it from 100% of its budget to 97%.
+
 - **BREAKING for `@g3t/react` types: three names meant two different
   things across `@g3t/core` and `@g3t/react`, and each now means one.**
   None of the three was catchable by the existing gates.
