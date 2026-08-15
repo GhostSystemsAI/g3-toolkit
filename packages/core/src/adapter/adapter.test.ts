@@ -109,6 +109,158 @@ describe("SparqlAdapter (M3.E2.T1)", () => {
       "SPARQL query failed",
     );
   });
+
+  // RDF 1.2 triple-term ingestion — PROV-O fold from kb graphs surfaces
+  // as `{ type: "triple", value: { subject, predicate, object } }` per
+  // the SPARQL 1.2 JSON results format. Regression: the pre-fix branch
+  // stringified the triple-term object to "[object Object]".
+  it("ingests an RDF 1.2 triple-term object without corruption", async () => {
+    const mockResponse = {
+      results: {
+        bindings: [
+          {
+            s: {
+              type: "uri" as const,
+              value: "https://forge.example/kb/Plan/orch-scaffold-abc",
+            },
+            p: {
+              type: "uri" as const,
+              value: "http://www.w3.org/1999/02/22-rdf-syntax-ns#typeAssertion",
+            },
+            o: {
+              type: "triple" as const,
+              value: {
+                subject: {
+                  type: "uri" as const,
+                  value: "https://forge.example/kb/Plan/orch-scaffold-abc",
+                },
+                predicate: {
+                  type: "uri" as const,
+                  value: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                },
+                object: {
+                  type: "uri" as const,
+                  value: "https://forge.example/kb/Plan",
+                },
+              },
+            },
+          },
+        ],
+      },
+    };
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+      text: () => Promise.resolve(JSON.stringify(mockResponse)),
+    });
+
+    const adapter = new SparqlAdapter(
+      "http://test/sparql",
+      mockFetch as unknown as typeof fetch,
+    );
+    const ugm = await adapter.query(
+      "SELECT ?s ?p ?o WHERE { ?s ?p ?o . << ?s rdf:type ?o >> ?p ?o }",
+    );
+
+    const subject = "https://forge.example/kb/Plan/orch-scaffold-abc";
+    const node = ugm.getNode(subject);
+    expect(node).toBeDefined();
+
+    const stored = node?.properties.typeAssertion as
+      | { subject: unknown; predicate: unknown; object: unknown }
+      | undefined;
+    expect(stored).toBeDefined();
+    // Never store the object as the "[object Object]" stringification.
+    // Serialize before scanning: String() on any structured object is itself
+    // "[object Object]", so it can only pass the intended check for a value the
+    // code has already flattened. JSON.stringify inspects the stored shape.
+    expect(JSON.stringify(stored)).not.toContain("[object Object]");
+    expect(stored?.subject).toEqual({ type: "uri", value: subject });
+    expect(stored?.predicate).toEqual({
+      type: "uri",
+      value: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+    });
+    expect(stored?.object).toEqual({
+      type: "uri",
+      value: "https://forge.example/kb/Plan",
+    });
+  });
+
+  it("preserves nested triple terms recursively", async () => {
+    const inner = {
+      subject: {
+        type: "uri" as const,
+        value: "https://forge.example/kb/inner-s",
+      },
+      predicate: {
+        type: "uri" as const,
+        value: "https://forge.example/kb/inner-p",
+      },
+      object: { type: "literal" as const, value: "inner-o" },
+    };
+    const mockResponse = {
+      results: {
+        bindings: [
+          {
+            s: {
+              type: "uri" as const,
+              value: "https://forge.example/kb/outer-s",
+            },
+            p: {
+              type: "uri" as const,
+              value: "https://forge.example/kb/wraps",
+            },
+            o: {
+              type: "triple" as const,
+              value: {
+                subject: {
+                  type: "uri" as const,
+                  value: "https://forge.example/kb/mid-s",
+                },
+                predicate: {
+                  type: "uri" as const,
+                  value: "https://forge.example/kb/mid-p",
+                },
+                object: { type: "triple" as const, value: inner },
+              },
+            },
+          },
+        ],
+      },
+    };
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+      text: () => Promise.resolve(JSON.stringify(mockResponse)),
+    });
+
+    const adapter = new SparqlAdapter(
+      "http://test/sparql",
+      mockFetch as unknown as typeof fetch,
+    );
+    const ugm = await adapter.query("SELECT ?s ?p ?o WHERE { ?s ?p ?o }");
+
+    const outer = ugm.getNode("https://forge.example/kb/outer-s");
+    const wraps = outer?.properties.wraps as
+      | { subject: unknown; predicate: unknown; object: unknown }
+      | undefined;
+    expect(wraps).toBeDefined();
+    const nestedObject = wraps?.object as {
+      type: string;
+      value: { subject: unknown; predicate: unknown; object: unknown };
+    };
+    expect(nestedObject.type).toBe("triple");
+    expect(nestedObject.value.subject).toEqual({
+      type: "uri",
+      value: "https://forge.example/kb/inner-s",
+    });
+    expect(nestedObject.value.object).toEqual({
+      type: "literal",
+      value: "inner-o",
+    });
+  });
 });
 
 // ── E2.T2: Cypher adapter ──────────────────────────────────────────
