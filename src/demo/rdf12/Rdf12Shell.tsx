@@ -483,6 +483,7 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
               stylesheet={stylesheet}
               onReady={publishCanvas("rdf12")}
               animate={!reducedMotion}
+              routeEdges
             />
           </div>
           <div style={{ padding: 12 }}>

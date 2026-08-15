@@ -734,6 +734,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                     layout={inferenceOn ? "fcose" : "breadthfirst"}
                     onReady={setViewCore}
                     animate={!reducedMotion}
+                    routeEdges
                   />
                 </div>
               </>
@@ -806,6 +807,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                         }
                         onReady={setViewCore}
                         animate={!reducedMotion}
+                        routeEdges
                       />
                       <FloatingLegend
                         ugm={neighborhood}
@@ -875,6 +877,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                     stylesheet={MULTI_TYPE_PIE_RULES}
                     onReady={setViewCore}
                     animate={!reducedMotion}
+                    routeEdges
                   />
                   <FloatingLegend
                     ugm={instUgm}
@@ -1032,6 +1035,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                         : undefined
                     }
                     animate={!reducedMotion}
+                    routeEdges
                   />
                 </div>
               </>
