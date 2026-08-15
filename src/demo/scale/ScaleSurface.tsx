@@ -38,6 +38,7 @@ import {
 import { SurfaceFrame } from "../surfaces/DashboardSurfaces";
 import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
+import { publishCanvas } from "../testing/e2e-hooks";
 import { generateScaleGraph, SCALE_SEED } from "./generate";
 
 /** Color driver switches between the type channel (uniform in the
@@ -650,6 +651,7 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
             onReady={(c) => {
               markReady(view.kind);
               setCore(c);
+              publishCanvas("scale")?.(c);
               const label = view.kind;
               const key = viewKey;
               // Name EVERY layout that runs on this instance: the

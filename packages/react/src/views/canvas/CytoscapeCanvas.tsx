@@ -1160,6 +1160,14 @@ export function CytoscapeCanvas({
   const routeEdgesRef = useRef(routeEdges);
   // eslint-disable-next-line react-hooks/refs
   routeEdgesRef.current = routeEdges;
+  // True once layoutstop has fired on the current cy instance; guards
+  // the prop-change effect from routing against pre-layout positions
+  // during a graph rebuild (init effect and the change effect both
+  // fire on ugm change, and the change effect used to run its pass
+  // synchronously against wherever the just-started layout had put
+  // nodes at that microtask - the initial fcose flash on the Scale
+  // demo's first-visit path).
+  const layoutSettledRef = useRef(false);
 
   /** One stylesheet assembly for init AND live theme restyles.
    *  Order is the precedence story: structural defaults (fallback
@@ -1640,6 +1648,7 @@ export function CytoscapeCanvas({
     if (structural) applyRoutedSegmentBypasses(cy);
 
     cyRef.current = cy;
+    layoutSettledRef.current = false;
     setOverlayCy(cy);
     // Re-apply the visibility filter to this (possibly rebuilt) instance.
     applyHiddenClasses(cy, hiddenRef.current);
@@ -1675,12 +1684,24 @@ export function CytoscapeCanvas({
         }
       };
       cy.on("layoutstop", () => {
+        layoutSettledRef.current = true;
         routingGeneration++;
         const gen = routingGeneration;
-        // animate:false makes layoutstop synchronous with settled
-        // positions; run immediately. animate:true defers positions to
-        // the animation frames, so the read must wait until they settle.
-        if (!animate || animationDuration === 0) {
+        // Only animate:true (per-tick animation) leaves positions
+        // interpolating at layoutstop and needs the deferred read.
+        // animate:false and animate:"end" both mean positions are
+        // SETTLED at layoutstop; deferring there paints straight
+        // beziers for animationDuration+16ms before edges snap to
+        // routed polylines (visible flash on the Scale demo's return
+        // paths where layoutOptions.animate is false but the canvas
+        // prop is true). The layout-config `animate` overrides the
+        // canvas prop by way of layoutOptionsRef spread order.
+        const effectiveAnimate = layoutOptionsRef.current?.animate ?? animate;
+        if (
+          effectiveAnimate === false ||
+          effectiveAnimate === "end" ||
+          animationDuration === 0
+        ) {
           runPass();
         } else {
           const delay = (animationDuration ?? 400) + 16;
@@ -1868,6 +1889,13 @@ export function CytoscapeCanvas({
     const cy = cyRef.current;
     if (!cy) return;
     if (routeEdges) {
+      // Skip if the current cy has not settled a layout yet: the init
+      // effect's layoutstop handler will route with correct positions.
+      // Routing here against a still-animating fcose paints edges to
+      // the initial (random) positions until layoutstop fires - the
+      // Scale demo's first-visit flash. Prop flips AFTER settle still
+      // route immediately (the intended change-handler behavior).
+      if (!layoutSettledRef.current) return;
       const cfg =
         routeEdges === true
           ? { maxEdges: 600 }
