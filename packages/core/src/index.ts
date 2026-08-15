@@ -364,6 +364,16 @@ export {
   buildSubgraph,
   clusterBadgeText,
 } from "./scale/collapse-by-cluster";
+export {
+  bundleEdges,
+  bundledPolylineToSegments,
+} from "./bundling/edge-bundling";
+export type {
+  BundlingEdge,
+  BundleEdgesOptions,
+  BundleEdgesResult,
+  XY as BundlingPoint,
+} from "./bundling/edge-bundling";
 export type {
   CollapseByClusterOptions,
   CollapseResult,

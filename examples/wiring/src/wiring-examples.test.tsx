@@ -40,6 +40,8 @@ import {
   typeCollapse,
   collapseByCluster,
   buildSubgraph,
+  bundleEdges,
+  bundledPolylineToSegments,
   G3tEventBus,
   HolonicAdapter,
   projectTripleTermsAsEdges,
@@ -668,6 +670,76 @@ describe("scaling (guide: Scaling: collapse large graphs to clusters)", () => {
     expect(clustered.getNode("cluster:t0")?.properties._badge).toBe(
       "40 nodes · 39 links",
     );
+  });
+});
+
+describe("edge bundling (guide: Edge bundling)", () => {
+  it("bundles a small parallel cluster deterministically, endpoints preserved", () => {
+    // Two near-parallel edges between four nodes: the FDEB canonical
+    // convergence case. The wiring-guide snippet shape.
+    const positions = {
+      a1: { x: 0, y: 0 },
+      a2: { x: 100, y: 0 },
+      b1: { x: 0, y: 8 },
+      b2: { x: 100, y: 8 },
+    };
+    const edges = [
+      { id: "a", source: "a1", target: "a2" },
+      { id: "b", source: "b1", target: "b2" },
+    ];
+
+    const { routes, skipped } = bundleEdges(positions, edges);
+    expect(skipped).toBe(false);
+
+    // Endpoints stay pinned to the input node positions.
+    for (const e of edges) {
+      const poly = routes.get(e.id)!;
+      expect(poly[0]).toBe(positions[e.source as keyof typeof positions]);
+      expect(poly[poly.length - 1]).toBe(
+        positions[e.target as keyof typeof positions],
+      );
+    }
+
+    // The two edges' same-index interior points converge relative
+    // to the input gap of 8.
+    const a = routes.get("a")!;
+    const b = routes.get("b")!;
+    const mid = Math.floor(a.length / 2);
+    expect(Math.abs(a[mid]!.y - b[mid]!.y)).toBeLessThan(8);
+
+    // Second run yields byte-identical routes (no RNG anywhere).
+    const again = bundleEdges(positions, edges);
+    for (const e of edges) {
+      const p1 = routes.get(e.id)!;
+      const p2 = again.routes.get(e.id)!;
+      expect(p1.length).toBe(p2.length);
+      for (let i = 0; i < p1.length; i++) {
+        expect(p1[i]!.x).toBe(p2[i]!.x);
+        expect(p1[i]!.y).toBe(p2[i]!.y);
+      }
+    }
+
+    // The segments projection is what the Cytoscape `curve-style:
+    // segments` rule consumes on the render side.
+    const seg = bundledPolylineToSegments(a);
+    expect(seg).not.toBeNull();
+    expect(seg!.weights.length).toBe(a.length - 2);
+    expect(seg!.distances.length).toBe(a.length - 2);
+  });
+
+  it("bypasses cleanly (skipped=true) when input exceeds maxEdges", () => {
+    const positions: Record<string, { x: number; y: number }> = {};
+    for (let i = 0; i < 20; i++) positions[`n${i}`] = { x: i * 10, y: 0 };
+    const edges = Array.from({ length: 10 }, (_, i) => ({
+      id: `e${i}`,
+      source: `n${i}`,
+      target: `n${i + 10}`,
+    }));
+    const { routes, skipped } = bundleEdges(positions, edges, { maxEdges: 5 });
+    expect(skipped).toBe(true);
+    for (const e of edges) {
+      expect(routes.get(e.id)!.length).toBe(2);
+    }
   });
 });
 

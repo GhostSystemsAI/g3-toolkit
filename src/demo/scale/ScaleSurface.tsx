@@ -28,6 +28,8 @@ import {
 } from "@g3t/react";
 import type { Core } from "cytoscape";
 import {
+  bundleEdges,
+  bundledPolylineToSegments,
   collapseByCluster,
   buildSubgraph,
   clusterBadgeText,
@@ -279,6 +281,10 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
   // 12.5: cluster-link labels are visual clutter at 40 supernodes;
   // OFF by default, a chip re-enables.
   const [edgeLabels, setEdgeLabels] = useState(false);
+  // Brief 16: force-directed edge bundling on the aggregated cluster-links.
+  // Well below the maxEdges=2000 cap in every layout; scoped to the
+  // clusters view (the raw drill graph exceeds it and would bypass).
+  const [bundleOn, setBundleOn] = useState(false);
   const spec = useMemo(
     () =>
       makeSpec(
@@ -345,6 +351,53 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
   }, [view, model]);
 
   const canvasUgm = drill ? drill.ugm : model.clustered;
+
+  // Recompute bundling on toggle / view change (never per frame):
+  // grabs the settled node positions from the cached layout output
+  // and rewrites each cluster-link edge's segments bypass through
+  // the live cy instance. Camera and node positions are untouched
+  // (this is a per-edge style bypass — a restyle, not a re-init or
+  // re-layout), matching the camera/position stability doctrine.
+  useEffect(() => {
+    if (!core) return;
+    const cy = core;
+    const active = bundleOn && view.kind === "clusters";
+    if (!active) {
+      cy.edges().forEach((e) => {
+        e.removeClass("g3t-bundled-edge");
+        e.removeStyle("curve-style");
+        e.removeStyle("segment-distances");
+        e.removeStyle("segment-weights");
+      });
+      return;
+    }
+    const positions = POS_CACHE.get(viewKey);
+    if (!positions) {
+      return;
+    }
+    const edgeInputs: Array<{ id: string; source: string; target: string }> =
+      [];
+    cy.edges().forEach((e) => {
+      edgeInputs.push({
+        id: e.id(),
+        source: e.source().id(),
+        target: e.target().id(),
+      });
+    });
+    const { routes, skipped } = bundleEdges(positions, edgeInputs);
+    if (skipped) return;
+    for (const [edgeId, poly] of routes) {
+      const seg = bundledPolylineToSegments(poly);
+      const ele = cy.$id(edgeId);
+      if (ele.length === 0 || !seg) continue;
+      ele.addClass("g3t-bundled-edge");
+      ele.style({
+        "curve-style": "segments",
+        "segment-distances": seg.distances.join(" "),
+        "segment-weights": seg.weights.join(" "),
+      });
+    }
+  }, [core, bundleOn, view.kind, viewKey]);
 
   // Selecting a supernode on the canvas drills in, same as the rail.
   // A store change is an EVENT: react to it inside the subscription
@@ -440,6 +493,34 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
               </button>
               <div style={{ fontSize: 10, opacity: 0.55, marginTop: 3 }}>
                 Recolors every supernode in place; no re-layout.
+              </div>
+              <button
+                type="button"
+                data-testid="scale-bundle-toggle"
+                onClick={() => setBundleOn((v) => !v)}
+                style={{
+                  font: "inherit",
+                  fontSize: 11,
+                  marginTop: 6,
+                  padding: "3px 10px",
+                  border: "1px solid #7ee081",
+                  borderRadius: 4,
+                  background: bundleOn
+                    ? "rgba(126,224,129,0.18)"
+                    : "transparent",
+                  color: "inherit",
+                  cursor: "pointer",
+                }}
+              >
+                {bundleOn ? "Bundling edges (FDEB)" : "Bundle edges"}
+              </button>
+              <div
+                style={{ fontSize: 10, opacity: 0.55, marginTop: 3 }}
+                data-testid="scale-bundle-status"
+              >
+                {bundleOn
+                  ? "Cluster-links bundled (force-directed, deterministic)."
+                  : "Force-directed edge bundling on the aggregated cluster links."}
               </div>
               <button
                 type="button"

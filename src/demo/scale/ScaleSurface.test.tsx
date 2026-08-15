@@ -201,4 +201,27 @@ describe("ScaleSurface", () => {
     // honors it per-layout; reduced motion flips it via the hook.
     expect(captured.animate.at(-1)).toBe(true);
   });
+
+  it("brief 16: bundle-edges toggle is scoped to the clusters view and flips state", () => {
+    render(<ScaleSurface onBack={() => {}} />);
+    const toggle = screen.getByTestId("scale-bundle-toggle");
+    expect(toggle.textContent).toMatch(/Bundle edges/);
+    fireEvent.click(toggle);
+    expect(screen.getByTestId("scale-bundle-toggle").textContent).toMatch(
+      /Bundling edges/,
+    );
+    // The status affordance updates on toggle. Under the mocked canvas
+    // no cy instance exists, so the bundled-count is 0 — the pixel-level
+    // route application is browser-verified; here we pin the wiring.
+    expect(screen.getByTestId("scale-bundle-status").textContent).toMatch(
+      /bundled/,
+    );
+    // Drilling into a cluster hides the cluster-scoped toggle: bundling
+    // only applies to the aggregated cluster links.
+    const drillRow = screen
+      .getAllByRole("button")
+      .find((b) => (b.textContent ?? "").includes("cluster around"));
+    fireEvent.click(drillRow as HTMLElement);
+    expect(screen.queryByTestId("scale-bundle-toggle")).toBeNull();
+  });
 });

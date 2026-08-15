@@ -125,7 +125,15 @@ const BUDGETS = {
   // (diamond _Statement pseudo-nodes with rdf:subject/object arcs,
   // recursing on nested << << s p o >> p2 o2 >>), both additive/opt-in,
   // exported through projection + top-level barrels. Measured 192.1.
-  core: 196 * 1024,
+  // RAISED 196 -> 200 (2026-08-15): brief 16 force-directed edge
+  // bundling (FDEB, Holten & van Wijk 2009) — bundling/edge-bundling.ts
+  // adds bundleEdges (deterministic, endpoint-preserving, maxEdges-
+  // bounded) + bundledPolylineToSegments (Cytoscape segments projector),
+  // pure geometry, zero React/Cytoscape, exported through the top-level
+  // barrel. Companion to collapseByCluster for the aggregated cluster-
+  // link legibility path; opt-in via a scale-demo toggle. Measured 198.3;
+  // +1.7 KB headroom.
+  core: 200 * 1024,
   // Core ledger:
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with

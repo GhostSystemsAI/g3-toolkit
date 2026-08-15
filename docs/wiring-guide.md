@@ -723,6 +723,60 @@ planning/large-graph-design.md; Approach 4 (worker layout with
 viewport culling, for drilled sets past ~5k) is designed but not yet
 implemented.
 
+## Edge bundling (dense-scene legibility)
+
+CI-executed in `examples/wiring/src/wiring-examples.test.tsx`. The
+"hairball" middle ground — hundreds to low-thousands of visible edges
+that obscure structure — is what force-directed edge bundling (FDEB,
+Holten & van Wijk 2009) is for. Pairs naturally with
+`collapseByCluster`: bundle the aggregated cluster links, not the
+raw 8,000-edge graph.
+
+```ts
+import { bundleEdges, bundledPolylineToSegments } from "@g3t/core";
+
+// positions: whatever your layout settled on (cy.nodes() -> position,
+// ELK output, cached preset positions — anything id -> {x,y}).
+const positions: Record<string, { x: number; y: number }> = {};
+cy.nodes().forEach((n) => (positions[n.id()] = n.position()));
+
+const edges = cy.edges().map((e) => ({
+  id: e.id(),
+  source: e.source().id(),
+  target: e.target().id(),
+}));
+
+const { routes, skipped } = bundleEdges(positions, edges);
+// skipped === true when input exceeds opts.maxEdges (default 2000):
+// bundling is O(E^2) in compatibility, so it bypasses cleanly.
+if (!skipped) {
+  for (const [edgeId, poly] of routes) {
+    const seg = bundledPolylineToSegments(poly);
+    if (!seg) continue; // straight polyline, no interior bend
+    cy.$id(edgeId).style({
+      "curve-style": "segments",
+      "segment-distances": seg.distances.join(" "),
+      "segment-weights": seg.weights.join(" "),
+    });
+  }
+}
+```
+
+Deterministic by construction (no RNG, fixed subdivision + iteration
+schedule): same input yields byte-identical polylines. Endpoints are
+never moved — `route[0]` and `route[last]` are the source and target
+positions verbatim, so bundling never detaches an edge from its node.
+Recompute on toggle or on a genuine layout change; a bundling pass
+is a restyle plus per-edge bypass, so pan/zoom and node positions
+hold (same-input-graph camera doctrine).
+
+Options: `maxEdges` (default 2000), `cycles` (6), `iterations` (50,
+halved per cycle), `stepSize` (0.4, halved per cycle), `stiffness`
+(0.1), `compatibilityThreshold` (0.6). The defaults match Holten's
+paper. Increase `compatibilityThreshold` to bundle only near-parallel
+edges; lower it to bundle more aggressively at the cost of longer
+routes.
+
 ## Programmatic APIs
 
 Every snippet here runs under CI in
