@@ -289,6 +289,13 @@ planning/           ← Milestones, audits, evaluations; retired-effort
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the toolkit/application boundary.
 
+## Security
+
+Report vulnerabilities privately, not as public issues. See
+[SECURITY.md](SECURITY.md), which also covers the one question every
+adopter connecting a browser to a graph store should read first: what
+the auth middleware does and does not protect.
+
 ## License
 
 Apache 2.0

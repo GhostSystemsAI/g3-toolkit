@@ -44,6 +44,7 @@ export { SparqlAdapter } from "./adapter";
 export { CypherAdapter } from "./adapter";
 export { HolonicAdapter } from "./adapter";
 export type { GremlinAdapterConfig } from "./adapter";
+export { RestAdapter } from "./adapter/rest-adapter";
 export type {
   RestAdapterConfig,
   RestResponseMapping,

@@ -12,10 +12,11 @@ import { UGM } from "../ugm";
 import type { GraphAdapter, SchemaModel } from "../adapter";
 import {
   composeMiddleware,
-  defaultFetch,
+  createDefaultFetch,
   type Middleware,
   type AdapterRequest,
 } from "../middleware/middleware";
+import { assertOk } from "./adapter-error";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -48,6 +49,11 @@ export interface RestAdapterConfig {
   mapResponse: (json: unknown) => RestResponseMapping;
   /** Middleware chain (auth, retry, logging). */
   middleware?: Middleware[];
+  /**
+   * Request timeout in milliseconds. Defaults to
+   * `DEFAULT_TIMEOUT_MS` (30 s); pass 0 to disable it.
+   */
+  timeoutMs?: number;
 }
 
 // ── Adapter ─────────────────────────────────────────────────────────
@@ -67,9 +73,10 @@ export class RestAdapter implements GraphAdapter {
   constructor(config: RestAdapterConfig) {
     this.config = config;
     this.name = `REST (${config.url})`;
+    const base = createDefaultFetch({ timeoutMs: config.timeoutMs });
     this.fetcher = config.middleware
-      ? composeMiddleware(config.middleware, defaultFetch)
-      : defaultFetch;
+      ? composeMiddleware(config.middleware, base)
+      : base;
   }
 
   async query(queryString: string): Promise<UGM> {
@@ -85,11 +92,7 @@ export class RestAdapter implements GraphAdapter {
 
     const response = await this.fetcher(request);
 
-    if (!response.ok) {
-      throw new Error(
-        `REST adapter: ${response.status} from ${this.config.url}`,
-      );
-    }
+    assertOk("REST", this.config.url, response);
 
     const json = JSON.parse(response.body);
     const mapped = this.config.mapResponse(json);

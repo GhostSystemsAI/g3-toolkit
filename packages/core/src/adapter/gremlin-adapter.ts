@@ -16,9 +16,10 @@ import { UGM } from "../ugm";
 import type { GraphAdapter, SchemaModel } from "./types";
 import type { PropertyMap } from "../ugm";
 import { coerceDepth } from "./query-safety";
+import { assertOk } from "./adapter-error";
 import {
   composeMiddleware,
-  defaultFetch,
+  createDefaultFetch,
   type Middleware,
   type AdapterRequest,
   type AdapterResponse,
@@ -61,6 +62,11 @@ export interface GremlinAdapterConfig {
   middleware?: Middleware[];
   /** Optional: source graph name for Neptune/Cosmos. */
   source?: string;
+  /**
+   * Request timeout in milliseconds. Defaults to
+   * `DEFAULT_TIMEOUT_MS` (30 s); pass 0 to disable it.
+   */
+  timeoutMs?: number;
 }
 
 // ── Adapter ─────────────────────────────────────────────────────────
@@ -74,9 +80,10 @@ export class GremlinAdapter implements GraphAdapter {
   constructor(config: GremlinAdapterConfig) {
     this.config = config;
     this.name = `Gremlin (${config.endpoint})`;
+    const base = createDefaultFetch({ timeoutMs: config.timeoutMs });
     this.fetcher = config.middleware
-      ? composeMiddleware(config.middleware, defaultFetch)
-      : defaultFetch;
+      ? composeMiddleware(config.middleware, base)
+      : base;
   }
 
   async query(q: string): Promise<UGM> {
@@ -179,11 +186,7 @@ export class GremlinAdapter implements GraphAdapter {
       body: JSON.stringify(body),
     });
 
-    if (!response.ok) {
-      throw new Error(
-        `Gremlin query failed: ${response.status} from ${this.config.endpoint}`,
-      );
-    }
+    assertOk("Gremlin", this.config.endpoint, response);
 
     return JSON.parse(response.body) as GremlinResponse;
   }

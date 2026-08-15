@@ -14,11 +14,12 @@ import type { PropertyMap } from "../ugm";
 import type { GraphAdapter, SchemaModel } from "./types";
 import {
   composeMiddleware,
-  defaultFetch,
+  createDefaultFetch,
   type Middleware,
   type AdapterRequest,
 } from "../middleware/middleware";
 import { assertPlainIdentifier, coerceDepth } from "./query-safety";
+import { assertOk } from "./adapter-error";
 
 /** Neo4j HTTP API response format. */
 interface Neo4jResult {
@@ -61,18 +62,23 @@ export class CypherAdapter implements GraphAdapter {
     endpointUrl: string,
     fetchFn?: typeof fetch,
     auth?: { username: string; password: string },
-    options?: { middleware?: Middleware[] },
+    options?: { middleware?: Middleware[]; timeoutMs?: number },
   ) {
     this.endpointUrl = endpointUrl;
     this.auth = auth;
+    const base = createDefaultFetch({ timeoutMs: options?.timeoutMs });
     if (options?.middleware) {
-      this.fetchImpl = composeMiddleware(options.middleware, defaultFetch);
+      this.fetchImpl = composeMiddleware(options.middleware, base);
     } else if (fetchFn) {
+      // `timeoutMs` does NOT apply on this path: the caller supplied
+      // the transport, so the timeout is theirs. The signal is
+      // forwarded so cancellation still works if their fetch honors it.
       this.fetchImpl = async (req) => {
         const res = await fetchFn(req.url, {
           method: req.method,
           headers: req.headers,
           body: req.body,
+          signal: req.signal,
         });
         let body = "";
         if (typeof res.text === "function") {
@@ -88,7 +94,7 @@ export class CypherAdapter implements GraphAdapter {
         };
       };
     } else {
-      this.fetchImpl = defaultFetch;
+      this.fetchImpl = base;
     }
   }
 
@@ -188,13 +194,20 @@ export class CypherAdapter implements GraphAdapter {
       }),
     });
 
-    if (!response.ok) {
-      throw new Error(`Cypher query failed: ${response.status}`);
-    }
+    assertOk("Cypher", this.endpointUrl, response);
 
     const data = JSON.parse(response.body) as Neo4jResult;
     if (data.errors.length > 0) {
-      throw new Error(`Cypher error: ${data.errors[0]?.message}`);
+      // Neo4j answers a rejected statement with HTTP 200 and an errors
+      // array, so this is not an `assertOk` case. Report every error
+      // with its code: the code is the machine-readable half
+      // (`Neo.ClientError.Statement.SyntaxError` distinguishes a bad
+      // query from `Neo.ClientError.Security.Unauthorized`), and only
+      // the first message was surfaced before.
+      const detail = data.errors
+        .map((e) => `${e.code}: ${e.message}`)
+        .join("; ");
+      throw new Error(`Cypher error: ${detail}`);
     }
 
     return data;

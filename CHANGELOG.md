@@ -1,6 +1,55 @@
 # Changelog
 
-## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, perf gate inputs, adopter docs, planning tree)
+## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, adapter request hygiene, security policy, perf gate inputs, adopter docs, planning tree)
+
+- **Adapter requests time out, can be cancelled, and now report what
+  the server actually said.** `fetch` has no timeout of its own and the
+  adapters added none, so an endpoint that accepted a connection and
+  then stopped answering left the returned promise pending forever:
+  every adapter call sits behind an `await`, so in a browser that is a
+  spinner that never resolves, with no error to catch and nothing in
+  the console. Requests now time out after 30 seconds by default,
+  configurable per adapter with `timeoutMs` (pass 0 to disable), and
+  `AdapterRequest` carries an optional `signal` so a host can cancel an
+  in-flight query when the user navigates away. The two cases are
+  reported apart: `AdapterTimeoutError.timedOut` separates a hung
+  endpoint, which is worth reporting, from a caller cancellation, which
+  usually is not. Separately, all four remote adapters rejected a
+  non-2xx response with a bare status (`"SPARQL query failed: 500"`)
+  after reading and discarding the body the endpoint sent, which is the
+  half that says which clause failed and at what offset. They now throw
+  `AdapterHttpError` carrying the status, the URL, and the body
+  truncated to 1000 characters, with the body in the message too since
+  logging `err.message` alone is the common case. The four call sites
+  share one helper so the shape cannot drift apart again, and the
+  Neo4j-specific error path reports every error with its code instead
+  of only the first message. `retryOnError` threw a bare
+  `new Error("Max retries exceeded")` out of an empty `catch {}`, so a
+  refused connection, a rejected token, and a timeout all produced the
+  same six words; it now throws `RetryExhaustedError` with the original
+  failure as `cause`, and it no longer retries aborts at all, since
+  retrying a cancelled request ignores an explicit instruction and
+  retrying a timeout multiplies the wait the timeout existed to bound.
+  Found while doing this: `RestAdapter`'s config types were exported
+  but the class itself was exported from nowhere, so a capability the
+  docs list as shipped had no import path. It is now reachable from
+  `@g3t/core` and `@g3t/core/adapters`.
+
+- **Added SECURITY.md, including the answer to the question adopters
+  connecting a browser to a graph store should ask first.** It states
+  the private reporting channel, what is in and out of scope for a
+  library that renders inside the host's origin with the host's
+  privileges, and which entry points are hardened against hostile input
+  versus trusted by contract. The credentials section is blunt on
+  purpose: `bearerAuth` and `apiKeyHeader` attach a credential from code
+  running in the page, so anything the bundle can read the user can
+  read, and the middleware is not a secret store. If a graph store
+  cannot issue per-user, short-lived, least-privilege credentials, the
+  browser should talk to an endpoint in the host application instead,
+  which is a one-line change since the adapters take a URL. README and
+  CONTRIBUTING point at it, and the dependency section says plainly
+  that there is no automated advisory gate in CI rather than implying
+  one exists.
 
 - **The perf suite now fails by name when its budgets file is missing
   or malformed, instead of by ENOENT or not at all.** `prf-budgets.json`

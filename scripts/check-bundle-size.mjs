@@ -57,8 +57,30 @@ const BUDGETS = {
   // oracle-pinned.
   // Round 21 (2026-08-05): +1 KB for the structural style applier
   // (R-12a), the renderer-neutral counterpart of the cytoscape one.
-  core: 162.0 * 1024,
+  core: 166.0 * 1024,
   // Core ledger:
+  // - 162 -> 166 KB, 2026-08-15 (adapter request hygiene): measured
+  //   164.6 KB, +4.2 KB. Four things, all first-party:
+  //   adapter/adapter-error.ts (new; AdapterHttpError plus the shared
+  //   assertOk the four adapters now call instead of hand-rolling a
+  //   throw), the timeout/cancellation machinery in
+  //   middleware/middleware.ts (createDefaultFetch, AdapterTimeoutError,
+  //   RetryExhaustedError), and RestAdapter becoming reachable from the
+  //   root barrel, which it never was: its config TYPES were exported
+  //   and the class was not, so a documented adapter had no import
+  //   path. That last one is the only byte-visible part of the fix and
+  //   it is not optional; an unreachable class is not a saving.
+  //   Sourcemap audit run first as the 2026-07-03 entry requires:
+  //   ZERO node_modules source bytes in core's dist, so every byte
+  //   here is ours. A large share is jsdoc on adapter-error.ts and on
+  //   the timeout default, which stays: budgets are unminified by
+  //   deliberate policy, and "why 30 seconds" and "why aborts are
+  //   never retried" are exactly what a future reader needs. New
+  //   headroom is 1.4 KB, deliberately tight, because the standing
+  //   recommendation is still to extract @g3t/layout (ARC-009) and
+  //   bring core back under its original envelope rather than keep
+  //   raising. This is the third raise this session and the third
+  //   that is hardening rather than feature work.
   // - 160 -> 162 KB, 2026-08-14 (parse-boundary hardening):
   //   element-shape checking in
   //   model/graph-document.ts so parseGraphDocument honors its

@@ -3,12 +3,11 @@ name: Publish Packages
 on:
   push:
     tags: ["v*"]
-  # Rehearsal. The audit finding this workflow answers was that the
-  # release path had never been executed: zero tags existed, so a first
-  # publish of three packages at 1.0.0 would be the debut run of every
-  # step below. A dispatch with dry_run left on runs the whole thing,
-  # publishes included, against `--dry-run`. Do the rehearsal before the
-  # tag, not after.
+  # Rehearsal. This release path has never been executed: zero tags
+  # exist, so a first publish of three packages at 1.0.0 would be the
+  # debut run of every step below. A dispatch with dry_run left on runs
+  # the whole thing, publishes included, against `--dry-run`. Do the
+  # rehearsal before the tag, not after.
   workflow_dispatch:
     inputs:
       dry_run:

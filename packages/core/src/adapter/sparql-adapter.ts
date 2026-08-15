@@ -14,11 +14,12 @@ import type { PropertyMap } from "../ugm";
 import type { GraphAdapter, SchemaModel } from "./types";
 import {
   composeMiddleware,
-  defaultFetch,
+  createDefaultFetch,
   type Middleware,
   type AdapterRequest,
 } from "../middleware/middleware";
 import { assertSafeIri, coerceDepth } from "./query-safety";
+import { assertOk } from "./adapter-error";
 
 /** A single binding row from a SPARQL SELECT result. */
 interface SparqlBinding {
@@ -51,18 +52,24 @@ export class SparqlAdapter implements GraphAdapter {
   constructor(
     endpointUrl: string,
     fetchFn?: typeof fetch,
-    options?: { middleware?: Middleware[] },
+    options?: { middleware?: Middleware[]; timeoutMs?: number },
   ) {
     this.endpointUrl = endpointUrl;
+    const base = createDefaultFetch({ timeoutMs: options?.timeoutMs });
     if (options?.middleware) {
-      this.fetchImpl = composeMiddleware(options.middleware, defaultFetch);
+      this.fetchImpl = composeMiddleware(options.middleware, base);
     } else if (fetchFn) {
-      // Legacy: wrap the custom fetchFn in our AdapterRequest interface
+      // Legacy: wrap the custom fetchFn in our AdapterRequest
+      // interface. `timeoutMs` does NOT apply on this path: the caller
+      // supplied the transport, so the timeout is theirs to impose.
+      // The request's `signal` is forwarded so cancellation still
+      // works if their fetch honors it.
       this.fetchImpl = async (req) => {
         const res = await fetchFn(req.url, {
           method: req.method,
           headers: req.headers,
           body: req.body,
+          signal: req.signal,
         });
         let body = "";
         if (typeof res.text === "function") {
@@ -78,7 +85,7 @@ export class SparqlAdapter implements GraphAdapter {
         };
       };
     } else {
-      this.fetchImpl = defaultFetch;
+      this.fetchImpl = base;
     }
   }
 
@@ -166,9 +173,7 @@ export class SparqlAdapter implements GraphAdapter {
       body: sparql,
     });
 
-    if (!response.ok) {
-      throw new Error(`SPARQL query failed: ${response.status}`);
-    }
+    assertOk("SPARQL", this.endpointUrl, response);
 
     return JSON.parse(response.body) as SparqlResult;
   }

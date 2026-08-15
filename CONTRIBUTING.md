@@ -181,3 +181,7 @@ Use GitHub Issues for bug reports and feature requests. Include:
 - Steps to reproduce (for bugs)
 - Expected vs actual behavior
 - Browser/OS/Node version
+
+Not for security. A suspected vulnerability goes through the private
+advisory form described in [SECURITY.md](SECURITY.md), which also
+states what is in scope.
