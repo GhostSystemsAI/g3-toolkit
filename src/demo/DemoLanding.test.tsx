@@ -41,6 +41,7 @@ describe("DemoLanding", () => {
   it("lists the capability surfaces beneath the scenarios (P1.4)", () => {
     expect(CAPABILITY_SURFACES.map((s) => s.id).sort()).toEqual([
       "analytics-dashboard",
+      "legibility",
       "ontology-workbench",
       "rdf12-hyperarcs",
       "routing-lab",

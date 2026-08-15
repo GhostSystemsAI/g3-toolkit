@@ -55,6 +55,11 @@ const RoutingShell = lazy(() =>
 const Rdf12Shell = lazy(() =>
   import("./rdf12/Rdf12Shell").then((m) => ({ default: m.Rdf12Shell })),
 );
+const LegibilityShell = lazy(() =>
+  import("./legibility/LegibilityShell").then((m) => ({
+    default: m.LegibilityShell,
+  })),
+);
 
 /** Map scenario IDs to dedicated demo shells. */
 const SHELL_MAP: Record<string, React.ComponentType<{ onBack: () => void }>> = {
@@ -68,6 +73,7 @@ const SHELL_MAP: Record<string, React.ComponentType<{ onBack: () => void }>> = {
   "style-lab": StyleLabShell,
   "routing-lab": RoutingShell,
   "rdf12-hyperarcs": Rdf12Shell,
+  legibility: LegibilityShell,
 };
 
 export function Demo() {

@@ -107,6 +107,17 @@ export const CAPABILITY_SURFACES: Scenario[] = [
     tags: ["RDF 1.2", "triple terms", "hyperarc", "holon"],
   },
   {
+    id: "legibility",
+    title: "Legibility Lab",
+    subtitle: "Hub burst, bus collapse, and holon boundary",
+    description:
+      "The smallest graphs that make each spreading device readable at a glance. Toggle raw vs spread to watch a 14-degree hub collapse into two grouped satellites, six like edges converge through one trunk (with a below-threshold group visibly staying direct), and a two-holon dataset render its boundary ring with a single exposed node the portal transits through.",
+    accent: "#22d3ee",
+    accentGlow: "rgba(34, 211, 238, 0.15)",
+    icon: "◐",
+    tags: ["hubBurst", "busCollapse", "holon boundary"],
+  },
+  {
     id: "ontology-workbench",
     title: "Ontology Workbench",
     subtitle: "Protege-style browsing, SHACL, SPARQL, and a demo reasoner",
