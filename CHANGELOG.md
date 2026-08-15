@@ -2,6 +2,35 @@
 
 ## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, adapter request hygiene, security policy, cross-package name collisions, archive accuracy, perf gate inputs, adopter docs, planning tree)
 
+- **The store channel is uniform: one reset name, every state type
+  exported, read-only collections, and a `setTheme` that says when it
+  cannot honor an id.** Exported zustand stores are one of the three
+  declared host-integration channels, and they had drifted in four ways
+  no gate could see, because each store was individually reasonable.
+  Six called their reset `clear` and `useSelectionStore` called it
+  `clearSelection`, so a host wiring two stores had to remember which
+  was which; `clear()` is now the name everywhere and `clearSelection`
+  stays as a deprecated alias that delegates to it, removed no earlier
+  than the next major per the policy in RELEASE.md. Four of the seven
+  state types (`InspectorSectionState`, `OverlayState`,
+  `PositionPinState`, `StyleOverrideState`, plus `ThemeState`) were
+  unexported, so a host could subscribe to those stores but could not
+  type a selector over them without redeclaring the shape by hand and
+  then silently drifting from it; all are exported now. `SelectionState`
+  handed out `Set<string>`, which a host could call `.add()` on to
+  change the selection without going through an action, leaving
+  subscribers unnotified and the canvas showing a selection the store
+  does not have; both collections are `ReadonlySet` now, a compile-time
+  narrowing that changes nothing at runtime for anyone already using the
+  actions. It surfaced exactly one internal call site, a `TreeNodeRow`
+  prop that only ever called `.has()`. Finally, `setTheme` with an
+  unknown id did nothing and said nothing, which reads as a rendering
+  bug rather than a bad id; it now warns with the id, the known ids, and
+  the `setCustomTheme` route for a theme of your own, and still does not
+  throw, because a bad theme id must not take down a host's render. A
+  new test types the store list so that a future store added without
+  `clear()` fails to compile rather than failing a test run.
+
 - **The bundle gate was measuring publish weight and calling it what
   consumers pull. It now measures both, separately.** Its docblock said
   unminified dist "is what consumers actually pull through their own

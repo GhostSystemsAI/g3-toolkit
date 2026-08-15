@@ -172,7 +172,7 @@ export const THEME_PRESETS: Record<string, G3tTheme> = {
 
 // ── Zustand Store ───────────────────────────────────────────────────
 
-interface ThemeState {
+export interface ThemeState {
   theme: G3tTheme;
   setTheme: (themeId: string) => void;
   setCustomTheme: (theme: G3tTheme) => void;
@@ -182,10 +182,24 @@ export const useThemeStore = create<ThemeState>((set) => ({
   theme: LIGHT_THEME,
   setTheme: (themeId: string) => {
     const preset = THEME_PRESETS[themeId];
-    if (preset) {
-      set({ theme: preset });
-      injectCssVariables(preset);
+    if (!preset) {
+      // Silently doing nothing was the previous behavior, and it is the
+      // worst answer available: the caller sees the theme not change
+      // with no error, no warning and nothing in the console, which
+      // reads as a rendering bug rather than a bad id. Warn rather than
+      // throw, matching createTheme's posture: a bad theme id should
+      // not take down a host's render.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[g3t] setTheme("${themeId}"): unknown theme id, keeping the ` +
+          `current theme. Known ids: ${Object.keys(THEME_PRESETS).join(", ")}. ` +
+          `For a theme of your own, build it with createTheme and pass it ` +
+          `to setCustomTheme.`,
+      );
+      return;
     }
+    set({ theme: preset });
+    injectCssVariables(preset);
   },
   setCustomTheme: (theme: G3tTheme) => {
     set({ theme });

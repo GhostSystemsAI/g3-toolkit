@@ -227,7 +227,10 @@ export function TreeView({
 
 interface TreeNodeRowProps {
   node: TreeNode;
-  selectedNodeIds: Set<string>;
+  // ReadonlySet: this row only calls .has(). Declaring the mutable
+  // type here was what made SelectionState's narrowing surface as an
+  // error, which is the narrowing doing its job.
+  selectedNodeIds: ReadonlySet<string>;
   onSelect: (ids: string[]) => void;
   onToggle: (nodeId: string) => void;
   onNavigate: (nodeId: string) => void;
