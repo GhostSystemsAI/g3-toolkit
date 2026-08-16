@@ -47,13 +47,20 @@ computation".
 - Algorithms and scale: `parseAlgorithmResult`, `applyAlgorithmResult`,
   `ingestAlgorithmResults`, `findShortestPath`, `allShortestPaths`,
   `collapseByCluster`, `buildSubgraph`, `computeIncrementalUpdate`,
-  `applyIncrementalLayout`.
-- Export: `exportSubgraphJson`, `exportSubgraphCsv`, `exportSubgraphTurtle`.
+  `applyIncrementalLayout`; dense-scene edge bundling (FDEB, pure
+  geometry): `bundleEdges` + `bundledPolylineToSegments` (projects
+  onto the `curve-style: segments` polyline path; deterministic, no
+  RNG; straight-line bypass past a `maxEdges` cap).
+- Export: `exportSubgraphJson`, `exportSubgraphCsv`, `exportSubgraphTurtle`;
+  raster snapshot of the live canvas via `buildImageExport` (@g3t/react
+  toolbar, wraps native `cy.png`; the GraphToolbar export menu exposes PNG).
 - Events: `G3tEventBus` (context-menu actions emit on it).
 
 React: `CytoscapeCanvas` (props: ugm, encodingSpec, stylesheet, hidden,
 containment, layout, layoutOptions, interactionOptions, edgeStyle,
-animate, menuManager, structural + structuralDecorations +
+animate, routeEdges (post-layout obstacle-aware A* routing on
+non-structural scenes; runs at layoutstop, holds camera/positions),
+menuManager, structural + structuralDecorations +
 structuralEdgeLayer (the structural path is DEPRECATED, see rules
 below), onReady which hands you the Cytoscape Core),
 `StructuralSvgView` + `useStructuralLayout`, `relayoutAroundFixed`,
@@ -128,11 +135,14 @@ Details:
 - [API reference (typedoc)](https://zwelz3.github.io/g3-toolkit/api/)
 - [Playground](https://zwelz3.github.io/g3-toolkit/playground/): five
   domain shells (Ontology, Auditor, MBSE, Supply Chain, Biomedical) +
-  capability dashboards (Analytics, Scale, Style Lab, Routing Lab —
-  hard edge-routing scenarios graded live, with an Engine toolbar row
-  exposing every live routing switch: nudge separation, long-edge
-  perimeter threshold, anchor, placement/layering strategy, and effort
-  budgets), live in the browser. The
+  capability dashboards (Analytics, Scale, Style Lab, Legibility Lab —
+  didactic pseudo-node spreading (hub burst / bus collapse) and a
+  holon boundary-ring with a single exposed boundary node, raw<->spread
+  toggles with the camera held so the regrouping is followable —
+  Routing Lab — hard edge-routing scenarios graded live, with an Engine
+  toolbar row exposing every live routing switch: nudge separation,
+  long-edge perimeter threshold, anchor, placement/layering strategy,
+  and effort budgets), live in the browser. The
   landing footer links this file, AGENTS.md, and the wiring guide.
 - [Storybook](https://zwelz3.github.io/g3-toolkit/storybook/)
 

@@ -35,7 +35,9 @@ exposing through one of these three, never a fourth mechanism.
 - Package manager: pnpm, ENFORCED. Never npm or yarn.
 - `pnpm install` then `pnpm run dev` (opens the scenario gallery:
   Ontology, Auditor, MBSE, Supply Chain, Biomedical shells plus the
-  Analytics, Scale, Style Lab, and Routing Lab dashboards).
+  Analytics, Scale, Style Lab, Legibility Lab, and Routing Lab
+  dashboards; Legibility Lab demos pseudo-node spreading and a holon
+  boundary ring with a single exposed boundary node).
 - `pnpm run storybook` for components in isolation.
 - `pnpm run docs:api` generates typedoc into docs-out/api.
 
@@ -143,6 +145,16 @@ docs/wiring-guide.md, and every wiring snippet runs in CI.
     hold): a number re-widths, `false` disables. Do not hand-roll a
     bare `node { text-wrap }` rule; the helper is `node[label]` scoped
     to avoid per-frame mapping warnings.
+16. Dense edge fields: `bundleEdges` + `bundledPolylineToSegments`
+    (@g3t/core) apply force-directed edge bundling (FDEB) as pure
+    geometry onto the `curve-style: segments` path; deterministic (no
+    RNG), with a straight-line bypass past a `maxEdges` cap. For
+    obstacle-aware per-edge routing on ordinary (non-structural)
+    scenes, pass the `routeEdges` prop to `CytoscapeCanvas`: it runs a
+    post-layout A* pass at layoutstop and holds the camera/positions.
+17. Raster export: `buildImageExport` (@g3t/react toolbar) wraps native
+    `cy.png` for a PNG snapshot of the live canvas; the GraphToolbar
+    export menu surfaces it alongside JSON/CSV/Turtle subgraph export.
 
 When unsure of a signature, read the shipped declaration files
 (`packages/*/dist/*.d.ts` after `pnpm run verify`, or the typedoc at
