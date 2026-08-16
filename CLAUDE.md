@@ -33,6 +33,25 @@ wiring-guide snippet + executable twin in examples/wiring/.
 TypeScript, React 19, Vite 8, pnpm (enforced), Cytoscape + Graphology,
 Zustand, Vitest + RTL.
 
+THREE channels, and the count is a ruling rather than an omission:
+`@g3t/core/events` was assessed 2026-08-16 and ruled a context-action
+COMMAND BUS, not a fourth integration channel. 13 of its 21 declared
+event types were emitted by nothing and were deleted; the `eventBus`
+singleton is deprecated (it carries the cross-instance identity hazard
+the stores had). Do not promote events to a channel without revisiting
+that ruling.
+
+**The packages publish ESM ONLY** as of 2026-08-16. No `require`
+condition in any exports entry, no `main` field, no `.cjs` in dist,
+`formats: ["es"]` in all three vite configs. Typed CJS never worked
+(TS1479 from one ESM-flavored `.d.ts` per entry), and that failure was
+the only thing stopping a consumer from mixing formats and duplicating
+the exported store singletons, which presents as selection silently not
+propagating between views. Paired `.d.cts` was REJECTED for fixing the
+compile error while worsening the hazard. `tests/dist/public-api.test.ts`
+asserts the absence per package; do not "restore dual format" without
+reading that reasoning.
+
 ## Non-negotiable gates (run before claiming done)
 
     pnpm run gates
