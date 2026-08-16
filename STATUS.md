@@ -18,11 +18,14 @@ container's blocked font CDN). **E2E CONFIRMED GREEN locally and in CI
 UNTAGGED and deliberately held until the latent MRs land (owner,
 2026-08-16). REMAINING: item 23 (phase 2), never run and covering
 typing, performance, memory, bundle delivery, accessibility and
-concurrency. NOTE: the phase-1 audit artifacts (state.json,
-AUDIT_REPORT-core.md, findings/) are GONE from this tree, excluded from
-the native round's handoff archive and not returned, so `/audit` has no
-state to resume and would plan fresh; audit/REMEDIATION.md is the only
-surviving record and its item numbering is now orphaned.)
+concurrency. **The audit artifacts were RESTORED from backup 2026-08-16
+and the audit is RESUMABLE**: state.json is v2, 4/10 stages complete,
+123 confirmed phase-1 findings, next stage `structure-p2`, 21 pass
+instances left. Two corrections that restoration forced: the 23 roadmap
+items are a prioritized synthesis of 25 deduped top findings, NOT the
+123 findings themselves; and phase-1 coverage was never exhaustive,
+since 7 of 11 passes hit the findings cap with roughly 27 findings seen
+and unwritten, putting the true phase-1 total nearer 154.)
 
 ## PRIOR SNAPSHOT (2026-08-15 remediation round)
 
