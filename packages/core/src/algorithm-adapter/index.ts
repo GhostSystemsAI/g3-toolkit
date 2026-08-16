@@ -1,4 +1,5 @@
 export { ingestAlgorithmResults } from "./algorithm-adapter";
+export type { AlgorithmIngestReport } from "./algorithm-adapter";
 // WITHDRAWN 2026-08-15: overlayFromDocument and
 // ingestEdgeAlgorithmResults. No adopter document named them and
 // nothing here used them. parseAlgorithmResult plus applyAlgorithmResult

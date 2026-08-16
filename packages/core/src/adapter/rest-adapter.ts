@@ -17,6 +17,7 @@ import {
   type AdapterRequest,
 } from "../middleware/middleware";
 import { assertOk } from "./adapter-error";
+import { AdapterArgumentError, coerceDepth } from "./query-safety";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -99,7 +100,28 @@ export class RestAdapter implements GraphAdapter {
     return this.buildUGM(mapped);
   }
 
-  async expandNeighborhood(nodeId: string, _hops?: number): Promise<UGM> {
+  /**
+   * Re-query the configured endpoint with the node id as the filter.
+   * DEPTH IS REJECTED ABOVE 1 rather than ignored.
+   *
+   * How many hops a REST response covers is decided by the endpoint
+   * and by the adopter's `mapResponse`, neither of which this adapter
+   * can see or parameterize. There is no traversal contract to bind a
+   * hop count to, so a supplied depth cannot be honored, and returning
+   * whatever the endpoint happens to send while accepting `depth: 3`
+   * misreports the result. An adopter whose API does take a depth
+   * should encode it in `url` or `mapResponse` and call with 1.
+   *
+   * @throws AdapterArgumentError when `depth` resolves above 1.
+   */
+  async expandNeighborhood(nodeId: string, depth = 1): Promise<UGM> {
+    if (coerceDepth(depth) > 1) {
+      throw new AdapterArgumentError(
+        "depth",
+        `RestAdapter has no traversal contract and cannot honor depth ${depth}; ` +
+          `encode the hop count in the configured url or mapResponse and pass 1`,
+      );
+    }
     // Default: re-query with the node ID as a filter
     return this.query(nodeId);
   }

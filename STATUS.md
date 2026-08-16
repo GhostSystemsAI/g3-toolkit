@@ -1,5 +1,43 @@
 # g3-toolkit Status
 
+**As of:** 2026-08-16 (active: **audit remediation CLOSED except 23.**
+Item 19 ruled branch A: the packages publish ESM ONLY. The `require`
+condition is gone from all 23 exports entries, `main` is gone from all
+three manifests, the vite builds emit `formats: ["es"]`, and zero .cjs
+files ship (44% less runtime JS). Rationale: typed CJS never worked
+(TS1479 from one ESM-flavored .d.ts per entry), nothing in the repo
+required a @g3t package, and TS1479 was the only thing preventing a
+consumer from mixing formats and duplicating the exported store
+singletons. Paired .d.cts was REJECTED as fixing the compile error
+while worsening the hazard. Guarded in tests/dist/public-api.test.ts.
+E2E: the 12 failures are fixed and the suite is RETARGETED off the
+deprecated Cytoscape renderer onto SVG; verified by running it against
+the production bundle (49 passed; the rest fail only on this
+container's blocked font CDN). v1.0.0 still UNTAGGED. REMAINING: item
+23 (phase 2), and a CI e2e run to confirm green on real infrastructure.)
+
+## PRIOR SNAPSHOT (2026-08-15 remediation round)
+
+**As of:** 2026-08-15 (active: audit remediation items 17, 20 and 21
+CLOSED; 18 PARTIAL; 19 needs an owner ruling. Adapters honor or reject
+`depth` instead of discarding it, and algorithm ingest reports
+matched-versus-supplied counts. Five layout options that had reached no
+engine since elkjs left are removed, with the docs that described them
+and five perf "tuning variants" that were measuring nothing. The event
+bus is ruled a context-action command bus, NOT a fourth integration
+channel; 13 never-emitted event types deleted, `eventBus` singleton
+deprecated. FIRST COVERAGE NUMBER EVER COLLECTED: 84.63% stmts / 75.90%
+branch, reported not gated. `passWithNoTests` removed and it caught an
+empty describe block that had been reporting as a pass. All 16 inert
+screenshot assertions and every e2e `isVisible()` guard are gone.
+Measured on native Linux: verify green including verify:exports at the
+default timeout, full suite ~4.5 min on one vCPU. v1.0.0 still UNTAGGED.
+REMAINING: **e2e has been red since roughly 2026-07-20 and the CI job is
+blocking, so the whole CI signal is being ignored** (owner is supplying
+the findings); then item 19's format ruling, then phase 2.)
+
+## PRIOR SNAPSHOT (2026-08-06 register)
+
 **As of:** 2026-08-06 (active: register R-15/R-16/R-17 answered:
 capability-gated editor controls (and the same over-promise fixed
 in StructuralNodeStyle itself), FloatingLegend elements

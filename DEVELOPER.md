@@ -153,6 +153,7 @@ font-size: var(--g3t-font-sm);
 ```bash
 pnpm run gates     # everything CI runs, in CI's order
 pnpm test          # unit + component only
+pnpm run test:coverage  # the same run, with a v8 coverage report
 pnpm typecheck     # TypeScript verification
 pnpm lint          # ESLint + Prettier check
 pnpm storybook     # Component explorer
@@ -160,7 +161,15 @@ pnpm storybook     # Component explorer
 
 Test counts are deliberately not quoted here. Hand-maintained numbers in
 this repository have drifted several times; when a number disagrees with
-a gate script, the script is right.
+a gate script, the script is right. Coverage is reported, NOT gated
+(ruled 2026-08-16): there is no threshold and none should be added from
+a single measurement, which would pin the number where it happened to
+land and make the next honest refactor read as a regression.
+
+`pnpm test` does not run the e2e suite; `pnpm run test:e2e` does, and it
+needs browsers (`pnpm exec playwright install --with-deps chromium`).
+Run it before trusting any change to `tests/e2e/`, because typecheck and
+lint cannot tell you whether a selector matches anything.
 
 ## Running the Demo
 

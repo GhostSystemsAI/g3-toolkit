@@ -1,5 +1,138 @@
 # Changelog
 
+## 1.0.0 (continued): 2026-08-16 (ESM-only publishing, e2e retargeted to the SVG renderer)
+
+- **The packages publish ESM only. The `require` condition and the cjs
+  build format are gone.** The manifests promised dual format and
+  delivered it at runtime while failing every typed CommonJS consumer:
+  each entry shipped one ESM-flavored `.d.ts`, so `require("@g3t/core")`
+  from a TypeScript `.cts` raised TS1479 even though the `.cjs` file
+  resolved. The fix was not to make typed CJS work. Publishing both
+  formats is what made the dual-package hazard reachable, and the
+  library's primary integration channel is exported zustand store
+  SINGLETONS: a dependency tree reaching a package through `import` on
+  one path and `require` on another gets two module instances and
+  therefore two stores, so one view subscribes to a store another view
+  is writing to, selection stops propagating, and nothing appears in a
+  stack trace. That is not fixable from inside the library while both
+  formats ship, and TS1479 was the only thing accidentally preventing
+  it. Removing the format removes the hazard, and takes 44% of emitted
+  runtime JS with it. Nothing in this repository required a @g3t
+  package, and the limitation was already documented for adopters. A
+  Node script using `require` must move to `import` or a dynamic
+  `import()`, and Jest in default CommonJS mode needs transform
+  configuration; every modern bundler is unaffected. An assertion in
+  the dist suite fails if a `require` condition, a `main` field, or a
+  `.cjs` file comes back.
+
+- **The e2e suite tests the renderer users actually get.** Ten of
+  twelve failures traced to one stale assumption: the MBSE shell
+  defaults to the SVG renderer and marks Cytoscape deprecated, while
+  five spec files opened the shell and waited on Cytoscape-path
+  testids that a default render never produces. Shared helpers spread
+  it, so one changed default took out drag-reroute, overlay-acceptance,
+  structural-projection and shells as identical timeouts. The specs are
+  retargeted onto the SVG view's own contract rather than pinned to the
+  deprecated renderer: drawn boxes come from `[data-ssv-node] > rect`,
+  edge geometry from `[data-ssv-edge-path]`, and the transform-only pan
+  invariant from the single `[data-ssv-scene]` transform. drag-reroute
+  was rewritten, since cy grab/drag events, element positions and zoom
+  have no SVG analogue. MR-8 and MR-9 gained a check that no dragged
+  node's edge falls back to a straight line, which is what a failure of
+  the live re-router looks like.
+
+- **Sorting is reachable and reports itself.** The table's sort handler
+  sits on a div inside the `th`, but `cursor: pointer` sat on the `th`
+  and keyed off `selectable`, which is row selection: the whole header
+  cell advertised a click that only part of it answered, and a click on
+  the cell landed on the inline column filter. The pointer cursor now
+  lives on the element that handles the click, the affordance carries a
+  `column-sort-<id>` testid, and the `th` reports `aria-sort`, which
+  was previously legible only as an icon glyph.
+
+## 1.0.0 (continued): 2026-08-15 (adapter depth contract, algorithm ingest reporting, inert layout options removed, event bus scoped, test-suite floor)
+
+- **`depth` is now honored or rejected by every adapter, never ignored.**
+  `SparqlAdapter`, `CypherAdapter` and `GremlinAdapter` already honored
+  any depth in range. `HolonicAdapter` and `RestAdapter` accepted the
+  argument and discarded it, so a host wiring an "expand 2 hops" action
+  got one hop back and no signal that the request had been narrowed.
+  Both now throw `AdapterArgumentError` with `argument: "depth"` above
+  1, before issuing any request. Neither can express a hop count
+  honestly: the holonic dataset carries no boundary or projection graph
+  to link the interiors a portal traversal would collect, so a
+  multi-hop result would be disconnected components presented as a
+  neighborhood; and how many hops a REST response covers is decided by
+  the adopter's endpoint and `mapResponse`, which the adapter cannot
+  see or parameterize. An adopter whose API does take a depth encodes
+  it in `url` or `mapResponse` and calls with 1. The `GraphAdapter`
+  contract now states the rule and names which adapters do which.
+
+- **Algorithm ingest reports what it matched.** `ingestAlgorithmResults`
+  and `ingestEdgeAlgorithmResults` returned `void`, so a results map
+  whose ids matched nothing was indistinguishable from one that matched
+  everything: the merge loop skipped every entry and the call looked
+  successful. Both now return `{ supplied, matched, unmatched }`. The
+  failure this surfaces is the recurring one, results computed against
+  full IRIs applied to a UGM keyed by local names.
+  `applyAlgorithmResult` takes an optional `onIngest` callback so the
+  report reaches callers through the documented door; it deliberately
+  stays silent when a caller-supplied ingest returns nothing, because
+  reporting a full match for an unknown outcome would recreate the bug.
+
+- **Five layout options that had not done anything since elkjs left the
+  tree are removed.** `edgeRouting`, `nodePlacement`,
+  `crossingMinimization`, `edgeNodeSpacing` and `edgeEdgeSpacing` were
+  pass-throughs into an `elk.*` string map that the g3t engine does not
+  read. Setting any of them changed the layout memo key and nothing
+  else, so a caller asking for SPLINES got orthogonal routes, paid for
+  a spurious cache miss, and read jsdoc describing ELK behavior that no
+  longer runs. Gone from the public type, from the memo key, and from
+  the emitted map; the builder no longer emits a routing or
+  edge-spacing default nobody chose. A host driving its own ELK through
+  `buildStructuralElkGraph` sets these on the returned graph's
+  `layoutOptions`, where they reach an engine that honors them. The
+  perf matrix lost five "tuning variants" in the same pass: all five
+  ran the identical code path and had been publishing run-to-run jitter
+  as tuning deltas.
+
+- **The event bus is scoped to what it does, and thirteen event types
+  that nothing ever emitted are deleted.** `node:selected`,
+  `theme:changed`, `ugm:changed` and ten others were declared, and the
+  module header claimed the stores emitted to the bus. No store ever
+  did, so a host subscribing to `node:selected` waited forever with no
+  way to tell that from a graph where nothing was selected. The eight
+  surviving `context:*` events all have an emitter and a consumer: they
+  carry menu intents from the action registry to whatever executes
+  them, because the toolkit cannot execute "focus this node" without
+  deciding a host's navigation and panel behavior. That is a command
+  bus between two toolkit pieces and NOT a fourth integration channel;
+  state observation stays with the exported stores, and the ruling is
+  recorded in ARCHITECTURE.md. The `eventBus` singleton is deprecated
+  in favor of `new G3tEventBus()`: two copies of `@g3t/core` in a tree,
+  or one path reaching it through `import` while another reaches it
+  through `require`, give the emitter and the subscriber different
+  buses and the menu goes dead silently. Both toolkit APIs already take
+  the bus as a parameter.
+
+- **The test suite has a floor under it, and a coverage number for the
+  first time.** `vitest run --coverage` reports 84.63% statements and
+  75.90% branches across 170 passing files; `pnpm run test:coverage`
+  reproduces it. `@vitest/coverage-v8` had been installed and unused.
+  `passWithNoTests` is removed, and it caught a defect immediately: an
+  empty `describe` block in the structural-to-cytoscape tests had been
+  reporting as a passing test. A `tests/component/**` include pointing
+  at a directory that has never existed is also gone. In the e2e suite,
+  16 screenshot assertions that compared against no committed baseline
+  are removed along with every `isVisible()` guard, which had been
+  turning missing UI into silent passes; assertions that can actually
+  fail replace them where the harness renders the element, and tests
+  whose element the harness never mounts are deleted rather than
+  converted into a guaranteed-red gate. `LayoutSwitcher` gained
+  `aria-pressed`: it had conveyed the active engine by background color
+  alone, which no assistive technology reads and no test can assert
+  without pinning a hex value.
+
 ## 1.0.0 (continued): 2026-08-14 (parse boundary, export encoding, render-failure containment, contributor onboarding, lint scope, optional-peer isolation, release path, adapter request hygiene, security policy, cross-package name collisions, archive accuracy, perf gate inputs, adopter docs, planning tree)
 
 - **The store channel is uniform: one reset name, every state type

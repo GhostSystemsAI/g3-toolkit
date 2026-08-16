@@ -16,6 +16,8 @@ import { SparqlAdapter } from "./sparql-adapter";
 import { CypherAdapter } from "./cypher-adapter";
 import { HolonicAdapter } from "./holonic-adapter";
 import { GremlinAdapter } from "./gremlin-adapter";
+import { RestAdapter } from "./rest-adapter";
+import { AdapterArgumentError } from "./query-safety";
 import type { HolonicDataset } from "./holonic-adapter";
 import { ingestAlgorithmResults } from "../algorithm-adapter";
 import { bearerAuth } from "../middleware";
@@ -418,6 +420,65 @@ describe("HolonicAdapter (M3.E2.T3)", () => {
   });
 });
 
+// ── The depth contract: honored or rejected, never ignored ─────────
+
+describe("expandNeighborhood depth contract", () => {
+  const holonicDataset: HolonicDataset = {
+    holons: [
+      {
+        id: "holon-1",
+        label: "One",
+        types: ["Holon"],
+        properties: {},
+        interiorNodes: [{ id: "i-1", types: ["X"], properties: {} }],
+        interiorEdges: [],
+        portals: [],
+      },
+    ],
+  };
+
+  // A depth an adapter cannot express must not reach the wire. Each
+  // rejecting adapter is given a fetch that fails the test if called,
+  // so "rejected before the request" is asserted rather than assumed.
+  const failIfCalled = async (): Promise<never> => {
+    throw new Error("no request should be issued for a rejected depth");
+  };
+
+  it("HolonicAdapter honors depth 1", async () => {
+    const adapter = new HolonicAdapter(holonicDataset);
+    const result = await adapter.expandNeighborhood("holon-1", 1);
+    expect(result.nodeCount).toBe(1);
+  });
+
+  it("HolonicAdapter rejects a depth above 1 with AdapterArgumentError", async () => {
+    const adapter = new HolonicAdapter(holonicDataset);
+    await expect(adapter.expandNeighborhood("holon-1", 2)).rejects.toThrow(
+      AdapterArgumentError,
+    );
+    await expect(
+      adapter.expandNeighborhood("holon-1", 2),
+    ).rejects.toMatchObject({ argument: "depth", code: "UNSAFE_ARGUMENT" });
+  });
+
+  it("RestAdapter rejects a depth above 1 without issuing a request", async () => {
+    const adapter = new RestAdapter({
+      url: "https://example.org/graph",
+      mapResponse: () => ({ nodes: [], edges: [] }),
+      middleware: [() => failIfCalled()],
+    });
+    await expect(adapter.expandNeighborhood("n1", 3)).rejects.toMatchObject({
+      argument: "depth",
+    });
+  });
+
+  it("rejects a non-finite depth everywhere it is accepted", async () => {
+    const holonic = new HolonicAdapter(holonicDataset);
+    await expect(
+      holonic.expandNeighborhood("holon-1", Number.NaN),
+    ).rejects.toThrow(AdapterArgumentError);
+  });
+});
+
 // ── E3.T1: AlgorithmResultAdapter ──────────────────────────────────
 
 describe("ingestAlgorithmResults (M3.E3.T1)", () => {
@@ -448,6 +509,38 @@ describe("ingestAlgorithmResults (M3.E3.T1)", () => {
     ingestAlgorithmResults(ugm, results);
 
     expect(ugm.getNode("a")?.properties.score).toBeUndefined();
+  });
+
+  it("reports matched versus supplied counts", () => {
+    const ugm = new UGM();
+    ugm.addNode("a", { types: ["X"] });
+    ugm.addNode("b", { types: ["X"] });
+
+    const report = ingestAlgorithmResults(
+      ugm,
+      new Map([
+        ["a", { score: 1 }],
+        ["b", { score: 2 }],
+        ["missing", { score: 3 }],
+      ]),
+    );
+
+    expect(report).toEqual({ supplied: 3, matched: 2, unmatched: 1 });
+  });
+
+  it("reports zero matches for a wholesale id-convention mismatch", () => {
+    // The failure the report exists for: results computed against
+    // full IRIs, a UGM keyed by local names. Every merge is a no-op
+    // and nothing else in the call says so.
+    const ugm = new UGM();
+    ugm.addNode("Sensor", { types: ["X"] });
+
+    const report = ingestAlgorithmResults(
+      ugm,
+      new Map([["http://example.org/Sensor", { pagerank: 0.9 }]]),
+    );
+
+    expect(report).toEqual({ supplied: 1, matched: 0, unmatched: 1 });
   });
 });
 

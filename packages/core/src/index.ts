@@ -174,6 +174,7 @@ export {
 } from "./algorithm-adapter";
 export type {
   AlgorithmResultDocument,
+  AlgorithmIngestReport,
   StructuralOverlay,
 } from "./algorithm-adapter";
 export { virtualizeRelationalData, parseCSV } from "./relational-virtualizer";

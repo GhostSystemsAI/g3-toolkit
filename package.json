@@ -12,6 +12,7 @@
     "build": "pnpm run build:packages && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "lint": "eslint . && prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,css}\"",

@@ -60,7 +60,20 @@ export interface GraphAdapter {
   /**
    * Expand the neighborhood of a node at the given depth.
    * Returns a UGM containing the discovered subgraph.
+   *
+   * DEPTH IS HONORED OR REJECTED, never ignored. An implementation
+   * that cannot express the requested hop count throws
+   * `AdapterArgumentError` with `argument: "depth"` before issuing a
+   * request, so a host learns at the call site instead of receiving a
+   * shallower subgraph that looks complete. Of the shipped adapters,
+   * `SparqlAdapter`, `CypherAdapter` and `GremlinAdapter` honor any
+   * depth in [1, MAX_TRAVERSAL_DEPTH]; `HolonicAdapter` and
+   * `RestAdapter` honor 1 and reject the rest, each for a reason
+   * recorded on the method.
+   *
    * @param edgeTypes Optional filter to specific edge types.
+   * @throws AdapterArgumentError when `depth` is not a finite number,
+   *   or when the implementation cannot honor the value.
    */
   expandNeighborhood(
     nodeId: string,

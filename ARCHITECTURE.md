@@ -142,6 +142,39 @@ level and belongs in the package.
 4. Components share selection state via `useSelectionStore`
 5. You handle everything else (layout, routing, auth, persistence)
 
+### Why `@g3t/core/events` is not a fourth channel
+
+Ruled 2026-08-15. The integration channels stay at three: exported
+stores, props and callbacks, versioned JSON documents.
+
+The events subpath reads like a fourth one and is not. It carries
+`context:*` menu intents from `registerToolkitActions` to whatever
+executes them, because the toolkit cannot execute "focus this node" or
+"edit this appearance" without deciding a host's navigation, panel and
+styling behavior. It publishes the intent; the host rules on it. That
+is a command bus between two toolkit pieces, and a host may hook it,
+but it is not where state observation lives.
+
+State observation is the store channel. Subscribe to `useSelectionStore`
+and its siblings for selection, theme, filter and layout changes; every
+state type is exported so a selector can be typed.
+
+Thirteen of the twenty-one declared event types were removed in the same
+ruling, having never been emitted by anything: node:selected,
+node:deselected, edge:selected, selection:cleared, node:hovered,
+node:doubleClicked, node:rightClicked, filter:changed, theme:changed,
+layout:changed, query:executed, encoding:changed, ugm:changed. The
+module header claimed the stores emitted to the bus and no store ever
+did, so a host subscribing to `node:selected` waited forever with no way
+to distinguish that from an idle graph.
+
+Pass a bus you constructed. The exported `eventBus` singleton is
+deprecated: two copies of `@g3t/core` in a tree, or one path reaching it
+through `import` while another reaches it through `require`, produce two
+buses, and the menu goes dead with nothing in a stack trace to show why.
+`registerToolkitActions` and `wireCytoscapeContextActions` both take the
+bus as a parameter for that reason.
+
 ### How the versioned-JSON parsers fail
 
 Versioned JSON documents are the third integration channel, and their
