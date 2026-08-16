@@ -13,8 +13,16 @@ while worsening the hazard. Guarded in tests/dist/public-api.test.ts.
 E2E: the 12 failures are fixed and the suite is RETARGETED off the
 deprecated Cytoscape renderer onto SVG; verified by running it against
 the production bundle (49 passed; the rest fail only on this
-container's blocked font CDN). v1.0.0 still UNTAGGED. REMAINING: item
-23 (phase 2), and a CI e2e run to confirm green on real infrastructure.)
+container's blocked font CDN). **E2E CONFIRMED GREEN locally and in CI
+2026-08-16 (PR #2)**, which closes that verification. v1.0.0 still
+UNTAGGED and deliberately held until the latent MRs land (owner,
+2026-08-16). REMAINING: item 23 (phase 2), never run and covering
+typing, performance, memory, bundle delivery, accessibility and
+concurrency. NOTE: the phase-1 audit artifacts (state.json,
+AUDIT_REPORT-core.md, findings/) are GONE from this tree, excluded from
+the native round's handoff archive and not returned, so `/audit` has no
+state to resume and would plan fresh; audit/REMEDIATION.md is the only
+surviving record and its item numbering is now orphaned.)
 
 ## PRIOR SNAPSHOT (2026-08-15 remediation round)
 
