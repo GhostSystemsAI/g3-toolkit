@@ -33,11 +33,15 @@ exposing through one of these three, never a fourth mechanism.
 ## Setup and commands (repo work)
 
 - Package manager: pnpm, ENFORCED. Never npm or yarn.
-- `pnpm install` then `pnpm run dev` (opens the scenario gallery:
-  Ontology, Auditor, MBSE, Supply Chain, Biomedical shells plus the
-  Analytics, Scale, Style Lab, Legibility Lab, and Routing Lab
-  dashboards; Legibility Lab demos pseudo-node spreading and a holon
-  boundary ring with a single exposed boundary node).
+- `pnpm install` then `pnpm run dev` (opens the scenario gallery: the
+  Auditor, MBSE, Supply Chain and Biomedical domain shells plus the
+  Analytics, Style Lab, Routing Lab, RDF 1.2 Hyperarcs, Legibility Lab
+  and Ontology Workbench capability surfaces; Legibility Lab demos
+  pseudo-node spreading and a holon boundary ring with a single exposed
+  boundary node). ELEVEN scenarios are registered in
+  src/demo/DemoLanding.tsx, which is the authority; Scale is
+  deployment-only and Style Lab is dev-only, so `pnpm run dev` and the
+  deployed page each show ten, and not the same ten.
 - `pnpm run storybook` for components in isolation.
 - `pnpm run docs:api` generates typedoc into docs-out/api.
 
@@ -86,8 +90,9 @@ docs/wiring-guide.md, and every wiring snippet runs in CI.
 
 1. Install: `pnpm add @g3t/core @g3t/react` (charts optional). Peer
    dependencies are NOT installed for you. `@g3t/react` needs react,
-   react-dom, cytoscape, cytoscape-fcose, zustand, echarts, and (today,
-   even if the timeline view is unused) vis-timeline and vis-data.
+   react-dom, cytoscape, cytoscape-fcose, zustand, echarts. Optional:
+   vis-timeline and vis-data, needed only for `@g3t/react/timeline`.
+   `@g3t/charts` takes @g3t/core and @g3t/react as peers too.
 2. Import the stylesheet first: `import "@g3t/react/style.css";`.
    Without it everything renders unstyled, silently.
 3. Memoize `ugm`. It is compared by identity; a fresh instance per

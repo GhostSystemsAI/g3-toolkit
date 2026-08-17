@@ -5,5 +5,9 @@
 // following the documented first line of the quickstart could not
 // compile. This declaration exists solely so that import resolves;
 // the stylesheet itself is dist/style.css.
-declare const styles: void;
+// `unknown`, not `void`: `void` means "the absence of a returned value"
+// and is not a legal type for a value binding, so exporting a `void`
+// const both misstates the shape and trips no-invalid-void-type. Either
+// way a consumer cannot read a property off it, which is the point.
+declare const styles: unknown;
 export default styles;

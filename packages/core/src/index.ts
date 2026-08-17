@@ -45,6 +45,7 @@ export type { RdfTerm, TripleTerm } from "./adapter";
 export { CypherAdapter } from "./adapter";
 export { HolonicAdapter } from "./adapter";
 export type { GremlinAdapterConfig } from "./adapter";
+export { RestAdapter } from "./adapter/rest-adapter";
 export type {
   RestAdapterConfig,
   RestResponseMapping,
@@ -154,16 +155,14 @@ export { typeCollapse } from "./projection";
 export { createPresetPipeline } from "./projection";
 // Brief 06: projection-level pseudo-node spreading (dense-scene
 // legibility). UGM -> UGM transforms applied after projection.
-export {
-  hubBurst,
-  busCollapse,
-  isPseudoNode,
-  filterPseudoNodes,
-  filterPseudoEdges,
-  PSEUDO_FLAG,
-  PSEUDO_CONNECTOR_TYPE,
-  PSEUDO_TRUNK_TYPE,
-} from "./projection";
+//
+// WITHDRAWN 2026-08-17 (merge review): filterPseudoNodes,
+// filterPseudoEdges, PSEUDO_FLAG, PSEUDO_CONNECTOR_TYPE and
+// PSEUDO_TRUNK_TYPE. Undocumented, and used by nothing outside
+// pseudo-nodes.ts itself; `isPseudoNode` is the one predicate a host
+// needs and it stays. Same class as the 2026-08-15 withdrawal. The
+// module and its tests stay in the tree.
+export { hubBurst, busCollapse, isPseudoNode } from "./projection";
 export type {
   PseudoKind,
   HubBurstOptions,
@@ -210,6 +209,7 @@ export {
 } from "./algorithm-adapter";
 export type {
   AlgorithmResultDocument,
+  AlgorithmIngestReport,
   StructuralOverlay,
 } from "./algorithm-adapter";
 export { virtualizeRelationalData, parseCSV } from "./relational-virtualizer";
@@ -231,13 +231,9 @@ export type {
 } from "./layout";
 export type { IncrementalLayoutOptions } from "./layout/incremental-layout";
 // PRF-003 brief 05a: channel router additive slice (off-by-default
-// flag on routeStructuralEdges); 05b flips the flag on.
-export {
-  assignTracks,
-  emitChannelRoute,
-  routeChannelOverflow,
-  classifyFallback,
-} from "./layout";
+// flag on routeStructuralEdges); 05b flips the flag on. Its four
+// runtime helpers were WITHDRAWN 2026-08-17; see the note in
+// ./layout/index.ts. The types ship from ./layout.
 export type {
   Channel,
   ChannelPlan,
@@ -390,9 +386,10 @@ export type {
   RouteSide,
   RouteTerminal,
 } from "./route/orthogonal-router";
+// WITHDRAWN 2026-08-17 (merge review): inferTerminalSides. An internal
+// step of routeSceneEdges, undocumented and called by nothing else.
 export {
   routeSceneEdges,
-  inferTerminalSides,
   polylineToCytoscapeSegments,
 } from "./route/route-scene-edges";
 export type {
@@ -432,6 +429,19 @@ export type {
 } from "./model/graph-document";
 export { importElkJson } from "./model/elk-import";
 export type { ElkJsonNode, ElkJsonEdge } from "./model/elk-import";
+// One failure convention for the versioned-JSON channel. The module
+// docblock states the rule: documents that can degrade return partial
+// results plus diagnostics, documents that cannot degrade throw, and
+// both halves use the same error codes.
+export {
+  DocumentParseError,
+  InvalidJsonError,
+  UnsupportedVersionError,
+  MalformedDocumentError,
+  parseJsonObject,
+  requireVersion,
+} from "./model/document-errors";
+export type { DocumentKind, DocumentErrorCode } from "./model/document-errors";
 export { layoutStructuralWithChangeSet } from "./layout/change-driven-layout";
 export type {
   ChangeDrivenLayoutResult,

@@ -1,16 +1,133 @@
 # g3-toolkit Status
 
-## QUEUE (2026-08-14): canvas edge routing shipped as `routeEdges` prop
-on `CytoscapeCanvas`; enabled by default in the Auditor/Supply/Bio/
-Analytics/Style-Lab shells (Scale shell in the clusters view only) via
-per-shell `ROUTE_EDGES` kill-switch constants. Pure geometry lives at
-`packages/core/src/route/route-scene-edges.ts` with unit tests; canvas
-harness tests pin the stamp/clear/no-op-on-structural/maxEdges-gate/
-drag-scope contract. AWAITS Zach's visual review across all five
-shells in a single Pages playground session (the orthogonal-on-force
-look is the review target; the ROUTE_EDGES constants revert
-per-shell). See CHANGELOG.
+**As of:** 2026-08-17 (active: **the routing/legibility feature arc and
+the audit-remediation arc are now on one tree.** `ai-agent-guide` merged
+with `fable-updates`; the two forked from one commit on 2026-08-14 and
+did disjoint work, so entries dated across the two arcs are concurrent,
+not sequential.
 
+HARDENING (audit remediation CLOSED except item 23, **against the
+pre-merge tree**: no audit pass ever saw the feature branch). Item 19
+ruled branch A: the packages publish ESM ONLY. The `require` condition
+is gone from all 23 exports entries, `main` is gone from all three
+manifests, the vite builds emit `formats: ["es"]`, and zero .cjs files
+ship. Rationale: typed CJS never worked (TS1479 from one ESM-flavored
+.d.ts per entry), nothing in the repo required a @g3t package, and
+TS1479 was the only thing preventing a consumer from mixing formats and
+duplicating the exported store singletons. Paired .d.cts was REJECTED as
+fixing the compile error while worsening the hazard. Guarded in
+tests/dist/public-api.test.ts. Also landed: 15 subpath exports withdrawn,
+the published surface frozen as a golden file (`api-surface.json` plus
+`verify:surface`), adapter request hygiene (timeout, cancel,
+`AdapterHttpError`), one failure convention for the versioned-JSON
+channel (`model/document-errors.ts`), a uniform store channel,
+`ViewErrorBoundary`, `TimelineView` on its own subpath with vis-* as
+OPTIONAL peers, whole-tree lint, the community files, and a rehearsable
+release path. E2E: the 12 failures are fixed and the suite is RETARGETED
+off the deprecated Cytoscape renderer onto SVG. **E2E was confirmed
+green locally and in CI 2026-08-16 (PR #2) on the hardening branch; it
+has NOT been re-run on this merged tree.**
+
+FEATURES (briefs 01-18, from `ai-agent-guide`). Routing: the nudging
+post-pass (`nudge`, still OPT-IN, default false), the long-edge
+perimeter policy with the VR-10 travel-band collision fix (8 violations
+to 0 across the 108-cell sweep), LAY-005 dummy chains, the
+corridor-supply contract, the additive channel-router module (its flag
+still off by default after 05b measured it regressing crossings 2-8x),
+and `routeEdges` on `CytoscapeCanvas` for non-structural scenes.
+Legibility: dense-scene pseudo-nodes and force-directed edge bundling.
+Data: RDF 1.2 triple-term ingest in `SparqlAdapter` plus the hyperarc
+and edge projections, and holon boundary projection. Export:
+`buildImageExport` (PNG). Style: `labelWrapRule`. Demo:
+`src/demo/DemoLanding.tsx` now registers ELEVEN scenarios (Routing Lab,
+RDF 1.2 Hyperarcs and Legibility Lab joined the eight), and the repo
+root carries the AI-agent guides `llms.txt` and `AGENTS.md`.
+
+MERGE RESOLUTION, the parts worth knowing. The five inert structural
+layout options stay removed and `nudge` stays. A duplicated RDF 1.2
+declaration block was deleted from `SparqlAdapter`: the same commits
+landed on both branches, git merged two identical copies, and the
+resulting `TS2300` was invisible because conflict markers suppress
+semantic diagnostics program-wide. Ten new exports were WITHDRAWN before
+the surface was refrozen, on the 2026-08-15 ruling (undocumented, no
+consumer); six more were kept and DOCUMENTED instead. `api-surface.json`
+refrozen at 34 additions across 5 entries and ZERO removals, the zero
+being what proves no hardening-side withdrawal was lost. All four budget
+gates re-measured rather than merged, since both branches raised caps in
+parallel off one baseline: core 209 KB (measured 206.3), react 397
+(393.9), `core-layout` 69 (66.0), `core-all` 182 (178.9). `core-ugm`
+held at 4.8 KB, so no routing code became reachable from `UGM` alone.
+The `@g3t/layout` (ARC-009) extraction stays retired.
+
+v1.0.0 still UNTAGGED and deliberately held until the latent MRs land
+(owner, 2026-08-16); this merge is one of them.
+
+REMAINING: (1) **Zach's visual review** of routing, bundling and the
+three new shells in one Pages playground session. Nothing in the gate
+covers rendered output; the orthogonal-on-force look is the review
+target and the per-shell `ROUTE_EDGES` constants revert individually.
+(2) E2E on the merged tree. (3) Audit item 23 (phase 2), never run,
+covering typing, performance, memory, bundle delivery, accessibility and
+concurrency. **The audit artifacts were RESTORED from backup 2026-08-16
+and the audit is RESUMABLE**: state.json is v2, 4/10 stages complete,
+123 confirmed phase-1 findings, next stage `structure-p2`, 21 pass
+instances left. Two corrections that restoration forced: the 23 roadmap
+items are a prioritized synthesis of 25 deduped top findings, NOT the
+123 findings themselves; and phase-1 coverage was never exhaustive,
+since 7 of 11 passes hit the findings cap with roughly 27 findings seen
+and unwritten, putting the true phase-1 total nearer 154.)
+
+## PRIOR SNAPSHOT (2026-08-16 remediation round)
+
+
+**As of:** 2026-08-16 (active: **audit remediation CLOSED except 23.**
+Item 19 ruled branch A: the packages publish ESM ONLY. The `require`
+condition is gone from all 23 exports entries, `main` is gone from all
+three manifests, the vite builds emit `formats: ["es"]`, and zero .cjs
+files ship (44% less runtime JS). Rationale: typed CJS never worked
+(TS1479 from one ESM-flavored .d.ts per entry), nothing in the repo
+required a @g3t package, and TS1479 was the only thing preventing a
+consumer from mixing formats and duplicating the exported store
+singletons. Paired .d.cts was REJECTED as fixing the compile error
+while worsening the hazard. Guarded in tests/dist/public-api.test.ts.
+E2E: the 12 failures are fixed and the suite is RETARGETED off the
+deprecated Cytoscape renderer onto SVG; verified by running it against
+the production bundle (49 passed; the rest fail only on this
+container's blocked font CDN). **E2E CONFIRMED GREEN locally and in CI
+2026-08-16 (PR #2)**, which closes that verification. v1.0.0 still
+UNTAGGED and deliberately held until the latent MRs land (owner,
+2026-08-16). REMAINING: item 23 (phase 2), never run and covering
+typing, performance, memory, bundle delivery, accessibility and
+concurrency. **The audit artifacts were RESTORED from backup 2026-08-16
+and the audit is RESUMABLE**: state.json is v2, 4/10 stages complete,
+123 confirmed phase-1 findings, next stage `structure-p2`, 21 pass
+instances left. Two corrections that restoration forced: the 23 roadmap
+items are a prioritized synthesis of 25 deduped top findings, NOT the
+123 findings themselves; and phase-1 coverage was never exhaustive,
+since 7 of 11 passes hit the findings cap with roughly 27 findings seen
+and unwritten, putting the true phase-1 total nearer 154.)
+
+## PRIOR SNAPSHOT (2026-08-15 remediation round)
+
+**As of:** 2026-08-15 (active: audit remediation items 17, 20 and 21
+CLOSED; 18 PARTIAL; 19 needs an owner ruling. Adapters honor or reject
+`depth` instead of discarding it, and algorithm ingest reports
+matched-versus-supplied counts. Five layout options that had reached no
+engine since elkjs left are removed, with the docs that described them
+and five perf "tuning variants" that were measuring nothing. The event
+bus is ruled a context-action command bus, NOT a fourth integration
+channel; 13 never-emitted event types deleted, `eventBus` singleton
+deprecated. FIRST COVERAGE NUMBER EVER COLLECTED: 84.63% stmts / 75.90%
+branch, reported not gated. `passWithNoTests` removed and it caught an
+empty describe block that had been reporting as a pass. All 16 inert
+screenshot assertions and every e2e `isVisible()` guard are gone.
+Measured on native Linux: verify green including verify:exports at the
+default timeout, full suite ~4.5 min on one vCPU. v1.0.0 still UNTAGGED.
+REMAINING: **e2e has been red since roughly 2026-07-20 and the CI job is
+blocking, so the whole CI signal is being ignored** (owner is supplying
+the findings); then item 19's format ruling, then phase 2.)
+
+## PRIOR SNAPSHOT (2026-08-06 register)
 
 **As of:** 2026-08-06 (active: register R-15/R-16/R-17 answered:
 capability-gated editor controls (and the same over-promise fixed
@@ -652,7 +769,7 @@ or MR-5 freeze when CI numbers arrive.)
 **As of:** 2026-07-12 (active: G3L Round 28 executed: PRF-001
 sharpened (warm 12.6 s; crossing minimization dominates; detuned
 elkjs still misses target; record at
-planning/g3l/prf-001-measurement.md) and LAY-020 shipped
+planning/archive/g3l/prf-001-measurement.md) and LAY-020 shipped
 (layoutStructuralWithChangeSet: local region splice with verbatim
 carryover pinned by object identity, global-sketch fallback, reroute
 reporting; five oracles). The incremental chain MOD-010 -> LAY-020
@@ -712,7 +829,7 @@ engineering); MR-11 background fix shipped, at re-review. Owner
 queue at two items: MR-11 re-review, MR-4 FTO. Next engineering:
 MR-5 bench harness, F1 continuation, or WS-E per owner priority.)
 
-**Owner queue:** planning/g3l/owner-queue.md is the single list of
+**Owner queue:** planning/archive/g3l/owner-queue.md is the single list of
 items blocked on the owner, each with the exact ask and what it
 unblocks.
 
@@ -721,7 +838,7 @@ zero-label e2e failure fixed at the shell (data-derived label text
 merged into the F1 attribute maps; adapter stays attributes-only).
 MR-9's browser pin passed in the owner's run (closed-loop return
 worked); MR-9 itself remains held for owner review. Owner queue
-established at planning/g3l/owner-queue.md.)
+established at planning/archive/g3l/owner-queue.md.)
 
 ## PRIOR SNAPSHOT (Round 21)
 
@@ -905,7 +1022,7 @@ the standing recommendation.)
 layout stability (A1, criterion met at zero displacement), drag-route
 oracles (B1, 4 pass-pins + 2 expected-fail pins on the RTE-011 gap),
 and the layout-metrics module (D1, exported from @g3t/core). Governing
-documents: planning/g3l/requirements-specification.md and
+documents: planning/archive/g3l/requirements-specification.md and
 planning/g3l/implementation-plan.md. G3L Round 2 executed: B2 SVG
 overlay edge layer shipped behind `structuralEdgeLayer` with the MBSE
 shell as the ruled first opt-in surface; manual/human review tasks now
@@ -964,11 +1081,17 @@ planning/rdf-lpg-virtualization-audit.md for the full
 shipped-vs-gap accounting and the reconciliation.
 
 This document is the current-state snapshot for humans; agents start
-at CLAUDE.md. The authoritative round-by-round history is
-planning/archive/visual-acceptance-1.md (surface retired 2026-07-04); per-area design records live in
-roadmap/design/; milestone-era tracking (the former PROGRESS.md and
-planning/status.md) is archived verbatim in
+at CLAUDE.md. The authoritative round-by-round history is the CHANGELOG
+(the former planning/visual-acceptance-1.md round log was deleted with
+the visual-acceptance surface on 2026-07-04); per-area design records
+live in roadmap/design/; milestone-era tracking (the former PROGRESS.md
+and planning/status.md) is archived verbatim in
 planning/milestone-history.md.
+
+**Where planning documents live.** `planning/` holds the records that
+tracked files cite, so every such citation resolves in a clone.
+`planning/archive/` is retained in the maintainer's working copy and is
+NOT published: a path under it is a local reference, not a link.
 
 ## PRIOR FOCUS (2026-06-21, superseded 2026-07-03): structural-view rendering + Storybook reshape
 
@@ -1032,7 +1155,14 @@ Patterns, plus a Reference group for supporting material. State:
   D2), and the DS2 chart-rendering sub-part; plus DS5 (a minimal starter
   example), open.
 
-## CURRENT FOCUS (2026-06-17): the flagship demo
+## PRIOR FOCUS (2026-06-17, superseded 2026-07-03): the flagship demo
+
+NOTE (2026-08-14): the flagship demo was RETIRED on 2026-07-03 and its
+planning documents were deleted with it. The four reading-order entries
+below are kept for the record; only `planning/rdf-lpg-virtualization-audit.md`
+still resolves. What the flagship alone demonstrated was folded into
+the shells and the wiring guide first; the audit of that fold is
+`planning/flagship-retirement.md`.
 
 The library is feature-stable at v1.0.0-rc.2. Active work has shifted
 from library features to a **cinematic flagship demonstration** of the

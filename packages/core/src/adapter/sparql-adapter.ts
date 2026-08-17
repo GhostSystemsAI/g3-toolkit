@@ -14,10 +14,12 @@ import type { PropertyMap } from "../ugm";
 import type { GraphAdapter, SchemaModel } from "./types";
 import {
   composeMiddleware,
-  defaultFetch,
+  createDefaultFetch,
   type Middleware,
   type AdapterRequest,
 } from "../middleware/middleware";
+import { assertSafeIri, coerceDepth } from "./query-safety";
+import { assertOk } from "./adapter-error";
 
 /**
  * A single RDF term as it appears in a SPARQL 1.2 JSON results binding.
@@ -100,18 +102,24 @@ export class SparqlAdapter implements GraphAdapter {
   constructor(
     endpointUrl: string,
     fetchFn?: typeof fetch,
-    options?: { middleware?: Middleware[] },
+    options?: { middleware?: Middleware[]; timeoutMs?: number },
   ) {
     this.endpointUrl = endpointUrl;
+    const base = createDefaultFetch({ timeoutMs: options?.timeoutMs });
     if (options?.middleware) {
-      this.fetchImpl = composeMiddleware(options.middleware, defaultFetch);
+      this.fetchImpl = composeMiddleware(options.middleware, base);
     } else if (fetchFn) {
-      // Legacy: wrap the custom fetchFn in our AdapterRequest interface
+      // Legacy: wrap the custom fetchFn in our AdapterRequest
+      // interface. `timeoutMs` does NOT apply on this path: the caller
+      // supplied the transport, so the timeout is theirs to impose.
+      // The request's `signal` is forwarded so cancellation still
+      // works if their fetch honors it.
       this.fetchImpl = async (req) => {
         const res = await fetchFn(req.url, {
           method: req.method,
           headers: req.headers,
           body: req.body,
+          signal: req.signal,
         });
         let body = "";
         if (typeof res.text === "function") {
@@ -127,7 +135,7 @@ export class SparqlAdapter implements GraphAdapter {
         };
       };
     } else {
-      this.fetchImpl = defaultFetch;
+      this.fetchImpl = base;
     }
   }
 
@@ -141,18 +149,27 @@ export class SparqlAdapter implements GraphAdapter {
     depth: number,
     edgeTypes?: string[],
   ): Promise<UGM> {
-    const typeFilter = edgeTypes
-      ? `FILTER(?p IN (${edgeTypes.map((t) => `<${t}>`).join(", ")}))`
-      : "";
+    // SPARQL has no binding mechanism for a query sent as
+    // application/sparql-query, and these positions are syntax in any
+    // case: an IRI inside angle brackets and a property-path
+    // quantifier. Both are validated instead.
+    const safeId = assertSafeIri(nodeId, "nodeId");
+    const typeFilter =
+      edgeTypes && edgeTypes.length > 0
+        ? `FILTER(?p IN (${edgeTypes
+            .map((t) => `<${assertSafeIri(t, "edgeTypes")}>`)
+            .join(", ")}))`
+        : "";
 
     // Build a property path for N-hop traversal
-    const pathExpr = depth === 1 ? "?p" : `?p{1,${depth}}`;
+    const safeDepth = coerceDepth(depth);
+    const pathExpr = safeDepth === 1 ? "?p" : `?p{1,${safeDepth}}`;
     const sparql = `
       SELECT ?s ?p ?o WHERE {
-        <${nodeId}> (${pathExpr}) ?neighbor .
+        <${safeId}> (${pathExpr}) ?neighbor .
         ?s ?p ?o .
-        FILTER(?s = <${nodeId}> || ?s = ?neighbor)
-        FILTER(?o = <${nodeId}> || ?o = ?neighbor)
+        FILTER(?s = <${safeId}> || ?s = ?neighbor)
+        FILTER(?o = <${safeId}> || ?o = ?neighbor)
         ${typeFilter}
       }
     `;
@@ -183,7 +200,7 @@ export class SparqlAdapter implements GraphAdapter {
   async getNodeProperties(nodeId: string): Promise<PropertyMap> {
     const sparql = `
       SELECT ?p ?o WHERE {
-        <${nodeId}> ?p ?o .
+        <${assertSafeIri(nodeId, "nodeId")}> ?p ?o .
       }
     `;
     const result = await this.executeSparql(sparql);
@@ -214,9 +231,7 @@ export class SparqlAdapter implements GraphAdapter {
       body: sparql,
     });
 
-    if (!response.ok) {
-      throw new Error(`SPARQL query failed: ${response.status}`);
-    }
+    assertOk("SPARQL", this.endpointUrl, response);
 
     return JSON.parse(response.body) as SparqlResult;
   }

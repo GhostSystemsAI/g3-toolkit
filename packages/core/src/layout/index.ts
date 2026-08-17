@@ -10,18 +10,22 @@ export { routeStructuralEdges } from "./g3t-engine/g3t-routing";
 // `useChannelRouter` flag on `routeStructuralEdges` is off by default,
 // so shipped routing is unchanged. 05b flips the flag and deletes the
 // escalation ladder.
-export {
-  assignTracks,
-  emitChannelRoute,
-  routeChannelOverflow,
-} from "./g3t-engine/g3t-channel-router";
+//
+// WITHDRAWN 2026-08-17 (merge review): assignTracks, emitChannelRoute,
+// routeChannelOverflow and classifyFallback. All four are internals of
+// a router behind an off-by-default flag, named in no adopter document
+// and called by nothing outside their own modules, which is the class
+// the 2026-08-15 subpath withdrawal covered. Per the standing
+// archive-don't-delete ruling the modules and their tests stay in the
+// tree and keep running, importing relatively rather than through the
+// public entry. The TYPES stay exported: they describe the geometry
+// `routeStructuralEdges` returns, which is public.
 export type {
   Channel,
   ChannelPlan,
   ChannelEdge,
   TrackAssignment,
 } from "./g3t-engine/g3t-channel-router";
-export { classifyFallback } from "./g3t-engine/g3t-fallback-classifier";
 export type {
   FallbackNodeInfo,
   FallbackEdge,

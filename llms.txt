@@ -21,13 +21,14 @@ computation".
   `./projection`, `./pipeline`, `./shacl`, `./diff`, `./layout`,
   `./algorithms`, `./undo-redo`, `./theme`, `./path-analysis`.
 - @g3t/react: subpath exports `.`, `./views`, `./controls`, `./state`,
-  `./theme`, `./a11y`, `./icons`, and `./style.css` (REQUIRED import,
-  see rules below). Peer deps are NOT auto-installed: react, react-dom,
-  cytoscape, cytoscape-fcose, zustand, echarts, vis-timeline, vis-data
-  (the vis-* pair is statically imported today, install it even if the
-  timeline view is unused).
+  `./theme`, `./a11y`, `./icons`, `./timeline`, and `./style.css`
+  (REQUIRED import, see rules below). Peer deps are NOT auto-installed:
+  react, react-dom, cytoscape, cytoscape-fcose, zustand, echarts.
+  vis-timeline and vis-data are OPTIONAL peers, needed only for
+  `@g3t/react/timeline`; every other entry point resolves without them.
 - @g3t/charts: `LinkedChart` (bar, scatter, line, pie), auto-links to
-  the shared selection store. Peers: react, echarts.
+  the shared selection store. Peers: @g3t/core, @g3t/react, react,
+  echarts.
 
 ## Core API surface (the names an agent should reach for)
 
@@ -74,9 +75,11 @@ below), onReady which hands you the Cytoscape Core),
 knob: a number re-widths, `false` disables; pass via the `stylesheet`
 prop, a position-preserving restyle),
 `captureWorkspace` / `applyWorkspace` / `serializeWorkspace`, plus view
-components: TableView, TreeView, TimelineView, MapView, MatrixView,
+components: TableView, TreeView, MapView, MatrixView,
 SankeyView, SchemaView, StatsPanel, QueryEditor, ShaclShapeBrowser,
-DiffRenderer. Stores: `useSelectionStore`, `usePositionPinStore`,
+DiffRenderer. TimelineView is on `@g3t/react/timeline` ONLY, and that
+subpath is the only one needing the optional peers vis-timeline and
+vis-data; importing it from `.` or `./views` does not resolve. Stores: `useSelectionStore`, `usePositionPinStore`,
 `useOverlayStore`, `useThemeStore`, `useStyleOverrideStore`
 (usable from React via selector or anywhere via `.getState()` /
 `.subscribe()`).
@@ -133,17 +136,22 @@ Details:
 - [Structural patterns](https://github.com/zwelz3/g3-toolkit/blob/main/docs/structural-patterns.md):
   UML/SysML structural-scene recipes.
 - [API reference (typedoc)](https://zwelz3.github.io/g3-toolkit/api/)
-- [Playground](https://zwelz3.github.io/g3-toolkit/playground/): five
-  domain shells (Ontology, Auditor, MBSE, Supply Chain, Biomedical) +
-  capability dashboards (Analytics, Scale, Style Lab, Legibility Lab —
-  didactic pseudo-node spreading (hub burst / bus collapse) and a
-  holon boundary-ring with a single exposed boundary node, raw<->spread
-  toggles with the camera held so the regrouping is followable —
-  Routing Lab — hard edge-routing scenarios graded live, with an Engine
-  toolbar row exposing every live routing switch: nudge separation,
-  long-edge perimeter threshold, anchor, placement/layering strategy,
-  and effort budgets), live in the browser. The
-  landing footer links this file, AGENTS.md, and the wiring guide.
+- [Playground](https://zwelz3.github.io/g3-toolkit/playground/): TEN
+  deployed surfaces, live in the browser. Four domain shells (Auditor,
+  MBSE, Supply Chain, Biomedical) and six capability surfaces:
+  Analytics, Scale, Routing Lab, RDF 1.2 Hyperarcs, Legibility Lab,
+  Ontology Workbench. Style Lab is dev-server only and so is NOT on the
+  deployed page; Scale is the reverse, deployment-only. Legibility Lab
+  is didactic pseudo-node spreading (hub burst and bus collapse) plus a
+  holon boundary ring with a single exposed boundary node, with
+  raw-to-spread toggles that hold the camera so the regrouping is
+  followable. Routing Lab grades hard edge-routing scenarios live, with
+  an Engine toolbar row exposing the live routing switches: nudge
+  separation, long-edge perimeter threshold, anchor, placement and
+  layering strategy, and effort budgets. RDF 1.2 Hyperarcs toggles the
+  hyperarc and edge renders of the same triple-term rows over a nested
+  fixture. The landing footer links this file, AGENTS.md, and the
+  wiring guide.
 - [Storybook](https://zwelz3.github.io/g3-toolkit/storybook/)
 
 ## Optional

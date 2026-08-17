@@ -169,12 +169,23 @@ export type TextMeasure = (
   role: "header" | "row" | "compartmentTitle",
 ) => { width: number; height: number };
 
-/** Deterministic estimator: monospace-ish average char widths per role. */
-/** Deterministic estimator: per-role average char widths. The
- *  header is bold and may carry guillemets («Stereotype»), so it
- *  estimates wider than rows; a small margin keeps labels from
- *  clipping when this estimate undershoots a proportional font (the
- *  canvas can substitute real measurement for pixel-true sizing). */
+/**
+ * Deterministic estimator: per-role average char widths. The header is
+ * bold and may carry guillemets («Stereotype»), so it estimates wider
+ * than rows; a small margin keeps labels from clipping when this
+ * estimate undershoots a proportional font (the canvas can substitute
+ * real measurement for pixel-true sizing).
+ *
+ * PUBLIC ON PURPOSE (reaffirmed 2026-08-14 against an audit finding
+ * that read it as an accidental export). This is the DEFAULT VALUE of
+ * the injectable `measure` seam, not a helper. `TextMeasure` is
+ * exported above and `StructuralLayoutOptions.measure` accepts one, so
+ * a consumer supplying real canvas measurement routinely needs the
+ * default too: to fall back on it when a font has not loaded, to
+ * delegate for roles they do not special-case, or to compare against it
+ * in a test. Exporting the seam's type while hiding its only shipped
+ * implementation would leave the seam half usable.
+ */
 export const estimateTextSize: TextMeasure = (text, role) => {
   const height = role === "header" ? 16 : 13;
   const margin = role === "header" ? 12 : 4;
@@ -212,13 +223,6 @@ export interface StructuralLayoutOptions extends G3tEngineTuning {
    */
   layerSpacing?: number;
   /**
-   * ELK edge routing style for the top-level graph. "ORTHOGONAL" (default)
-   * routes in horizontal/vertical segments; "POLYLINE" allows diagonals;
-   * "SPLINES" curves. ELK computes the actual routes regardless; whether
-   * the geometry carries them is controlled by `routeEdges`.
-   */
-  edgeRouting?: "ORTHOGONAL" | "POLYLINE" | "SPLINES";
-  /**
    * Emit ELK's computed edge routes (node-avoiding polylines) into the
    * geometry as `edges`. Default true. A renderer that follows them does
    * not draw an edge behind a block. Set false to omit the routes and let
@@ -234,19 +238,6 @@ export interface StructuralLayoutOptions extends G3tEngineTuning {
    * affected snapshot/geometry test.
    */
   nudge?: boolean;
-  /**
-   * ELK node-placement strategy. "BRANDES_KOEPF" (default) favors
-   * straight through-edges; "NETWORK_SIMPLEX" is more compact;
-   * "LINEAR_SEGMENTS"/"SIMPLE" are cheaper.
-   */
-  nodePlacement?:
-    | "BRANDES_KOEPF"
-    | "NETWORK_SIMPLEX"
-    | "LINEAR_SEGMENTS"
-    | "SIMPLE";
-  /** Crossing-minimization strategy. Default "LAYER_SWEEP". Superseded
-   *  by INTERACTIVE for a run that carries a `sketch`. */
-  crossingMinimization?: "LAYER_SWEEP" | "INTERACTIVE";
   /**
    * Prior TOP-LEVEL positions: a layout sketch (G3L:LAY-017; the
    * ruled 12.20 experiment graduated). When present and non-empty,
@@ -269,22 +260,24 @@ export interface StructuralLayoutOptions extends G3tEngineTuning {
   sketch?: Readonly<
     Record<string, { x: number; y: number; width?: number; height?: number }>
   >;
-  /**
-   * Preferred minimum gap between an edge segment and a node side
-   * (yFiles: minimum distance to node sides). Default 16. Keeps edges off
-   * the block borders for legibility.
-   */
-  edgeNodeSpacing?: number;
-  /**
-   * Preferred minimum gap between two parallel edge segments, mapped to
-   * ELK's edgeEdge and edgeEdgeBetweenLayers spacing. Raise it when edges
-   * that fan from one side to vertically-aligned targets bunch up or
-   * superimpose after their orthogonal bends. Default 24.
-   */
-  edgeEdgeSpacing?: number;
   /** Text measurement; defaults to the deterministic estimator. */
   measure?: TextMeasure;
 }
+
+/* REMOVED 2026-08-15: edgeRouting, nodePlacement, crossingMinimization,
+ * edgeNodeSpacing and edgeEdgeSpacing. All five survived elkjs leaving
+ * the tree (D3b part 1) as pass-throughs into a `layoutOptions` string
+ * map that the g3t engine does not read, so setting any of them changed
+ * the memo key and nothing else: a caller asking for SPLINES got
+ * orthogonal routes and no signal. Their jsdoc described ELK behavior
+ * that no longer runs, which is the part that made them worse than
+ * absent. A host driving its own ELK through buildStructuralElkGraph
+ * still sets these, on the returned graph's layoutOptions, where they
+ * reach the engine that honors them.
+ *
+ * `nudge` above is NOT in this bucket and should not be re-audited into
+ * it: it is a boolean branch the g3t engine reads directly
+ * (g3t-structural.ts and g3t-routing.ts), not an `elk.*` pass-through. */
 
 /* Expand/collapse was removed by ruling (2026-07-10); see
  * planning/expand-collapse-postmortem.md before reintroducing any
@@ -391,8 +384,23 @@ interface RowPlan {
 
 /**
  * Pure builder: StructuralGraphInput -> ELK JSON per the validated
- * recipe. Exposed for testability; layoutStructural() runs it through
- * the layout engine (g3t since D3b part 1).
+ * recipe. layoutStructural() runs it through the layout engine (g3t
+ * since D3b part 1).
+ *
+ * PUBLIC ON PURPOSE (reaffirmed 2026-08-14 against an audit finding
+ * that read it as an accidental export). The original reason given here
+ * was "exposed for testability", which does NOT justify a public export:
+ * the one perf test that calls it (tests/perf/prf001-matrix.perf.test.ts)
+ * imports the deep source path, not the barrel, so the barrel export
+ * carries no test weight at all.
+ *
+ * The reason it stays is the other half of the split. This is the pure
+ * half of a two-step pipeline, and it emits ELK JSON: a versioned
+ * document, which is one of the toolkit's three declared integration
+ * channels. A host that wants to run its own ELK configuration, feed a
+ * different layout engine, cache the assembly step, or inspect the
+ * recipe needs the builder without the engine. Collapsing the two steps
+ * into one entry point would close that channel for no gain.
  */
 export function buildStructuralElkGraph(
   input: StructuralGraphInput,
@@ -404,11 +412,6 @@ export function buildStructuralElkGraph(
   const direction = options?.direction ?? "RIGHT";
   const spacing = options?.spacing ?? 60;
   const layerSpacing = options?.layerSpacing ?? spacing + 20;
-  const edgeRouting = options?.edgeRouting ?? "ORTHOGONAL";
-  const nodePlacement = options?.nodePlacement ?? "BRANDES_KOEPF";
-  const crossingMinimization = options?.crossingMinimization ?? "LAYER_SWEEP";
-  const edgeNodeSpacing = options?.edgeNodeSpacing ?? 16;
-  const edgeEdgeSpacing = options?.edgeEdgeSpacing ?? 24;
 
   // Side policy. Data-flow (declared) ports sit on the flow axis (left/right
   // for a horizontal layout); body edges attach perpendicular to the flow
@@ -616,15 +619,11 @@ export function buildStructuralElkGraph(
       // container's DOWN sub-layout and lays rows out horizontally.
       "elk.algorithm": "layered",
       "elk.direction": direction,
-      "elk.edgeRouting": edgeRouting,
-      "elk.layered.nodePlacement.strategy": nodePlacement,
-      "elk.layered.crossingMinimization.strategy": crossingMinimization,
       "elk.spacing.nodeNode": String(spacing),
       "elk.layered.spacing.nodeNodeBetweenLayers": String(layerSpacing),
-      "elk.spacing.edgeNode": String(edgeNodeSpacing),
-      "elk.layered.spacing.edgeNodeBetweenLayers": String(edgeNodeSpacing),
-      "elk.spacing.edgeEdge": String(edgeEdgeSpacing),
-      "elk.layered.spacing.edgeEdgeBetweenLayers": String(edgeEdgeSpacing),
+      // Routing and edge-spacing keys are NOT emitted: the options that
+      // fed them were removed with this commit, and defaulting them
+      // here would put a value in the recipe that no caller chose.
     },
     children,
     edges,
@@ -645,8 +644,9 @@ export function buildStructuralElkGraph(
     // strategies preserve layers and order but NOT coordinates
     // (BRANDES_KOEPF recenters within layers, ~360px drift on the
     // fixture). Node placement is the coordinate-preserving phase, so
-    // sketch mode forces it INTERACTIVE too, superseding the
-    // `nodePlacement` option for the run.
+    // sketch mode forces it INTERACTIVE too. These four keys are the
+    // recipe an external ELK run needs; the shipped path reads
+    // `options.sketch` directly in the g3t engine.
     graph.layoutOptions["elk.layered.nodePlacement.strategy"] = "INTERACTIVE";
     // Position hints ride the children as x/y (what elkjs's
     // interactive strategies consume). The flow-axis extent hold for
@@ -756,11 +756,6 @@ function layoutOptionsKey(options?: StructuralLayoutOptions): string {
     vPadding: options?.vPadding ?? 5,
     spacing: options?.spacing ?? 60,
     layerSpacing: options?.layerSpacing ?? (options?.spacing ?? 60) + 20,
-    edgeRouting: options?.edgeRouting ?? "ORTHOGONAL",
-    nodePlacement: options?.nodePlacement ?? "BRANDES_KOEPF",
-    crossingMinimization: options?.crossingMinimization ?? "LAYER_SWEEP",
-    edgeNodeSpacing: options?.edgeNodeSpacing ?? 16,
-    edgeEdgeSpacing: options?.edgeEdgeSpacing ?? 24,
     routeEdges: options?.routeEdges ?? true,
     nudge: options?.nudge ?? false,
     g3t: {

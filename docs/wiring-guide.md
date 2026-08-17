@@ -5,9 +5,12 @@ support or process application, who need their OWN buttons, panels,
 and workflows to control toolkit behavior, and toolkit state to flow
 back out into their components.
 
-Every snippet in this guide runs in CI: `examples/wiring/src/`
-contains each one as an executable test, so this document cannot rot
-silently.
+Every snippet here is typechecked in CI against the real package types
+(`pnpm run verify:snippets`), so a recipe naming a removed or renamed
+export fails the build rather than sitting here misleading you. The
+integration paths they describe additionally run as executable tests in
+`examples/wiring/src/`. Snippets show their imports and assume the
+values you own (`ugm`, `cy`, your settings) are in scope.
 
 ## The integration surface
 
@@ -130,13 +133,24 @@ useThemeStore.getState().setTheme(orgSettings.darkMode ? "dark" : "light");
 The spec is plain serializable state YOU own:
 
 ```tsx
+import { useState } from "react";
+import {
+  CytoscapeCanvas,
+  EncodingSpecPanel,
+  SpecLegend,
+  type EncodingSpec,
+} from "@g3t/react";
+
 const [spec, setSpec] = useState<EncodingSpec>(initialSpec);
-// Your button:
-<button onClick={() => setSpec(riskViewSpec)}>Risk view</button>
-// Our components:
-<EncodingSpecPanel ugm={ugm} spec={spec} onChange={setSpec} />
-<CytoscapeCanvas ugm={ugm} encodingSpec={spec} />
-<SpecLegend ugm={ugm} spec={spec} />
+
+<>
+  {/* Your button: */}
+  <button onClick={() => setSpec(riskViewSpec)}>Risk view</button>
+  {/* Our components: */}
+  <EncodingSpecPanel ugm={ugm} spec={spec} onChange={setSpec} />
+  <CytoscapeCanvas ugm={ugm} encodingSpec={spec} />
+  <SpecLegend ugm={ugm} spec={spec} />
+</>;
 ```
 
 `parseEncodingSpec` / `serializeEncodingSpec` round-trip it through
@@ -152,6 +166,9 @@ Cytoscape instance survive. Do NOT feed a pre-filtered UGM as `ugm`: a new
 toggle.
 
 ```tsx
+import { useMemo, useState } from "react";
+import { CytoscapeCanvas, FacetFilter } from "@g3t/react";
+
 const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
 
 // A node is hidden only when ALL of its types are hidden; it stays
@@ -166,8 +183,10 @@ const hidden = useMemo(() => {
   return ids;
 }, [ugm, hiddenTypes]);
 
-<FacetFilter ugm={ugm} onFilterChange={setHiddenTypes} />
-<CytoscapeCanvas ugm={ugm} hidden={hidden} />
+<>
+  <FacetFilter ugm={ugm} onFilterChange={setHiddenTypes} />
+  <CytoscapeCanvas ugm={ugm} hidden={hidden} />
+</>;
 ```
 
 ### Route edges around nodes on any layout
@@ -179,20 +198,24 @@ library; the shipped demo shells set it to `true`). Structural scenes are
 detected automatically and the pass is skipped there.
 
 ```tsx
+import { CytoscapeCanvas } from "@g3t/react";
+
 // Simple opt-in: routing on with defaults (clearance 12, bendPenalty 30,
 // minStub 28; maxEdges 600 scale cap).
-<CytoscapeCanvas ugm={ugm} routeEdges />
+export const Simple = () => <CytoscapeCanvas ugm={ugm} routeEdges />;
 
 // Or with tuning:
-<CytoscapeCanvas
-  ugm={ugm}
-  routeEdges={{
-    maxEdges: 400,
-    clearance: 16,       // more breathing room around obstacles
-    bendPenalty: 60,     // straighter routes, fewer corners
-    minStub: 24,         // shorter perpendicular exits before a bend
-  }}
-/>
+export const Tuned = () => (
+  <CytoscapeCanvas
+    ugm={ugm}
+    routeEdges={{
+      maxEdges: 400,
+      clearance: 16, // more breathing room around obstacles
+      bendPenalty: 60, // straighter routes, fewer corners
+      minStub: 24, // shorter perpendicular exits before a bend
+    }}
+  />
+);
 ```
 
 The pass runs on every `layoutstop` (subject to the `maxEdges` cap) and on
@@ -207,6 +230,7 @@ import {
   parseAlgorithmResult,
   applyAlgorithmResult,
   ingestAlgorithmResults,
+  type UGM,
 } from "@g3t/core";
 import { useOverlayStore } from "@g3t/react";
 
@@ -230,7 +254,7 @@ case; "Copy ID" otherwise). "Inspect properties" appears only when
 you wire it, because only the host app knows its detail surface:
 
 ```tsx
-import { createDefaultMenuManager } from "@g3t/react";
+import { createDefaultMenuManager, useSelectionStore } from "@g3t/react";
 
 const manager = createDefaultMenuManager({
   // Selection IS the inspect surface in most g3t apps: the inspector,
@@ -272,6 +296,7 @@ wire every event you expose. The Analytics Dashboard in the playground
 consumes all seven (CI-tested there); the pattern:
 
 ```tsx
+import { useEffect } from "react";
 import { ContextMenuManager, registerToolkitActions } from "@g3t/react";
 import { G3tEventBus } from "@g3t/core";
 
@@ -340,47 +365,14 @@ const geometry = await layoutStructural({
 // open arrow), or "association" (plain arrow, the default).
 ```
 
-Collapse compartments by feeding their keys to the layout (collapse
-is a layout-time input, so the container actually shrinks; re-run on
-toggle). Build keys with `compartmentKey(nodeId, compartmentId)`:
-
-```tsx
-import { layoutStructural, compartmentKey } from "@g3t/core";
-
-const collapsed = new Set([compartmentKey("sensor", "operations")]);
-const geometry = await layoutStructural(input, {
-  collapsedCompartments: collapsed,
-});
-// "operations" now shows only a divider noting the hidden count; the
-// sensor container is shorter by the omitted rows. Toggle by adding
-// or removing keys and re-running. Hold the set in your own state
-// (or a store) and drive it from a button or a context-menu action.
-```
-
-For the per-container right-click toggle, register the built-in
-action and let the toolkit's collapse store hold the state; subscribe
-and re-run layout:
-
-```tsx
-import {
-  ContextMenuManager,
-  registerCompartmentCollapseActions,
-  useCompartmentCollapseStore,
-  collapsedCompartmentSet,
-} from "@g3t/react";
-
-const manager = new ContextMenuManager();
-registerCompartmentCollapseActions(manager); // right-click a container
-
-// Re-run layout whenever the collapse set changes:
-useCompartmentCollapseStore.subscribe((s) => {
-  void layoutStructural(input, {
-    collapsedCompartments: collapsedCompartmentSet(s.collapsedKeys),
-  }).then(setGeometry);
-});
-// The component-config surface is just seeding the store up front:
-// useCompartmentCollapseStore.getState().setCollapsed([...]).
-```
+Compartment collapse is NOT part of the surface. A layout-time
+collapse input (`compartmentKey`, `collapsedCompartments`) and its
+context-menu store shipped once and were removed by maintainer
+ruling on 2026-07-10; see `planning/expand-collapse-postmortem.md`
+for why, and read it before proposing anything equivalent. To hide
+detail today, build the `StructuralGraphInput` with the rows you
+want and re-run `layoutStructural`: the input IS the projection, so
+a host that owns which rows it emits already owns collapse.
 
 ### Render a SHACL shape graph (same compartment API)
 
@@ -396,6 +388,7 @@ import {
   closedShapeIds,
   layoutStructural,
 } from "@g3t/core";
+import { CytoscapeCanvas } from "@g3t/react";
 
 const input = shaclShapesToStructural(shapes, {
   references: { "PersonShape::worksFor": "OrgShape" }, // sh:node edges
@@ -524,6 +517,8 @@ The "Patterns/Coordinated Selection" story demonstrates it live.
 Subscribe to stores from anything:
 
 ```tsx
+import { useSelectionStore } from "@g3t/react";
+
 // React: your detail pane follows the toolkit selection
 function MyDossierPane() {
   const selected = useSelectionStore((s) => [...s.selectedNodeIds]);
@@ -544,6 +539,7 @@ import {
   captureWorkspace,
   applyWorkspace,
   serializeWorkspace,
+  parseWorkspace,
 } from "@g3t/react";
 const snapshot = captureWorkspace({ cy, spec });
 await saveToCase(caseId, serializeWorkspace(snapshot)); // your storage
@@ -589,11 +585,11 @@ CI-executed in `examples/wiring/src/wiring-examples.test.tsx`
 (`« s p o »`), so you can annotate a fact with who stated it,
 confidence, time. `SparqlAdapter` parses the SPARQL-1.2-JSON `triple`
 binding shape; `tripleTermToValue` folds it losslessly to a JSON
-value; two projections shape it for a canvas —
+value; two projections shape it for a canvas:
 `projectTripleTermsAsEdges` (haunt g-xplore style, one dashed `star`
 edge per annotation) and `projectTripleTermsAsHyperarcs` (reification
 onto a diamond `_Statement` pseudo-node). The hyperarc render is the
-one that survives NESTING (`« « s p o » p2 o2 »`) — a UGM edge cannot
+one that survives NESTING (`« « s p o » p2 o2 »`): a UGM edge cannot
 have an edge as an endpoint; a node can.
 
 ```ts
@@ -616,12 +612,48 @@ const stylesheet = [
   { selector: "node[_confidence]", style: { opacity: "data(_confidence)" } },
 ];
 
-// Same rows, edge render — one dashed star edge per annotation:
+// Same rows, edge render: one dashed star edge per annotation.
 const edgeUgm = projectTripleTermsAsEdges(rows);
 ```
 
+Five smaller exports come with the pair, for hosts that write their own
+labels or select the projected elements themselves:
+
+```ts
+import {
+  tripleLabel,
+  termLabel,
+  localName,
+  STAR_EDGE_TYPE,
+  RDF_STATEMENT_FLAG,
+  type TripleTerm,
+} from "@g3t/core";
+
+declare const term: TripleTerm;
+
+// Display labels. `termLabel` renders one RDF term, `tripleLabel` the
+// whole `s p o` as one string, and `localName` shortens an IRI to its
+// last path or fragment segment. All three are what the two
+// projections use internally, exported so a host relabeling nodes
+// gets the same text the default render shows.
+const label = tripleLabel(term); // "alice knows bob"
+const short = localName("http://ex.org/ns#Person"); // "Person"
+const one = termLabel(term.subject);
+
+// The two markers the projections stamp, so a selector or a filter
+// can name them instead of hardcoding the string.
+const isStatementNode = (attrs: { properties: Record<string, unknown> }) =>
+  attrs.properties[RDF_STATEMENT_FLAG] === true;
+const starEdges = `edge[type = "${STAR_EDGE_TYPE}"]`;
+```
+
+`localName` overlaps what most RDF-shaped hosts already have. It ships
+because the two projections need one shortening rule and a host
+relabeling their output needs the SAME rule; reach for your own if you
+have one.
+
 The RDF 1.2 shell in `src/demo/rdf12/` toggles between the two live
-over a small constellation fixture with a nested review — the
+over a small constellation fixture with a nested review, where the
 statement-to-statement link is the shape the edge render cannot
 express.
 
@@ -638,12 +670,16 @@ interior node ids in `boundaryNodeIds` and optionally pin a portal to
 its transit node via `boundaryNodeId`.
 
 ```ts
-import { HolonicAdapter } from "@g3t/core";
+import { HolonicAdapter, type HolonicDataset } from "@g3t/core";
+
+// Your holarchy, however you load it.
+declare const dataset: HolonicDataset;
+
 const adapter = new HolonicAdapter(dataset);
 const boundary = adapter.projectHolonBoundary(dataset.holons[0]);
 // Holon node carries _boundaryRing (double-ring styling in the
 // canvas defaults); exposed nodes link from the holon via
-// HolonicAdapter.BOUNDARY_CONTAINMENT_EDGE — hand that type to the
+// HolonicAdapter.BOUNDARY_CONTAINMENT_EDGE; hand that type to the
 // canvas containment prop to render them inside the ring compound.
 // Portal edges carry _portalTransit (mid-edge glyph; diamond when
 // CONSTRUCT-backed).
@@ -684,19 +720,22 @@ const { ugm: sub, truncated } = buildSubgraph(big, memberIds, 1500);
 ```
 
 Supernodes carry `memberCount` (drive the size channel with it),
-`interiorEdgeCount` (edges wholly inside the cluster — the "how many
+`interiorEdgeCount` (edges wholly inside the cluster, the "how many
 paths in it" number an analyst asks for first), `boundaryEdgeCount`
 (edges crossing the cluster boundary), `typeBreakdown`, and a
 disambiguated name like "Person cluster around alice"; inter-cluster
 edges aggregate into weighted `cluster-link` edges.
 
 Compose the count badge into the canvas label with the pure helper
-`clusterBadgeText(attrs)` — renderer-neutral so it survives brief
+`clusterBadgeText(attrs)`, renderer-neutral so it survives brief
 08's per-view renderer independence. The typical wiring precomputes
 `_badge` onto each supernode and points the Cytoscape label at it:
 
 ```ts
-import { clusterBadgeText } from "@g3t/core";
+import { clusterBadgeText, type UGM } from "@g3t/core";
+
+// The collapsed graph from the previous snippet.
+declare const clustered: UGM;
 
 clustered.forEachNode((id, attrs) => {
   attrs.properties._badge = clusterBadgeText(attrs.properties);
@@ -726,8 +765,8 @@ implemented.
 ## Edge bundling (dense-scene legibility)
 
 CI-executed in `examples/wiring/src/wiring-examples.test.tsx`. The
-"hairball" middle ground — hundreds to low-thousands of visible edges
-that obscure structure — is what force-directed edge bundling (FDEB,
+"hairball" middle ground, hundreds to low-thousands of visible edges
+that obscure structure, is what force-directed edge bundling (FDEB,
 Holten & van Wijk 2009) is for. Pairs naturally with
 `collapseByCluster`: bundle the aggregated cluster links, not the
 raw 8,000-edge graph.
@@ -736,11 +775,16 @@ raw 8,000-edge graph.
 import { bundleEdges, bundledPolylineToSegments } from "@g3t/core";
 
 // positions: whatever your layout settled on (cy.nodes() -> position,
-// ELK output, cached preset positions — anything id -> {x,y}).
-const positions: Record<string, { x: number; y: number }> = {};
-cy.nodes().forEach((n) => (positions[n.id()] = n.position()));
+// ELK output, cached preset positions: anything id -> {x,y}).
+// Minimal shape of the Cytoscape elements this touches; `cy` is your
+// Cytoscape core instance.
+type CyNode = { id(): string; position(): { x: number; y: number } };
+type CyEdge = { id(): string; source(): CyNode; target(): CyNode };
 
-const edges = cy.edges().map((e) => ({
+const positions: Record<string, { x: number; y: number }> = {};
+cy.nodes().forEach((n: CyNode) => (positions[n.id()] = n.position()));
+
+const edges = cy.edges().map((e: CyEdge) => ({
   id: e.id(),
   source: e.source().id(),
   target: e.target().id(),
@@ -764,7 +808,7 @@ if (!skipped) {
 
 Deterministic by construction (no RNG, fixed subdivision + iteration
 schedule): same input yields byte-identical polylines. Endpoints are
-never moved — `route[0]` and `route[last]` are the source and target
+never moved: `route[0]` and `route[last]` are the source and target
 positions verbatim, so bundling never detaches an edge from its node.
 Recompute on toggle or on a genuine layout change; a bundling pass
 is a restyle plus per-edge bypass, so pan/zoom and node positions
@@ -776,6 +820,63 @@ halved per cycle), `stepSize` (0.4, halved per cycle), `stiffness`
 paper. Increase `compatibilityThreshold` to bundle only near-parallel
 edges; lower it to bundle more aggressively at the cost of longer
 routes.
+
+## When a view fails to render
+
+A render-phase throw unmounts every React ancestor, so without a
+boundary somewhere above the canvas the user gets a blank page: no
+message, no reload, nothing to act on. There is no hook form of an
+error boundary, so the toolkit ships the component.
+
+```tsx
+import { ViewErrorBoundary, CytoscapeCanvas } from "@g3t/react";
+
+export function Panel() {
+  return (
+    <ViewErrorBoundary
+      // Your reporting. `info.componentStack` locates the throw in a
+      // production build, where the message alone will not.
+      onError={(error, info) => logError(error, info.componentStack)}
+      fallback={({ error, retry }) => (
+        <div>
+          <p>The graph could not render: {error.message}</p>
+          <button onClick={retry}>Try again</button>
+        </div>
+      )}
+    >
+      <CytoscapeCanvas ugm={ugm} />
+    </ViewErrorBoundary>
+  );
+}
+```
+
+Omit `fallback` for a built-in message and retry button. `retry`
+remounts the subtree, which is enough for a transient failure; it is
+NOT enough for a `React.lazy` whose import rejected, because lazy
+caches its rejection permanently. If you code-split a view, build a
+new lazy from the loader when `retry` fires.
+
+An ASYNC failure never reaches a boundary, so the hooks report it
+themselves. `useStructuralLayout` returns an error channel alongside
+the scene, because a rejected layout and a layout still in flight both
+leave `structural` null and a host that only checks for null spins a
+loading state forever:
+
+```tsx
+import type { StructuralGraphInput } from "@g3t/core";
+import { useStructuralLayout } from "@g3t/react";
+
+export function StructuralPanel({ input }: { input: StructuralGraphInput }) {
+  const { structural, error } = useStructuralLayout(input);
+  if (error) return <p>Layout failed: {error.message}</p>;
+  if (!structural) return <p>Laying out…</p>;
+  return <pre>{JSON.stringify(structural.geometry.nodes, null, 2)}</pre>;
+}
+```
+
+The error belongs to the input that produced it: switching inputs
+clears it, and a later successful layout of the same input clears it
+too.
 
 ## Programmatic APIs
 
@@ -830,9 +931,35 @@ of the current viewport; `full: false` snapshots what the user sees.
 `scale` (default `2`) multiplies pixel density. `bg` sets a solid
 background colour (Cytoscape defaults to transparent).
 
-SVG export is not bundled — it needs the `cytoscape-svg` extension
-(new dependency + bundle-ledger entry). Add it in your host if you
-need vector snapshots.
+SVG export is not bundled: it needs the `cytoscape-svg` extension
+(new dependency plus a bundle-ledger entry). Add it in your host if
+you need vector snapshots.
+
+`buildExport` is the data-side counterpart, and the function the
+toolbar's other Export entries call. Note the two differ where the
+payloads differ: `buildExport` returns text as `content`, while
+`buildImageExport` returns binary as a `blob`. It also takes the
+selection explicitly, so the same call serves both the whole-graph and
+the selection-scoped menu entries (a non-empty id list switches the
+filename from `g3t-graph.*` to `g3t-selection.*`):
+
+```ts
+import { buildExport } from "@g3t/react";
+
+declare const format: "json" | "turtle" | "csv";
+declare const selectedNodeIds: string[];
+
+// Whole graph.
+const all = buildExport(format, ugm, []);
+// Just the selection.
+const some = buildExport(format, ugm, selectedNodeIds);
+
+const blob = new Blob([some.content], { type: some.mime });
+const url = URL.createObjectURL(blob);
+// hand `url` to an <a download={some.filename}> or your upload path
+URL.revokeObjectURL(url);
+void all;
+```
 
 ### Applying an encoding spec without the panel
 

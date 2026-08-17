@@ -1,18 +1,37 @@
 #!/usr/bin/env node
 /**
- * Bundle-size budget (P6).
+ * PUBLISH-WEIGHT budget (P6). Read the next paragraph before citing a
+ * number from this file.
  *
  * For each published package, compute the total ESM dist size and
  * compare against a budget. Fails if any package exceeds its budget.
+ *
+ * **This is publish weight, NOT what an adopter downloads.** Every
+ * package here declares `sideEffects: false` (asserted by
+ * verify:treeshake), so a bundler drops what the consumer does not
+ * reference. Measured 2026-08-15: importing only `UGM` costs 4.8 KB of
+ * first-party code, against the 164 KB this file reports for the whole
+ * package. The two numbers differ by a factor of thirty and answer
+ * different questions.
+ *
+ * `scripts/check-consumer-cost.mjs` budgets what an adopter actually
+ * pays, per import. This file stays because publish weight catches
+ * things that one cannot and catches them cheaply: an accidental
+ * node_modules inclusion, a dependency swap, a build that stopped
+ * splitting chunks. Keep both, and do not read a raise here as a
+ * regression somebody's page load will feel; check the other gate for
+ * that.
  *
  * The "total ESM" is the sum of every `.mjs` and `.js` file in the
  * package's `dist/` directory, EXCLUDING `.cjs` (CommonJS) and `.map`
  * (source maps). Shared chunks Rollup extracts during the multi-entry
  * build count.
  *
- * Budgets are unminified bytes; this is intentional because the
- * unminified surface is what consumers actually pull through their own
- * bundlers. Consumers minify in production.
+ * Budgets are unminified bytes. Consumers minify in production. The
+ * previous wording here said unminified dist "is what consumers
+ * actually pull through their own bundlers", which was the assumption
+ * that made this file look like a consumer-cost gate for a year. It is
+ * not: consumers pull what they reference.
  *
  * Headroom: each budget is set ~25% above the current measured size.
  * If a legitimate change pushes any package over its budget, raise the
@@ -57,84 +76,195 @@ const BUDGETS = {
   // oracle-pinned.
   // Round 21 (2026-08-05): +1 KB for the structural style applier
   // (R-12a), the renderer-neutral counterpart of the cytoscape one.
-  // RAISED 155.5 -> 167 (2026-08-14): brief 01 (routing independence)
-  // landed the route-nudging post-pass: g3t-nudging.ts (grouping,
-  // divergence sort, placement ladder, snapshot-plan atomic commit),
-  // the CorridorDemand contract brief 04 consumes, and the
-  // g3t-polyline-utils extraction. ~9.7 KB of pure routing compute,
-  // opt-in (`nudge` option), 11 oracle-pinned unit tests. Measured
-  // 165.2; modest headroom only, so briefs 02-10 renegotiate here
-  // as they land rather than riding silent headroom.
-  // RAISED 167 -> 169 (2026-08-14): brief 10 (long-edge perimeter
-  // policy) landed in g3t-routing/g3t-layered: edges with >= 12
-  // near-obstacle boxes prefer a perimeter detour with deterministic
-  // outward stagger. Measured 167.0 (bytes over the 167 line); the
-  // renegotiate-per-brief posture above holds.
-  // RAISED 169 -> 173 (2026-08-14): LAY-005 (dummy chains for long-
-  // span edges) landed in g3t-dummy-chain.ts plus wire-through in
-  // g3t-layered.ts / g3t-structural.ts / g3t-routing.ts. The new
-  // module carries splitLongSpanEdges, harvestBendHints, and the
-  // chooseDummyParent helper (for the nested-container case the
-  // input model does not yet expose); the router grew a bend-hint
-  // seeding path that reads dummy positions as intermediate bend
-  // hints and emits them as StructuralEdgeGeometry.intermediate.
-  // Measured 172.5; the +2 KB headroom covers upcoming polish.
-  // RAISED 173 -> 176 (2026-08-14): brief 04 (corridor supply contract)
-  // landed in g3t-dummy-chain (estimateCorridorDemand, computeCorridorGap,
-  // named constants), threading per-corridor gap sizing through
-  // g3tLayoutFlat and g3tLayoutStructural, and adding a dev-mode
-  // layout-supply / router-demand drift assertion (nudge measurement
-  // moved from routeStructuralEdges into g3tLayoutStructural so the
-  // corridorDemand it emits can be compared against the estimate).
-  // Measured 174.4; +1.6 KB headroom for the follow-on E/W-axis
-  // calibration in brief 04 verification step 5.
-  // RAISED 176 -> 182 (2026-08-14): brief 05a (channel router, PRF-003
-  // phase 1) landed g3t-channel-router.ts (channel/track model,
-  // libavoid divergence-sort track assignment, per-channel demand
-  // overflow to routeOrthogonal, geometry emission from track index)
-  // and g3t-fallback-classifier.ts (the same-layer / anti-monotone /
-  // compound-boundary AABB classifier), both pure-additive behind an
-  // off-by-default `useChannelRouter` flag on routeStructuralEdges;
-  // 17 oracle-pinned unit tests. Measured 180.7; +1.3 KB headroom.
-  // 05b flips the flag on, deletes the escalation ladder + brief-10
-  // stage-A accept-site + the transient flag (no-legacy), which nets
-  // most of this back; renegotiate here when it lands. UPDATE
-  // 2026-08-14: 05b measured channel-as-default and it regresses
-  // crossings 2-8x, so the flag stays off-by-default and the ladder is
-  // retained (Decision do-not-make-the-prf-003-channel-router-the-default);
-  // no net deletion came back.
-  // RAISED 182 -> 187 (2026-08-14): brief 06 (dense-scene legibility)
-  // landed projection/pseudo-nodes.ts (hubBurst satellite spreading +
-  // busCollapse fan-in junctions, UGM->UGM transforms + SatelliteMap/
-  // JunctionMap reverse maps + shared pseudo-node filter helpers), pure
-  // additive/opt-in; 12 oracle-pinned unit tests. Measured 184.8;
-  // +2.2 KB headroom.
-  // RAISED 187 -> 190 (2026-08-14): two additive features in one
-  // consolidation round: (1) VR-10 routing correctness — travelBand/
-  // crossBounds in g3t-routing.ts fix the perimeter-policy and
-  // detourAround collision checks that judged against the bbox-
-  // filtered 'near' set (rails leave that bbox by definition; 8
-  // violations -> 0 across the 108-cell sweep, flow-sweep pin added);
-  // (2) brief 12 holon boundary projection — projectHolonBoundary on
-  // HolonicAdapter (ringed holon + exposed boundary nodes via the
-  // _boundaryContains containment type + portal stubs with transit
-  // markers), additive optional fields only. Measured 187.7.
-  // RAISED 190 -> 196 (2026-08-14): brief 14 RDF 1.2 triple-term
-  // projection — projection/hyperarc.ts adds projectTripleTermsAsEdges
-  // (haunt-style dashed qualified edges) + projectTripleTermsAsHyperarcs
-  // (diamond _Statement pseudo-nodes with rdf:subject/object arcs,
-  // recursing on nested << << s p o >> p2 o2 >>), both additive/opt-in,
-  // exported through projection + top-level barrels. Measured 192.1.
-  // RAISED 196 -> 200 (2026-08-15): brief 16 force-directed edge
-  // bundling (FDEB, Holten & van Wijk 2009) — bundling/edge-bundling.ts
-  // adds bundleEdges (deterministic, endpoint-preserving, maxEdges-
-  // bounded) + bundledPolylineToSegments (Cytoscape segments projector),
-  // pure geometry, zero React/Cytoscape, exported through the top-level
-  // barrel. Companion to collapseByCluster for the aggregated cluster-
-  // link legibility path; opt-in via a scale-demo toggle. Measured 198.3;
-  // +1.7 KB headroom.
-  core: 200 * 1024,
+  core: 209 * 1024,
   // Core ledger:
+  // - 169.0 -> 209 KB, 2026-08-17 (MERGE of ai-agent-guide into
+  //   fable-updates). Measured 206.3 KB.
+  //
+  //   The two budget lines that met here FORKED FROM THE SAME 155.5
+  //   cap on 2026-08-14 and each raised against it, so the numbers
+  //   below are two parallel sequences, not one. fable-updates went
+  //   155.5 -> 160 -> 162 -> 166 -> 169 for hardening, then measured
+  //   164.0 after withdrawing 15 subpath exports. ai-agent-guide went
+  //   155.5 -> 167 -> 169 -> 173 -> 176 -> 182 -> 187 -> 190 -> 196
+  //   -> 200 for feature work and measured 198.3. The 169 that appears
+  //   in both is arithmetic coincidence, not a shared checkpoint, and
+  //   neither cap covers the other side's code.
+  //
+  //   FEATURE SIDE, carried forward from ai-agent-guide. Every measured
+  //   number below was taken on a tree containing NONE of the hardening
+  //   accounted for further down this ledger:
+  //   - 155.5 -> 167: brief 01 routing independence. g3t-nudging.ts
+  //     (grouping, divergence sort, placement ladder, snapshot-plan
+  //     atomic commit), the CorridorDemand contract brief 04 consumes,
+  //     and the g3t-polyline-utils extraction. Opt-in behind `nudge`.
+  //     Measured 165.2.
+  //   - 167 -> 169: brief 10 long-edge perimeter policy in
+  //     g3t-routing/g3t-layered. Edges with >= 12 near-obstacle boxes
+  //     prefer a perimeter detour with deterministic outward stagger.
+  //     Measured 167.0.
+  //   - 169 -> 173: LAY-005 dummy chains for long-span edges.
+  //     g3t-dummy-chain.ts (splitLongSpanEdges, harvestBendHints,
+  //     chooseDummyParent) plus the router bend-hint seeding path that
+  //     emits dummy positions as StructuralEdgeGeometry.intermediate.
+  //     Measured 172.5.
+  //   - 173 -> 176: brief 04 corridor supply contract
+  //     (estimateCorridorDemand, computeCorridorGap) threaded through
+  //     g3tLayoutFlat and g3tLayoutStructural, with a dev-mode
+  //     supply/demand drift assertion. Measured 174.4.
+  //   - 176 -> 182: brief 05a channel router (PRF-003 phase 1).
+  //     g3t-channel-router.ts and g3t-fallback-classifier.ts, both
+  //     pure-additive behind an off-by-default `useChannelRouter`.
+  //     Measured 180.7. 05b measured channel-as-default and it
+  //     regressed crossings 2-8x, so the flag stays off and the
+  //     escalation ladder was retained; no net deletion came back.
+  //   - 182 -> 187: brief 06 dense-scene legibility.
+  //     projection/pseudo-nodes.ts (hubBurst satellite spreading,
+  //     busCollapse fan-in junctions, the reverse maps and shared
+  //     filters). Measured 184.8.
+  //   - 187 -> 190: VR-10 routing correctness (travelBand/crossBounds
+  //     fix the perimeter and detourAround collision checks that judged
+  //     against the bbox-filtered `near` set; 8 violations to 0 across
+  //     the 108-cell sweep) plus brief 12 holon boundary projection.
+  //     Measured 187.7.
+  //   - 190 -> 196: brief 14 RDF 1.2 triple-term projection.
+  //     projection/hyperarc.ts (projectTripleTermsAsEdges and
+  //     projectTripleTermsAsHyperarcs, recursing on nested triple
+  //     terms). Measured 192.1.
+  //   - 196 -> 200: brief 16 force-directed edge bundling (FDEB,
+  //     Holten and van Wijk 2009). bundling/edge-bundling.ts, pure
+  //     geometry, opt-in. Measured 198.3.
+  //
+  //   THE @g3t/layout (ARC-009) WITHDRAWAL STANDS, and this merge
+  //   strengthens it. The entry below retired that recommendation on
+  //   the grounds that this number is publish weight, every package
+  //   declares `sideEffects: false`, and layout already costs nothing
+  //   to a consumer who does not import it. The feature side just added
+  //   roughly 43 KB of routing and layout code, which makes the
+  //   distinction between publish weight and adopter cost matter more,
+  //   not less. check-consumer-cost.mjs is where the real question is
+  //   asked; do not reinstate the extraction on the strength of a
+  //   number from this file.
+  //
+  //   MEASURED, not estimated: 206.3 KB against this 209 cap after
+  //   `pnpm run build:packages` on the resolved merge. That is 42.5 KB
+  //   over the 163.8 KB the fable-updates dist measured alone, which
+  //   is the feature side's own 43 KB arriving very nearly intact:
+  //   the two arcs touch different modules, so almost nothing
+  //   deduplicated. Sourcemap audit run first as the 2026-07-03 entry
+  //   requires: ZERO node_modules source bytes across all 110 core
+  //   sourcemaps, so every byte of the growth is first-party.
+  //   Headroom is 2.7 KB, held tight on purpose and in line with the
+  //   entries below; the next addition of any size renegotiates here
+  //   rather than riding slack.
+  // - NO RAISE, 2026-08-15 (the @g3t/layout recommendation is RETIRED,
+  //   and 15 subpath exports were withdrawn). Measured 164.0 KB against
+  //   the unchanged 169.0 cap, so headroom went 1.4 -> 5.0 KB. Two
+  //   things happened and neither was a raise.
+  //
+  //   FIRST: the standing recommendation carried by the four entries
+  //   below, "extract @g3t/layout (ARC-009) and bring core back under
+  //   its original envelope", IS WITHDRAWN. It was chasing THIS number,
+  //   and this number is publish weight. Every package declares
+  //   `sideEffects: false`, so a consumer downloads what it references.
+  //   Measured by bundling real imports: `UGM` alone costs 4.8 KB of
+  //   first-party code with ZERO layout in it (no dagre, no elk, no
+  //   quadtree, no force simulation); importing the layout engines adds
+  //   roughly 35 KB of first-party code, or 106 KB with their own
+  //   dependencies. Layout already costs nothing to anyone who does not
+  //   use it, so the extraction would have moved this number without
+  //   changing one adopter's page load, while adding a fourth tarball
+  //   and a fourth publish to a release sequence that already has two
+  //   unrecoverable failure windows. Do not reinstate it on the
+  //   strength of a number from this file. If layout ever becomes
+  //   unconditionally reachable, the core-ugm scenario in
+  //   check-consumer-cost.mjs is what will say so.
+  //
+  //   SECOND: the withdrawal (maintainer ruling) removed 15 symbols
+  //   that no adopter document named and nothing here used, across the
+  //   middleware, SHACL-report, pipeline, algorithms and projection
+  //   subpaths. That is where the 3.6 KB came from. The cap stays at
+  //   169.0 rather than being tightened to the new measurement: the
+  //   headroom was earned by removing surface, and spending it
+  //   immediately on a tighter cap would just force the next raise.
+  // - 166 -> 169 KB, 2026-08-15 (versioned-JSON failure convention):
+  //   measured 167.6 KB, +3.0 KB for model/document-errors.ts and the
+  //   parser call sites that now use it. Sourcemap audit run first:
+  //   ZERO node_modules source bytes, and the new module is CODE-SPLIT
+  //   into its own chunk (document-errors-*.js) rather than duplicated
+  //   into each of the entries that import it, which was the specific
+  //   risk worth checking for a module three subpaths depend on.
+  //   Most of the weight is the module docblock, which states the
+  //   three-arm rule for when a parser throws, returns diagnostics, or
+  //   returns an error list. That reasoning is the deliverable: the
+  //   defect being fixed was seven parsers failing four different ways
+  //   with nothing written down, so deleting the explanation to save
+  //   bytes would reintroduce half the problem. Headroom is 1.4 KB,
+  //   held tight on purpose. FOURTH raise this session, all four
+  //   hardening rather than feature work. The standing recommendation
+  //   is unchanged and is now overdue: extract @g3t/layout (ARC-009)
+  //   and bring core back under its original envelope instead of
+  //   raising a fifth time.
+  // - 162 -> 166 KB, 2026-08-15 (adapter request hygiene): measured
+  //   164.6 KB, +4.2 KB. Four things, all first-party:
+  //   adapter/adapter-error.ts (new; AdapterHttpError plus the shared
+  //   assertOk the four adapters now call instead of hand-rolling a
+  //   throw), the timeout/cancellation machinery in
+  //   middleware/middleware.ts (createDefaultFetch, AdapterTimeoutError,
+  //   RetryExhaustedError), and RestAdapter becoming reachable from the
+  //   root barrel, which it never was: its config TYPES were exported
+  //   and the class was not, so a documented adapter had no import
+  //   path. That last one is the only byte-visible part of the fix and
+  //   it is not optional; an unreachable class is not a saving.
+  //   Sourcemap audit run first as the 2026-07-03 entry requires:
+  //   ZERO node_modules source bytes in core's dist, so every byte
+  //   here is ours. A large share is jsdoc on adapter-error.ts and on
+  //   the timeout default, which stays: budgets are unminified by
+  //   deliberate policy, and "why 30 seconds" and "why aborts are
+  //   never retried" are exactly what a future reader needs. New
+  //   headroom is 1.4 KB, deliberately tight, because the standing
+  //   recommendation is still to extract @g3t/layout (ARC-009) and
+  //   bring core back under its original envelope rather than keep
+  //   raising. This is the third raise this session and the third
+  //   that is hardening rather than feature work.
+  // - 160 -> 162 KB, 2026-08-14 (parse-boundary hardening):
+  //   element-shape checking in
+  //   model/graph-document.ts so parseGraphDocument honors its
+  //   declared `{ error } | { document, diagnostics }` union instead
+  //   of throwing a raw TypeError out of library internals, and so a
+  //   numeric id stops passing as a well-typed document. Measured
+  //   160.4 KB, +0.4 KB. Sourcemap audit still clean (zero
+  //   node_modules bytes). The checkers are hand-written rather than
+  //   a JSON Schema engine precisely because of this budget: an
+  //   engine would cost more than the whole document module. Second
+  //   raise this session, both of them hardening work; ordinary
+  //   feature work should still expect to argue for its bytes.
+  // - 155.5 -> 160 KB, 2026-08-14 (adapter query-argument safety):
+  //   adapter/query-safety.ts plus the
+  //   call sites in the Gremlin, Cypher and SPARQL adapters,
+  //   measured 157.1 KB. This is the raise the previous entry warned
+  //   was coming; it is a security fix, not the style/route program,
+  //   so it does not renegotiate that program's standing
+  //   recommendation (extract @g3t/layout, ARC-009, and bring core
+  //   back under its original envelope). Sourcemap audit run first,
+  //   as that entry requires: ZERO node_modules source bytes in
+  //   core's dist, so all 1.9 KB is first-party. Most of it is the
+  //   module's jsdoc, which stays: budgets are unminified by
+  //   deliberate policy and the reasoning about what is bound versus
+  //   validated is the part a future reader needs. New headroom is
+  //   2.9 KB, set modestly on purpose so ordinary creep still trips
+  //   the gate.
+  // - NO raise, 2026-08-14 (nine-helper ruling): the
+  //   new ./internal subpath adds dist/internal.mjs at 193 B. Rollup
+  //   code-split it, so the four SHACL row-label formatters are NOT
+  //   duplicated out of shacl.mjs; the entry is a re-export shim.
+  //   Measured 155.2 KB against the unchanged 155.5 cap.
+  //   WARNING TO THE NEXT ROUND: that is 0.3 KB of headroom, ~100%.
+  //   The next first-party addition of any size trips this gate. Do
+  //   not treat the pass as slack. If a raise is needed, run the
+  //   sourcemap audit described in the 2026-07-03 entry first, because
+  //   at this margin an accidental node_modules inclusion and a real
+  //   feature look identical from the total alone.
   // - 140 -> 160 KB, 2026-07-07 (review remediation round 2): measured
   //   139.1 KB (99% of cap) after khopNeighborhood (BFS composed with
   //   buildSubgraph for the neighborhood popout) and the
@@ -297,25 +427,60 @@ const BUDGETS = {
   // Round 21 (2026-08-05): +1.5 KB for R-12 (structural node
   // styles, controlled drag offsets, the renderer-neutral editor
   // target) and R-13.3 (one legend serving both renderers).
-  // RAISED 386 -> 388 (2026-08-14): measured 386.1 after brief 10's
-  // perimeter policy (core routing growth re-bundled through the
-  // react dist); no react-side code was added.
-  // RAISED 388 -> 390 (2026-08-14): measured 389.1 KB (100%) after
-  // the `routeEdges` prop landed on CytoscapeCanvas — new
-  // `runCanvasEdgeRouting` pass (post-layout obstacle-aware routing
-  // for non-structural scenes), plus the g3t-canvas-edge-routed
-  // stylesheet rule and a routeEdges change effect. The pure geometry
-  // (routeSceneEdges / polylineToCytoscapeSegments) is imported from
-  // `@g3t/core`, so the react-side growth is just the wiring, effect,
-  // and prop plumbing.
-  // RAISED 390 -> 393 (2026-08-14): brief 12 holon boundary view —
-  // registerHolonDrillItems (Open boundary / Open interior context-
-  // menu registration) plus four field-scoped stylesheet rules
-  // (node[_boundaryRing] double ring, node[_portalStub] de-emphasis,
-  // edge[_portalTransit] mid-edge glyph with a diamond override for
-  // CONSTRUCT-backed portals), and the RDF 1.2 triple-term parser
-  // growth in core re-bundled through the react dist. Measured 390.6.
-  react: 393 * 1024, // 420 KB
+  react: 397 * 1024,
+  // React ledger:
+  // - 390 -> 397 KB, 2026-08-17 (MERGE of ai-agent-guide into
+  //   fable-updates). Measured 393.9 KB. Same shape as the core entry:
+  //   the two react caps also forked from one 386 baseline and raised
+  //   in parallel, so 390 and 393 are siblings, not a sequence.
+  //   Carried forward from ai-agent-guide, all measured without any of
+  //   the hardening below:
+  //   - 386 -> 388: brief 10 perimeter policy, core routing growth
+  //     re-bundled through the react dist. No react-side code added.
+  //     Measured 386.1.
+  //   - 388 -> 390: the `routeEdges` prop on CytoscapeCanvas. New
+  //     runCanvasEdgeRouting pass (post-layout obstacle-aware routing
+  //     for non-structural scenes), the g3t-canvas-edge-routed
+  //     stylesheet rule, and a routeEdges change effect. The geometry
+  //     (routeSceneEdges, polylineToCytoscapeSegments) is imported from
+  //     @g3t/core, so the react-side growth is wiring only.
+  //     Measured 389.1.
+  //   - 390 -> 393: brief 12 holon boundary view.
+  //     registerHolonDrillItems plus four field-scoped stylesheet rules
+  //     (node[_boundaryRing] double ring, node[_portalStub]
+  //     de-emphasis, edge[_portalTransit] mid-edge glyph with a diamond
+  //     override for CONSTRUCT-backed portals). Measured 390.6.
+  //   Sourcemap audit: ZERO node_modules source bytes across all 137
+  //   react sourcemaps, so the growth is first-party here too.
+  //   Headroom is 3.1 KB. Note this package is at 99% of cap: the
+  //   react dist carries core's routing growth through its own bundle,
+  //   so a core-side addition lands here too even when no react code
+  //   changes. Two of the three entries above are exactly that.
+  // - NO RAISE, 2026-08-14 (timeline moved to its own subpath):
+  //   387.2 -> 387.7 KB, +0.5 KB, headroom 2.8 -> 2.3 KB. TimelineView
+  //   statically imports the two OPTIONAL peers, and rollup had hoisted
+  //   it into a chunk the root barrel imported, so the documented
+  //   install produced an unresolvable `import { CytoscapeCanvas } from
+  //   "@g3t/react"`. Splitting it to its own entry costs one 2.5 KB
+  //   entry file and returns most of that from the chunk it left; it
+  //   still shares EmptyState and selection-store. Recorded here rather
+  //   than passed over because the previous entry set this headroom
+  //   deliberately, and a fix that eats a fifth of it should say so.
+  // - 386 -> 390 KB, 2026-08-14 (render-failure containment):
+  //   views/error/ViewErrorBoundary.tsx, measured 387.2 KB, +1.4 KB.
+  //   The package shipped no error boundary at all, and there is no
+  //   hook form of one, so a render-phase throw under any view (a
+  //   code-split chunk that fails to fetch, a malformed document
+  //   reaching a renderer) unmounted the whole tree to a blank page
+  //   with nothing in the UI to act on. This is the one component a
+  //   host cannot write around the library's own views without
+  //   wrapping every one of them itself. Sourcemap audit run first as
+  //   the 2026-07-03 core entry requires: ZERO node_modules source
+  //   bytes in react's dist, so all 1.4 KB is first-party, most of it
+  //   the docblock explaining why a class component is here (budgets
+  //   are unminified by deliberate policy). It is a tree-shakeable
+  //   named export, so hosts that never reference it pay nothing.
+  //   New headroom is 2.8 KB, set modestly on purpose.
   // - 384 -> 420 KB, 2026-07-07 (review remediation round 2): measured
   //   379.9 KB (99% of cap) after the emphasis/effects layer
   //   (emphasis store + class application), useStructuralCollapse,
@@ -365,7 +530,7 @@ for (const [pkg, budget] of Object.entries(BUDGETS)) {
   let total;
   try {
     total = dirSize(dist, [".mjs", ".js"]);
-  } catch (err) {
+  } catch {
     console.error(
       `  @g3t/${pkg}: dist/ missing; run pnpm run build:packages first`,
     );

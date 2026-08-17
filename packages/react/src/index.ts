@@ -50,10 +50,22 @@ export type { StructuralLayoutResult } from "./views/canvas/use-structural-layou
 export * from "./views/canvas";
 export * from "./views/table";
 export * from "./views/inspector";
-export * from "./views/timeline";
+// NOT re-exported here: ./views/timeline. TimelineView statically imports
+// vis-timeline and vis-data, which package.json declares OPTIONAL peers, so
+// a package manager does not install them. Module resolution runs before
+// tree-shaking, which means a re-export from this barrel makes the very
+// first `import { CytoscapeCanvas } from "@g3t/react"` fail to resolve for
+// every consumer who took the documented install. TimelineView ships on its
+// own subpath instead: `@g3t/react/timeline`. Enforced by
+// scripts/check-optional-peers.mjs.
 export * from "./views/map";
 export * from "./views/tree";
 export * from "./views/schema";
+export { ViewErrorBoundary } from "./views/error/ViewErrorBoundary";
+export type {
+  ViewErrorBoundaryProps,
+  ViewErrorFallbackArgs,
+} from "./views/error/ViewErrorBoundary";
 export { FloatingLegend } from "./views/legend/FloatingLegend";
 export { FloatingPanel } from "./views/popout/FloatingPanel";
 export type { FloatingPanelProps } from "./views/popout/FloatingPanel";
@@ -61,6 +73,15 @@ export { NeighborhoodPopout } from "./views/popout/NeighborhoodPopout";
 export type { NeighborhoodPopoutProps } from "./views/popout/NeighborhoodPopout";
 export { ShaclShapeBrowser } from "./views/schema/ShaclShapeBrowser";
 export type { ShaclShapeBrowserProps } from "./views/schema/ShaclShapeBrowser";
+// The validator's shape model, re-exported alongside the components
+// that consume it so `ShaclShape` on this entry means one thing. A
+// display-only type in SchemaView used to own this name here, and it
+// was structurally incompatible (it keys its constraint list
+// `constraints`, core keys it `properties`), so an adopter who imported
+// ShaclShape and built an array for ShaclShapeBrowser got a type the
+// component rejected. That type is now SchemaViewShape, and SchemaView
+// accepts either form.
+export type { ShaclShape } from "@g3t/core";
 export * from "./views/matrix";
 export * from "./views/sankey";
 export * from "./views/query";
@@ -149,6 +170,13 @@ export {
   G3tLayeredLayout,
   WorkingSetManager,
 } from "@g3t/core";
+// The engines' option bag, re-exported alongside them so `LayoutOptions`
+// on this entry means the thing the engines actually accept. The
+// LayoutManager panel's UI state used to own this name here, which
+// type-checked against ForceLayout.compute() and silently discarded
+// every force-tuning field (audit 2026-08); that type is now
+// LayoutPanelOptions.
+export type { LayoutOptions } from "@g3t/core";
 export * from "./icons";
 
 // ── VisualAttributes -> Cytoscape projection (G3L:ARC-008 posture):

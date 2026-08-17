@@ -8,7 +8,7 @@
 import { create } from "zustand";
 import type { NodeStyleOverride } from "@g3t/core";
 
-interface StyleOverrideState {
+export interface StyleOverrideState {
   overrides: NodeStyleOverride[];
   add: (override: NodeStyleOverride) => void;
   remove: (scope: NodeStyleOverride["scope"]) => void;

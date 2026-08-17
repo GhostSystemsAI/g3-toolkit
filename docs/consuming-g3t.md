@@ -14,8 +14,22 @@ pnpm add @g3t/charts
 
 Peer dependencies are NOT installed for you. `@g3t/react` peers:
 `react`, `react-dom`, `cytoscape`, `cytoscape-fcose`, `zustand`,
-`echarts`, `vis-timeline`, `vis-data`. `@g3t/charts` peers:
-`react`, `echarts`. `@g3t/core` peers: `graphology`.
+`echarts`. `@g3t/charts` peers: `react`, `echarts`. `@g3t/core`
+peers: `graphology`.
+
+`@g3t/react` also declares two OPTIONAL peers, `vis-timeline` and
+`vis-data`. Install them only if you use `TimelineView`, which is
+the sole consumer:
+
+```bash
+pnpm add vis-timeline vis-data
+```
+
+`TimelineView` is reachable exclusively from `@g3t/react/timeline`
+for this reason. Importing it from the root barrel or from
+`@g3t/react/views` will not work, by design: those barrels are
+resolvable without the optional peers installed, and they can only
+stay that way by not referencing the component that needs them.
 
 ## Import the stylesheet, first
 
@@ -211,9 +225,24 @@ theme store silently splits:
 
 ## Known limitations
 
-- Typed CJS consumption (`require` from a `.cts` file) is not
-  supported pending declaration bundling. Runtime CJS works and is
-  smoke-tested; ESM and bundler resolution are gated in CI.
-- `vis-timeline` and `vis-data` are statically imported by the
-  react bundle, so they must be installed even when no timeline
-  view is used. Subpath isolation is planned.
+- **The packages are ESM only** as of 2026-08-16. There is no `require`
+  condition and no `.cjs` in `dist`. `import` works from every bundler
+  (Vite, webpack 5, Rollup, esbuild, Next) and from Node with ESM. A
+  Node script using `require("@g3t/core")` must switch to `import` or
+  a dynamic `import()`, and Jest running in default CommonJS mode
+  needs transform configuration.
+
+  Typed CJS never actually worked: each entry shipped one ESM-flavored
+  `.d.ts`, so `require` from a `.cts` raised TS1479 even though the
+  runtime file resolved. Publishing both formats was also what made
+  the dual-package hazard reachable, and that one is worse than a
+  compile error. The exported zustand stores are singletons; a
+  dependency tree that reaches a package through `import` on one path
+  and `require` on another gets two module instances and therefore two
+  stores, so one view subscribes to a store another view is writing
+  to, selection stops propagating, and nothing appears in a stack
+  trace. It cannot be fixed from inside the library while both formats
+  ship.
+- `TimelineView` is only importable from `@g3t/react/timeline`, and
+  that subpath requires the optional peers `vis-timeline` and
+  `vis-data`. Every other entry point resolves without them.

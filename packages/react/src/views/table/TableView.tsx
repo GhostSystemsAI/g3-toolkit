@@ -349,16 +349,43 @@ export function TableView({
               {hg.headers.map((header) => (
                 <th
                   key={header.id}
+                  // The sort state was legible only as an icon glyph,
+                  // which no assistive technology reports and no test
+                  // can assert without matching on an SVG. aria-sort is
+                  // the standard carrier.
+                  aria-sort={
+                    header.column.getIsSorted() === "asc"
+                      ? "ascending"
+                      : header.column.getIsSorted() === "desc"
+                        ? "descending"
+                        : "none"
+                  }
                   style={{
                     padding: density === "compact" ? "2px 6px" : "6px 8px",
                     borderBottom: "2px solid var(--g3t-border, #ddd)",
                     textAlign: "left",
-                    cursor: selectable ? "pointer" : "default",
                     userSelect: "none",
                     whiteSpace: "nowrap",
                   }}
                 >
-                  <div onClick={header.column.getToggleSortingHandler()}>
+                  <div
+                    // The sort handler lives here, not on the th, so
+                    // that the inline filter input below does not
+                    // toggle sorting when it is clicked. The pointer
+                    // cursor belongs on the same element for the same
+                    // reason: it was on the th and keyed off
+                    // `selectable`, which is ROW selection and has
+                    // nothing to do with sorting, so the whole header
+                    // cell advertised a click that only its top half
+                    // answered.
+                    data-testid={`column-sort-${header.id}`}
+                    style={{
+                      cursor: header.column.getCanSort()
+                        ? "pointer"
+                        : "default",
+                    }}
+                    onClick={header.column.getToggleSortingHandler()}
+                  >
                     {flexRender(
                       header.column.columnDef.header,
                       header.getContext(),
