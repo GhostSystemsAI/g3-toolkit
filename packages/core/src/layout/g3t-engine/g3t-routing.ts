@@ -222,6 +222,56 @@ export function routeStructuralEdges(
      *  info); 05a keeps it caller-supplied so this brief lands without
      *  touching the layout pipeline. */
     channelPlan?: ChannelPlan;
+    /** Minimum px between adjacent anchors on one side, with overflow
+     *  onto the two adjacent sides once a side saturates. OPT-IN;
+     *  omitted (the default) is byte-identical to today.
+     *
+     *  The plain fan divides a side into `count + 1` and takes the
+     *  interior points, so its pitch is `extent / (count + 1)` with no
+     *  floor. That is fine until a side is asked to absorb more edges
+     *  than it has room for: 17 arrivals on a 52px-tall box land 2.9px
+     *  apart, which is mathematically distinct and visually one line
+     *  with 17 arrowheads stacked on it. No existing option helps,
+     *  because none of them adds space.
+     *
+     *  When set, anchors are placed at AT LEAST this pitch, centred on
+     *  the side. Once `count` exceeds what the side can hold, the
+     *  outermost edges in fan order wrap around the corners onto the
+     *  two perpendicular sides (an edge arriving from far above takes
+     *  the north face), nearest-corner first, each overflow side
+     *  pitch-limited in turn. Edges that overflow keep their fan
+     *  ORDER, so the sequence still reads around the box.
+     *
+     *  A side is never given more than it can hold at this pitch. A
+     *  box with genuinely too many incident edges saturates its
+     *  overflow sides too, and those fall back to even division on the
+     *  side they landed on: legibility degrades from there.
+     *
+     *  This REDUCES stacking, it does not abolish it, and the
+     *  difference is worth stating. Placement here is an input to
+     *  `anchorOf`, not the last word: VR-7f slides an anchor whose
+     *  natural spot is covered by the counterpart box to the nearest
+     *  exposed cross, and two anchors can slide onto the SAME cross
+     *  because that choice is made per edge with no knowledge of its
+     *  neighbours. An assigned side that is fully covered also falls
+     *  through to the ordinary side walk, which takes that side's
+     *  midpoint. Both paths can still coincide. Making distinctness a
+     *  guarantee means teaching those two to see the anchors already
+     *  placed, which is a larger change than this option.
+     *
+     *  Ordering caveat: the fan sorts by the far end's coordinate in
+     *  the PRIMARY side's axis. Once an edge overflows around a
+     *  corner, its own axis changes, so the sort key at the far end
+     *  can be read in the other axis. That affects fan ORDER only,
+     *  never placement, and it is the same imprecision the plain fan
+     *  already carries for mixed-side pairs. */
+    anchorPitch?: number;
+    /** Target separation between nudged parallel runs, px. Default 8.
+     *  Only read when `nudge` is on. Callers coming through the layout
+     *  should set it there instead, so the corridor the layout
+     *  RESERVES widens to match; setting it only here spreads runs
+     *  into space that was never allocated. */
+    trackGap?: number;
   },
 ): Record<string, { points: Pt[]; intermediate?: Pt[] }> {
   // Direction-aware (WS-D D3a fix): under horizontal flow (RIGHT/
@@ -346,6 +396,54 @@ export function routeStructuralEdges(
   // how much to spread" property they asked for.
   const anchorFirst = options?.anchor ?? "source";
   const fanOffset = new Map<string, number>(); // `${edge}@${node}` -> tangent coord
+  // Anchor-pitch overflow (opt-in, see options.anchorPitch). ONLY
+  // written when the option is set, and read only where it is present,
+  // so the default path never sees it and stays byte-identical. A
+  // separate map rather than widening fanOffset for the same reason:
+  // the default fan is oracle-pinned and not worth the risk.
+  const anchorPitch = options?.anchorPitch;
+  const fanSide = new Map<string, RouteSide>(); // `${edge}@${node}` -> side
+  /** The two sides perpendicular to `side`, low end first. Overflow
+   *  wraps around the corners onto these. */
+  const perpSides = (side: RouteSide): [RouteSide, RouteSide] =>
+    side === "EAST" || side === "WEST" ? ["NORTH", "SOUTH"] : ["WEST", "EAST"];
+  /** Span available for anchors on one side of `g`, as [min, max] in
+   *  that side's tangent axis. */
+  const spanOf = (
+    g: { x: number; y: number; width: number; height: number },
+    side: RouteSide,
+    margin: number,
+  ): [number, number] => {
+    const ew = side === "EAST" || side === "WEST";
+    const lo = (ew ? g.y : g.x) + margin;
+    const hi = (ew ? g.y + g.height : g.x + g.width) - margin;
+    return [lo, Math.max(lo, hi)];
+  };
+  /** Place `n` anchors centred on [lo, hi] at `pitch` spacing, or as
+   *  many as fit. Returns fewer than `n` only when the span cannot
+   *  hold them; the caller overflows the rest. */
+  const placeAtPitch = (
+    lo: number,
+    hi: number,
+    pitch: number,
+    n: number,
+  ): number[] => {
+    if (n <= 0) return [];
+    const span = hi - lo;
+    const capacity = Math.max(1, Math.floor(span / pitch) + 1);
+    const take = Math.min(n, capacity);
+    if (take === 1) return [lo + span / 2];
+    // Spread to the full span when there is room to spare, so a light
+    // side still reads as an even fan rather than a tight cluster in
+    // the middle; tighten to exactly `pitch` once it is crowded.
+    // `(take - 1) * step <= span` holds either way, because capacity
+    // is floor(span / pitch) + 1, so the run always fits inside the
+    // span and `start` below never pushes it past `hi`.
+    const step = Math.max(pitch, span / take);
+    const total = step * (take - 1);
+    const start = lo + Math.max(0, (span - total) / 2);
+    return Array.from({ length: take }, (_, i) => start + i * step);
+  };
   const collect = (ends: "source" | "target", align = false): void => {
     fans.clear();
     for (const e of edges) {
@@ -377,6 +475,56 @@ export function routeStructuralEdges(
       );
       const lo = ew ? g.y : g.x;
       const extent = ew ? g.height : g.width;
+      if (anchorPitch !== undefined && anchorPitch > 0) {
+        // Opt-in pitch + corner overflow. Takes precedence over both
+        // branches below: it subsumes the even fan (it spreads to the
+        // full span when there is room) and the align pass has no
+        // answer for a saturated side, which is the case this exists
+        // for.
+        const MARGIN = 8;
+        // Bound once, so the closure below takes a plain number rather
+        // than relying on narrowing to survive into it.
+        const pitchPx = anchorPitch;
+        const primary = (sideRaw ?? "EAST") as RouteSide;
+        const [pLo, pHi] = spanOf(g, primary, MARGIN);
+        const onPrimary = placeAtPitch(pLo, pHi, pitchPx, sorted.length);
+        const excess = sorted.length - onPrimary.length;
+        // The MIDDLE of the fan keeps the primary side; the outermost
+        // edges wrap around the corners, which is where they were
+        // already heading. Split the excess evenly so neither corner
+        // takes the whole overflow.
+        const lowCount = Math.floor(excess / 2);
+        const [lowSide, highSide] = perpSides(primary);
+        const lowEdges = sorted.slice(0, lowCount);
+        const midEdges = sorted.slice(lowCount, lowCount + onPrimary.length);
+        const highEdges = sorted.slice(lowCount + onPrimary.length);
+        midEdges.forEach((a, i) => {
+          fanOffset.set(`${a.edge}@${node}`, onPrimary[i] ?? pLo);
+          fanSide.set(`${a.edge}@${node}`, primary);
+        });
+        const placeOverflow = (group: typeof sorted, side: RouteSide): void => {
+          if (group.length === 0) return;
+          const [oLo, oHi] = spanOf(g, side, MARGIN);
+          let pos = placeAtPitch(oLo, oHi, pitchPx, group.length);
+          if (pos.length < group.length) {
+            // This side saturated too. Fall back to even division on
+            // it, so the anchors still separate as far as the border
+            // allows instead of stacking on one point. Legibility
+            // degrades past this; no anchor is lost.
+            const oSpan = oHi - oLo;
+            pos = group.map(
+              (_, i) => oLo + ((i + 1) / (group.length + 1)) * oSpan,
+            );
+          }
+          group.forEach((a, i) => {
+            fanOffset.set(`${a.edge}@${node}`, pos[i] ?? oLo);
+            fanSide.set(`${a.edge}@${node}`, side);
+          });
+        };
+        placeOverflow(lowEdges, lowSide);
+        placeOverflow(highEdges, highSide);
+        continue;
+      }
       if (align) {
         // R-4 v2 (consumer measurement 2026-08-03): sorting by the
         // other end's assigned coordinate is NOT enough. In a
@@ -516,11 +664,31 @@ export function routeStructuralEdges(
       return chosen === undefined ? null : mk(chosen);
     };
     const fanPreferred = fanOffset.get(`${e.id}@${node}`);
+    // Anchor-pitch overflow assigned this edge to a specific side, so
+    // try that one FIRST rather than the gap-ordered primary. Empty
+    // unless options.anchorPitch is set, so the default walk below is
+    // reached unchanged. VR-7f still applies: if the assigned side is
+    // covered by the counterpart box we fall through to the normal
+    // ordering rather than anchoring into another box.
+    const assignedSide = fanSide.get(`${e.id}@${node}`);
+    if (assignedSide !== undefined) {
+      const a = buildAnchor(assignedSide, fanPreferred);
+      if (a !== null) return a;
+    }
     const ordered = sidesFor(node, other);
     for (let i = 0; i < ordered.length; i++) {
       const side = ordered[i];
       if (side === undefined) continue;
-      const a = buildAnchor(side, i === 0 ? fanPreferred : undefined);
+      if (side === assignedSide) continue; // already tried, and failed
+      // `fanPreferred` is a coordinate in its OWN side's tangent axis.
+      // On the default path that side is ordered[0], so passing it
+      // there is correct. When overflow assigned a different side and
+      // that side was rejected, the coordinate means nothing here (a
+      // y from an EAST fan read as an x on NORTH), so drop it and take
+      // the side's natural midpoint.
+      const preferred =
+        i === 0 && assignedSide === undefined ? fanPreferred : undefined;
+      const a = buildAnchor(side, preferred);
       if (a !== null) return a;
     }
     // Everything covered (extreme containment): the primary side's
@@ -1092,7 +1260,9 @@ export function routeStructuralEdges(
     }
   }
   if (options?.nudge) {
-    const { routes } = nudgeRoutes(out, obstacles);
+    const { routes } = nudgeRoutes(out, obstacles, {
+      trackGap: options?.trackGap,
+    });
     return routes;
   }
   return out;

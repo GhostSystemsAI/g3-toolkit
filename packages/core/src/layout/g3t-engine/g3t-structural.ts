@@ -356,7 +356,13 @@ export function g3tLayoutStructural(
     }
     if (li < realLayers.length - 1) {
       const demand = corridorDemandEst.get(li) ?? 0;
-      const { gap } = computeCorridorGap(demand, layerSpacing);
+      const { gap } = computeCorridorGap(
+        demand,
+        layerSpacing,
+        options?.trackGap,
+        undefined,
+        options?.corridorMaxGapFactor,
+      );
       corridorMidlines.push(flow + layerF + gap / 2);
       flow += layerF + gap;
     } else {
@@ -446,6 +452,8 @@ export function g3tLayoutStructural(
       // to Infinity, disabling perimeter) does not silently change
       // behavior when invoked through the layout pipeline.
       longEdgeNear: options?.longEdgeNear ?? 12,
+      // Opt-in; undefined leaves the fan exactly as it was.
+      anchorPitch: options?.anchorPitch,
       bendHints,
     });
     if (options?.nudge) {
@@ -459,7 +467,11 @@ export function g3tLayoutStructural(
         width: g.width,
         height: g.height,
       }));
-      const { routes, corridorDemand } = nudgeRoutes(rawRoutes, obstacles);
+      // Same trackGap the corridor-supply estimate above was sized
+      // with, or the drift assertion compares two different geometries.
+      const { routes, corridorDemand } = nudgeRoutes(rawRoutes, obstacles, {
+        trackGap: options?.trackGap,
+      });
       // Preserve the intermediate hints the router attaches; nudge
       // rewrites points only.
       const merged: Record<string, { points: Pt[]; intermediate?: Pt[] }> = {};

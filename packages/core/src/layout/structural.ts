@@ -766,6 +766,14 @@ function layoutOptionsKey(options?: StructuralLayoutOptions): string {
       orderingBudgetMs: options?.orderingBudgetMs ?? 60,
       routingBudgetMs: options?.routingBudgetMs ?? 80,
       longEdgeNear: options?.longEdgeNear ?? 12,
+      // Participates in the key: changing the pitch changes the
+      // geometry, so a cached run under a different pitch is the
+      // wrong answer. `null` for "unset" keeps the serialized key
+      // stable rather than dropping the field.
+      anchorPitch: options?.anchorPitch ?? null,
+      // Both change geometry, so both must key the cache.
+      trackGap: options?.trackGap ?? null,
+      corridorMaxGapFactor: options?.corridorMaxGapFactor ?? null,
     },
     // Sketch participates in the memo key: a sketched re-layout of the
     // same input+options is a DIFFERENT computation from the

@@ -14,6 +14,23 @@
  * (default ON here so separation is evaluable), the long-edge
  * perimeter threshold, router anchor, placement/layering strategies,
  * and an effort preset over the phase time budgets.
+ *
+ * Anchor pitch (2026-08-18) is a layout option like the rest, but it
+ * addresses CAPACITY rather than route shape and is worth separating
+ * in the reviewer's head. The plain fan divides a side by `count + 1`
+ * with no floor, so a small box taking many edges spaces them below
+ * arrowhead width. Setting a pitch floors the separation and wraps the
+ * outermost edges around the corners. Off by default here, matching
+ * the library, because the bench exists to make the default visible.
+ *
+ * NO BUNDLING CONTROL, deliberately (removed 2026-08-18 after review).
+ * Force-directed bundling assumes point-like nodes; this view has
+ * compartmented boxes with declared ports, and FDEB ignores ports, box
+ * geometry and obstacles by construction, so on Port Storm it drew
+ * long diagonals out of port anchors across the boxes. It has a proper
+ * home on the force canvas in the Scale surface, where the nodes are
+ * point-like and the edges are long and roughly parallel. Do not
+ * re-add it here without revisiting that.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StructuralSvgView, useStructuralLayout } from "@g3t/react";
@@ -45,6 +62,48 @@ const LONG_EDGE = {
   conservative: 20,
 } as const;
 type LongEdge = keyof typeof LONG_EDGE;
+
+/** Minimum px between adjacent anchors on one side (anchorPitch),
+ *  overflowing around the corners once a side saturates. `undefined`
+ *  is the library default: the plain fan divides the side by
+ *  `count + 1` with no floor, so a small box taking many edges spaces
+ *  them below arrowhead width. Fan-In Bus at Large is the case to
+ *  watch: 17 arrivals on a 52px Collector land 2.9px apart with this
+ *  off. 12 matches the arrowhead scale; 20 is deliberately coarse so
+ *  the corner overflow is easy to see. */
+const ANCHOR_PITCH = {
+  off: undefined,
+  snug: 8,
+  default: 12,
+  loose: 20,
+} as const;
+type AnchorPitch = keyof typeof ANCHOR_PITCH;
+
+/** Nudge separation presets: the track gap the post-pass spreads
+ *  parallel runs to, paired with the ceiling on how wide a corridor
+ *  may grow to hold them.
+ *
+ *  They ship as PAIRS on purpose. The corridor gap is
+ *  `min(factor * layerSpacing, demand * trackGap + 2 * clearance)`, so
+ *  at the default 80px layer spacing the cap binds above 28 edges per
+ *  corridor and everything past that is spread across a fixed 240px no
+ *  matter how wide the tracks were asked to be. Raising trackGap 8 to
+ *  12 on its own therefore does NOTHING to a 40-edge corridor (6.0px
+ *  before and after) while shrinking the fully-served range from 28
+ *  edges to 19. The factor is what bites at scale.
+ *
+ *  Measured effective gap on a 40-edge corridor: default 6.0px,
+ *  roomy 8.0px, wide 10.0px.
+ *
+ *  The track gap is also the threshold at which the pass decides two
+ *  runs are crowded enough to separate at all, so raising it widens
+ *  both the spacing it produces AND the set of runs it will touch. */
+const NUDGE_SPACING = {
+  default: { trackGap: undefined, factor: undefined },
+  roomy: { trackGap: 12, factor: 4 },
+  wide: { trackGap: 16, factor: 5 },
+} as const;
+type NudgeSpacing = keyof typeof NUDGE_SPACING;
 
 /** Effort presets over the engine's anytime phase budgets (PRF-001
  *  allocation is the default; high trades latency for quality). */
@@ -182,6 +241,15 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   const [nudge, setNudge] = useState(true);
   const [longEdge, setLongEdge] = useState<LongEdge>("default");
   const [anchor, setAnchor] = useState<"source" | "target">("source");
+  // Minimum separation between anchors on one side, with overflow
+  // around the corners once a side fills. Library default is off (the
+  // plain fan divides the side by count+1 with no floor), and the
+  // bench exists to make that visible, so "off" is the first option
+  // rather than a hidden default.
+  const [pitch, setPitch] = useState<AnchorPitch>("off");
+  // Track gap + corridor cap, as a pair. Defaults to the library
+  // values so the bench keeps showing what a host gets untouched.
+  const [spacing, setSpacing] = useState<NudgeSpacing>("default");
   const [placement, setPlacement] = useState<Placement>("brandes-koepf");
   const [layering, setLayering] = useState<Layering>("network-simplex");
   const [effort, setEffort] = useState<Effort>("default");
@@ -212,6 +280,10 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
       nudge,
       longEdgeNear: LONG_EDGE[longEdge],
       anchor,
+      // undefined for "off", which is exactly the library default.
+      anchorPitch: ANCHOR_PITCH[pitch],
+      trackGap: NUDGE_SPACING[spacing].trackGap,
+      corridorMaxGapFactor: NUDGE_SPACING[spacing].factor,
       placement,
       layering,
       ...EFFORTS[effort],
@@ -223,6 +295,8 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
       nudge,
       longEdge,
       anchor,
+      pitch,
+      spacing,
       placement,
       layering,
       effort,
@@ -236,6 +310,21 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
     () => (scene ? gradeRoutes(scene.input, scene.geometry) : null),
     [scene],
   );
+
+
+  /**
+   * Clicking the pinned edge again unpins it.
+   *
+   * This is the only in-canvas escape from a pinned trace.
+   * `useElementPointerEvents` resolves a click through the hit test and
+   * DROPS it when nothing is hit, so a click on empty canvas never
+   * reaches a handler and the old "click empty canvas to clear" was
+   * unreachable. The Clear button in the Trace panel is the
+   * discoverable escape; this is the convenient one.
+   */
+  const handleEdgeClick = (id: string | null): void => {
+    setTracedEdge((cur) => (id !== null && id === cur ? null : id));
+  };
 
   // Per-edge stroke colors + pinned-trace emphasis as generated CSS.
   // CSS rules beat SVG presentation attributes, so the demo restyles
@@ -389,6 +478,19 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
                 onChange={(e) => setNudge(e.target.checked)}
               />
             </span>
+            <span title="Track gap the nudge post-pass spreads parallel runs to, paired with the ceiling on how wide a corridor may grow to hold them. They move together on purpose: the corridor gap is min(factor * layerSpacing, demand * trackGap + 2 * clearance), so past roughly 28 edges per corridor the cap binds and a wider track gap alone changes nothing. Effective gap on a 40-edge corridor: Default 6px, Roomy 8px, Wide 10px.">
+              <label htmlFor="rlab-spacing">Separation</label>
+              <select
+                id="rlab-spacing"
+                data-testid="rlab-spacing-select"
+                value={spacing}
+                onChange={(e) => setSpacing(e.target.value as NudgeSpacing)}
+              >
+                <option value="default">Default (8 / 3x)</option>
+                <option value="roomy">Roomy (12 / 4x)</option>
+                <option value="wide">Wide (16 / 5x)</option>
+              </select>
+            </span>
             <span>
               <label htmlFor="rlab-longedge">Perimeter</label>
               <select
@@ -415,6 +517,20 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
               >
                 <option value="source">Source</option>
                 <option value="target">Target</option>
+              </select>
+            </span>
+            <span>
+              <label htmlFor="rlab-pitch">Anchor pitch</label>
+              <select
+                id="rlab-pitch"
+                data-testid="rlab-pitch-select"
+                value={pitch}
+                onChange={(e) => setPitch(e.target.value as AnchorPitch)}
+              >
+                <option value="off">Off</option>
+                <option value="snug">Snug (8)</option>
+                <option value="default">Default (12)</option>
+                <option value="loose">Loose (20)</option>
               </select>
             </span>
             <span>
@@ -461,7 +577,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
               <SizedStructuralSvg
                 scene={scene}
                 direction={dir}
-                onEdgeClick={setTracedEdge}
+                onEdgeClick={handleEdgeClick}
               />
             ) : (
               <div className="rlab-empty">
@@ -522,8 +638,24 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
                   tone="ok"
                 />
                 <p style={{ marginTop: 8 }}>
-                  Everything else is dimmed. Click empty canvas to clear.
+                  Everything else is dimmed. Click the edge again, or use Clear.
                 </p>
+                {/* An explicit affordance, because the canvas cannot
+                    offer one. `useElementPointerEvents` resolves a
+                    click through the hit test and DROPS it when
+                    nothing is hit, so a click on empty canvas never
+                    reaches a handler and "click empty canvas to
+                    clear" was never reachable. Toggling on re-click
+                    below covers the common case; this covers the
+                    rest. */}
+                <button
+                  type="button"
+                  className="rlab-back"
+                  data-testid="rlab-trace-clear"
+                  onClick={() => setTracedEdge(null)}
+                >
+                  Clear trace
+                </button>
               </>
             ) : (
               <p>

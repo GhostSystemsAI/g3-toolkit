@@ -124,6 +124,12 @@ describe("RoutingShell", () => {
     expect(screen.getByTestId("rlab-edge-css").textContent).toContain(
       `[data-ssv-edge="${firstEdge.id}"]`,
     );
+    // NOTE this exercises the shell's HANDLER contract, not a real
+    // gesture. `useElementPointerEvents` resolves a click through the
+    // hit test and drops it when nothing is hit, so a click on empty
+    // canvas never produces this call in the running app. The reachable
+    // escapes are re-clicking the pinned edge and the Clear button,
+    // both covered below.
     act(() => {
       captured.onElementClick!({
         hit: null,
@@ -145,6 +151,64 @@ describe("RoutingShell", () => {
       "rlab-longedge-select",
     ) as HTMLSelectElement;
     expect(longEdge.value).toBe("default");
+  });
+
+  it("engine row: anchor pitch defaults OFF", async () => {
+    render(<RoutingShell onBack={() => {}} />);
+    await waitFor(() => expect(captured.scenes.length).toBeGreaterThan(0));
+    // Defaults off so the bench shows the LIBRARY default. The plain
+    // fan's lack of a pitch floor is the thing under review; a lab
+    // that hid it behind a default would defeat the purpose.
+    const pitch = screen.getByTestId("rlab-pitch-select") as HTMLSelectElement;
+    expect(pitch.value).toBe("off");
+  });
+
+  it("anchor pitch reaches the engine and re-lays out", async () => {
+    render(<RoutingShell onBack={() => {}} />);
+    await waitFor(() => expect(captured.scenes.length).toBeGreaterThan(0));
+    const before = captured.scenes.length;
+    fireEvent.change(screen.getByTestId("rlab-pitch-select"), {
+      target: { value: "loose" },
+    });
+    await waitFor(() => {
+      expect(captured.scenes.length).toBeGreaterThan(before);
+    });
+    // A layout option, so the geometry must actually move.
+    expect(JSON.stringify(captured.scenes.at(-1)!.geometry.edges)).not.toBe(
+      JSON.stringify(captured.scenes[0]!.geometry.edges),
+    );
+  });
+
+  it("clicking the pinned edge again unpins it, and Clear does too", async () => {
+    const { act } = await import("@testing-library/react");
+    render(<RoutingShell onBack={() => {}} />);
+    await waitFor(() => expect(captured.onElementClick).not.toBeNull());
+    const edge = ROUTING_SCENARIOS[0]!.build("M").edges[0]!;
+    const pin = (): void => {
+      act(() => {
+        captured.onElementClick!({
+          hit: { elementId: edge.id, kind: "edge", zone: "segment" },
+          point: { x: 0, y: 0 },
+          originalEvent: {},
+        });
+      });
+    };
+    pin();
+    expect(screen.getByTestId("rlab-trace").textContent).toContain(edge.id);
+    // Re-click the SAME edge unpins. This is the only in-canvas escape:
+    // a click on empty canvas resolves to no hit and is dropped by
+    // useElementPointerEvents before any handler sees it, so the old
+    // "click empty canvas to clear" was never reachable.
+    pin();
+    expect(screen.getByTestId("rlab-trace").textContent).toContain(
+      "Hover an edge",
+    );
+    // And the explicit affordance, which is the discoverable one.
+    pin();
+    fireEvent.click(screen.getByTestId("rlab-trace-clear"));
+    expect(screen.getByTestId("rlab-trace").textContent).toContain(
+      "Hover an edge",
+    );
   });
 
   it("engine knob change re-runs the layout (new scene delivered)", async () => {

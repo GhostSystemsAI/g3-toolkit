@@ -66,6 +66,33 @@ export interface G3tLayoutOptions {
    *  corridor, so long lines through dense fields move outside where
    *  they read cleanly. Default 12; Infinity disables (rollback). */
   longEdgeNear?: number;
+  /** Minimum px between adjacent anchors on one side, overflowing
+   *  around the corners once a side saturates. OPT-IN; omitted is
+   *  byte-identical to today. The plain fan divides a side by
+   *  `count + 1` with no floor, so a small box taking many edges
+   *  spaces them below arrowhead width and they read as one line.
+   *  See routeStructuralEdges for the full contract. */
+  anchorPitch?: number;
+  /** Target separation between nudged parallel runs, px. Default 8
+   *  (`CORRIDOR_TRACK_GAP`, which the corridor-supply estimate
+   *  mirrors, so this is threaded into BOTH: raising it here widens
+   *  the reserved corridor by the same amount, or the router would
+   *  spread into space the layout never reserved). */
+  trackGap?: number;
+  /** Ceiling on a corridor gap, as a multiple of `layerSpacing`.
+   *  Default 3 (`CORRIDOR_MAX_GAP_FACTOR`).
+   *
+   *  Raise this WITH `trackGap` when the goal is more separation in
+   *  medium or large graphs, because on its own `trackGap` does not
+   *  get there. Gap is `min(factor * base, demand * trackGap + 2 *
+   *  clearance)`, so at the default base of 80 the cap binds above 28
+   *  edges per corridor and every corridor past that is spread across
+   *  a fixed 240px however wide the tracks were asked to be. Going
+   *  8 -> 12 with the factor left at 3 changes a 40-edge corridor not
+   *  at all (6.0px either way) and SHRINKS the fully-served range from
+   *  28 edges to 19. The factor is the lever that bites at scale;
+   *  `trackGap` is the lever that bites below the cap. */
+  corridorMaxGapFactor?: number;
 }
 
 interface FlatNode {
@@ -558,7 +585,15 @@ export function g3tLayoutFlat(
     }
     if (li < layers.length - 1) {
       const demand = corridorDemandEst.get(li) ?? 0;
-      y += layerH + computeCorridorGap(demand, layerSpacing).gap;
+      y +=
+        layerH +
+        computeCorridorGap(
+          demand,
+          layerSpacing,
+          options?.trackGap,
+          undefined,
+          options?.corridorMaxGapFactor,
+        ).gap;
     } else {
       y += layerH + layerSpacing;
     }

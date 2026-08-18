@@ -201,8 +201,46 @@ export function nudgeRoutes(
   const planned: PlannedGroup[] = [];
   const usedKeys = new Set<string>();
 
+  /**
+   * Split a union-find group into the runs that actually need moving.
+   *
+   * Grouping is a TRANSITIVE closure over the capture band, so a chain
+   * of segments each within `captureBand` of the next becomes one
+   * group spanning far more than the band: A-B-C at 16px steps is a
+   * single 32px group. Planning that whole chain as one evenly-spaced
+   * run moves members that had no crowded neighbour on either side,
+   * which is the "nudge moved an edge nowhere near another edge"
+   * report. Capture is the right net to CATCH candidates with; it is
+   * the wrong unit to PLAN with.
+   *
+   * Two segments only need separating when they are closer than one
+   * track gap. So sort by perpendicular coordinate and cut wherever
+   * consecutive members are already at least `trackGap` apart: what
+   * survives is the maximal runs that genuinely overlap, and anything
+   * already adequately spaced is left exactly where the router put it.
+   */
+  const crowdedRuns = (memberIdxs: number[]): number[][] => {
+    const withPerp = memberIdxs
+      .map((i) => ({ i, perp: movable[i]?.perp ?? 0 }))
+      .sort((a, b) => a.perp - b.perp || a.i - b.i);
+    const runs: number[][] = [];
+    let run: { i: number; perp: number }[] = [];
+    for (const m of withPerp) {
+      const prev = run[run.length - 1];
+      if (prev !== undefined && m.perp - prev.perp >= trackGap) {
+        if (run.length >= 2) runs.push(run.map((r) => r.i));
+        run = [];
+      }
+      run.push(m);
+    }
+    if (run.length >= 2) runs.push(run.map((r) => r.i));
+    return runs;
+  };
+
   // Deterministic iteration order for reproducible corridorKey suffixes.
   const groupList = Array.from(groups.values())
+    .filter((m) => m.length >= 2)
+    .flatMap(crowdedRuns)
     .filter((m) => m.length >= 2)
     .map((memberIdxs) => {
       const first = movable[memberIdxs[0] ?? -1];
@@ -276,17 +314,27 @@ export function nudgeRoutes(
     if (spanAvailable <= 0) {
       blocked = true;
       attemptRewrite = false;
-    } else if (spanAvailable >= (n + 1) * trackGap) {
-      const spread = (n - 1) * trackGap;
-      const start = midline - spread / 2;
-      placements = ordered.map((memberIdx, k) => ({
-        memberIdx,
-        newPerp: start + k * trackGap,
-      }));
     } else {
-      const gap = spanAvailable / (n + 1);
+      // Centre the run on WHERE IT ALREADY IS, not on the corridor.
+      //
+      // This used to start from `midline`, the centre of the space
+      // between the bounding obstacle faces. A run sitting comfortably
+      // off to one side of a wide corridor was therefore dragged to
+      // the middle of it: a large, surprising move that separation
+      // never asked for, and the second half of the "nudge moved an
+      // edge for no reason" report. Separation is a LOCAL property, so
+      // the run keeps its own centre of mass and only spreads about
+      // it, clamped so it still lands inside the corridor.
+      const ownMid = (ownLo + ownHi) / 2;
+      const gap =
+        spanAvailable >= (n + 1) * trackGap
+          ? trackGap
+          : spanAvailable / (n + 1);
       const spread = (n - 1) * gap;
-      const start = midline - spread / 2;
+      const start = Math.min(
+        Math.max(ownMid - spread / 2, faceLo),
+        faceHi - spread,
+      );
       placements = ordered.map((memberIdx, k) => ({
         memberIdx,
         newPerp: start + k * gap,
@@ -575,13 +623,20 @@ function replanPlacements(
   const faceLo = perpMin + clearance;
   const faceHi = perpMax - clearance;
   const spanAvailable = faceHi - faceLo;
-  const midline = (faceLo + faceHi) / 2;
   const n = memberIdxs.length;
   if (spanAvailable <= 0) return null;
   let effGap = gap;
   if (spanAvailable < (n + 1) * gap) effGap = spanAvailable / (n + 1);
   const spread = (n - 1) * effGap;
-  const start = midline - spread / 2;
+  // Own centre of mass, clamped into the corridor: same rule as the
+  // primary placement above, and for the same reason. Anchoring on the
+  // corridor midline here would undo the fix on any run that reaches
+  // the replan path.
+  const ownMid = (ownLo + ownHi) / 2;
+  const start = Math.min(
+    Math.max(ownMid - spread / 2, faceLo),
+    faceHi - spread,
+  );
   return memberIdxs.map((memberIdx, k) => ({
     memberIdx,
     newPerp: start + k * effGap,

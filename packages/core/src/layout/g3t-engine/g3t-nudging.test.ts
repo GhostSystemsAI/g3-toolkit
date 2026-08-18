@@ -84,6 +84,68 @@ describe("nudgeRoutes: basics", () => {
   });
 });
 
+describe("nudgeRoutes: only moves what is actually crowded", () => {
+  /** A vertical run at `x`, spanning the same y interval as its peers
+   *  so they all overlap and are grouping candidates. */
+  const vRun = (x: number): { points: Pt[] } => ({
+    points: [
+      { x: 0, y: 0 },
+      { x, y: 0 },
+      { x, y: 200 },
+      { x: 400, y: 200 },
+    ],
+  });
+
+  it("leaves a run alone when every neighbour is already a trackGap away", () => {
+    // 0, 12, 24: within the 16px capture band pairwise, so the old
+    // transitive grouping swept all three into one corridor and
+    // re-spaced them. They are already >= trackGap apart, so there is
+    // nothing to separate and they must not move.
+    const input = { a: vRun(0), b: vRun(12), c: vRun(24) };
+    const { routes } = nudgeRoutes(input, [], { trackGap: 8, clearance: 0 });
+    expect(routes.a?.points).toEqual(input.a.points);
+    expect(routes.b?.points).toEqual(input.b.points);
+    expect(routes.c?.points).toEqual(input.c.points);
+  });
+
+  it("splits a transitive chain and moves only the crowded end", () => {
+    // a/b are coincident and must separate. c sits a comfortable 40px
+    // off, chained in only by transitivity through nothing at all: it
+    // must be left exactly where it was.
+    const input = { a: vRun(0), b: vRun(0), c: vRun(40) };
+    const { routes } = nudgeRoutes(input, [], { trackGap: 8, clearance: 0 });
+    expect(routes.c?.points).toEqual(input.c.points);
+    const ax = routes.a?.points[1]?.x ?? 0;
+    const bx = routes.b?.points[1]?.x ?? 0;
+    expect(Math.abs(ax - bx)).toBeGreaterThanOrEqual(8 - 1e-6);
+  });
+
+  it("separates about the run's own centre, not the corridor's", () => {
+    // Two coincident runs at x=100, inside a corridor whose walls sit
+    // far away on one side. Anchoring on the corridor midline dragged
+    // the pair toward the middle of that space; anchoring on their own
+    // centre of mass keeps them at 100 and just splits them.
+    const input = { a: vRun(100), b: vRun(100) };
+    const boxes = [
+      { x: -400, y: -50, width: 300, height: 400 },
+      { x: 300, y: -50, width: 100, height: 400 },
+    ];
+    const { routes } = nudgeRoutes(input, boxes, {
+      trackGap: 8,
+      clearance: 0,
+    });
+    const xs = [
+      routes.a?.points[1]?.x ?? 0,
+      routes.b?.points[1]?.x ?? 0,
+    ].sort((m, n) => m - n);
+    // Split by a full track gap...
+    expect((xs[1] ?? 0) - (xs[0] ?? 0)).toBeCloseTo(8, 5);
+    // ...and still centred where they started, not hauled to the
+    // middle of a corridor running from -100 to 300.
+    expect(((xs[0] ?? 0) + (xs[1] ?? 0)) / 2).toBeCloseTo(100, 5);
+  });
+});
+
 describe("nudgeRoutes: degradation ladder", () => {
   it("branch (a): full-gap spacing with wide-open corridor (deficit 0)", () => {
     // No obstacles; open corridor. Two parallel V segments coincide.

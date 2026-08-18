@@ -1,5 +1,104 @@
 # Changelog
 
+## 1.0.0 (continued): 2026-08-18 (anchor capacity, edge hover, Routing Lab controls)
+
+Three findings from the Routing Lab review, two of them the same root
+cause seen from different ends.
+
+- **Anchor pitch with corner overflow, a new OPT-IN layout option
+  (`anchorPitch`).** The fan divides a side into `count + 1` and takes
+  the interior points, so its pitch is `extent / (count + 1)` with no
+  floor. Fan-In Bus at Large asks one 52px-tall Collector to absorb 17
+  arrivals, which lands them **2.9px apart**: mathematically distinct,
+  visually one line carrying 17 stacked arrowheads. No existing option
+  helped, because none of them adds space. Setting a pitch floors the
+  separation and wraps the outermost edges in fan order around the
+  corners onto the perpendicular sides; a box that saturates those too
+  falls back to even division on whichever side each edge landed on.
+  This REDUCES stacking rather than abolishing it, and the tests say so
+  rather than claiming a guarantee: placement feeds `anchorOf`, and
+  VR-7f can still slide two anchors onto the same exposed cross because
+  it chooses per edge without seeing its neighbours. Making distinctness
+  a guarantee means teaching VR-7f and the side-fallback to see the
+  anchors already placed, which is a larger change than this. Omitted,
+  which is
+  the default, is byte-identical to before: the placement lives behind
+  its own branch and writes to its own map, so the oracle-pinned fan is
+  untouched. Threaded through `g3tLayoutStructural` and into the
+  `layoutStructural` memo key, since a cached run under a different
+  pitch is the wrong answer.
+- **Nudge could never have fixed that**, and it is worth writing down
+  why, because the symptom reads like a nudging bug from either side.
+  `g3t-nudging.ts` pins the first and last segment of every route
+  (`fixed = i === 0 || i === pts.length - 2`), so it moves interior
+  runs only. The overlapping horizontal stubs in Fan-In Bus ARE the
+  terminal segments, sitting at the anchor coordinate, 2.9px apart. The
+  apparent axis asymmetry between scenarios (verticals separate in
+  Fan-In Bus, horizontals in Crossing Storm) is the same rule seen
+  twice: `sidesFor` picks sides by largest signed border gap, so the
+  interior segment is vertical when edges anchor east/west and
+  horizontal when they anchor north/south.
+- **SVG edges are now hoverable.** `StructuralSvgView` drew each edge
+  as a 1.5px stroke with `fill="none"` and no hit area, so SVG
+  hit-testing registered only inside those 1.5px and a consumer styling
+  `g[data-ssv-edge]:hover` had to be pixel-accurate; grazing a line
+  flickered the state rather than holding it. Click was never affected,
+  because that path goes through `hitTestStructural` and its
+  width-aware tolerance. Every edge group now carries a transparent
+  12px hit path (`data-ssv-edge-hit`) beneath the visible stroke, which
+  restores the same forgiveness to hover. Beneath rather than above on
+  purpose: in a dense fan the nearest edge's own line should win over a
+  neighbour's hit band.
+- **Nudge separation is now tunable: `trackGap` and
+  `corridorMaxGapFactor`, both OPT-IN with defaults unchanged.** Asked
+  for more forced spacing in medium and large graphs, the obvious move
+  is to raise the nudge track gap, and on its own that does not work.
+  The corridor gap is `min(factor * layerSpacing, demand * trackGap +
+  2 * clearance)`, so at the default 80px layer spacing the cap binds
+  above 28 edges per corridor and everything past that is spread across
+  a fixed 240px however wide the tracks were asked to be. Going 8 to 12
+  with the factor left at 3 changes a 40-edge corridor not at all (6.0px
+  either way) and SHRINKS the fully-served range from 28 edges to 19.
+  The factor is the lever that bites at scale; the track gap is the one
+  that bites below the cap, which is why both are exposed and why the
+  Lab presets move them as pairs. `computeCorridorGap` had already
+  written down the diagnostic: cap-limited corridors mean the
+  maxGapFactor default is too restrictive. Threaded through the layout
+  so the corridor the layout RESERVES widens with the tracks the router
+  spreads, keeping the supply/demand drift assertion honest, and into
+  the memo key. Defaults are untouched pending a measured choice.
+- **Two nudge bugs fixed, both reported as "nudge moved an edge that
+  was nowhere near another edge".** Separation is a LOCAL property and
+  the pass was treating it as a corridor-wide one, in two places.
+  First, grouping is a transitive closure over the capture band, so a
+  chain of segments each within `trackGap * 2` of the next became ONE
+  group spanning far more than the band, and every member was re-placed
+  as a single evenly-spaced run. Capture is the right net to catch
+  candidates with and the wrong unit to plan with, so each group is now
+  split into the maximal runs whose consecutive members are closer than
+  one track gap; anything already adequately spaced is left exactly
+  where the router put it. Second, placement anchored on the corridor
+  midline, the centre of the space between the bounding obstacle faces,
+  so a run sitting comfortably off to one side of a wide corridor was
+  dragged to the middle of it. Runs now keep their own centre of mass
+  and spread about it, clamped into the corridor. Both placement sites
+  were affected, including the replan path.
+- **Routing Lab: two new Engine controls**, Anchor pitch and
+  Separation. Both default to the library values so the bench keeps
+  showing what a host gets untouched.
+- **RULING: no bundling control in the Routing Lab.** It was built and
+  withdrawn before landing, so it appears nowhere in history and this
+  entry is the only record. Force-directed bundling assumes point-like
+  nodes; the structural view has compartmented boxes with declared
+  ports, and FDEB ignores ports, box geometry and obstacles by
+  construction, so on Port Storm it drew long diagonals out of the port
+  anchors straight across the boxes. Splicing the router's endpoints
+  back on and then clipping the interior points were both treating
+  symptoms of a host mismatch rather than the mismatch. Bundling keeps
+  its proper home on the force canvas in the Scale surface, where the
+  nodes are point-like and the edges are long and roughly parallel. Do
+  not re-add it to the structural view without revisiting this.
+
 ## 1.0.0 (continued): 2026-08-17 (the feature arc and the hardening arc merged)
 
 `ai-agent-guide` merged with `fable-updates`. The two branches forked
