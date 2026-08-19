@@ -60,7 +60,6 @@ import { buildSupplyNetwork, originCoverageByTier } from "./supply-data";
 
 type Tab = "degree" | "scatter" | "stats" | "sankey";
 
-
 export interface AnalyticsDashboardProps {
   className?: string;
 }

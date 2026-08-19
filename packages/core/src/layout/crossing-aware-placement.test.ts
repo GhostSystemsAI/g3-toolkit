@@ -125,7 +125,8 @@ describe("optimizePlacement", () => {
     expect(result.crossingsAfter).toBeLessThanOrEqual(result.crossingsBefore);
     // Sanity: verify reported crossings match a re-computation.
     const sizes = new Map<string, { width: number; height: number }>();
-    for (const n of nodes) sizes.set(n.id, { width: n.width, height: n.height });
+    for (const n of nodes)
+      sizes.set(n.id, { width: n.width, height: n.height });
     expect(crossingsOf(result.positions, sizes, edges)).toBe(
       result.crossingsAfter,
     );

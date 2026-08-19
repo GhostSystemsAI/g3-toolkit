@@ -446,6 +446,18 @@ export function DemoLanding({
             </a>
           ))}
         </div>
+        <div
+          data-testid="landing-version"
+          style={{
+            marginTop: 18,
+            fontFamily: "var(--g3t-font-mono, monospace)",
+            fontSize: 11,
+            color: "#334155",
+            letterSpacing: "0.04em",
+          }}
+        >
+          v{__APP_VERSION__}
+        </div>
       </div>
     </div>
   );
