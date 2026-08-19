@@ -10,7 +10,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { CyStylesheet } from "@g3t/react";
 
 const captured = vi.hoisted(() => ({
-  panes: [] as Array<{ stylesheet?: CyStylesheet[]; ugm?: unknown }>,
+  panes: [] as Array<{
+    stylesheet?: CyStylesheet[];
+    ugm?: unknown;
+    routeRefreshSignal?: number;
+    relayoutSignal?: number;
+    edgeClickIsolate?: boolean;
+  }>,
 }));
 
 vi.mock("@g3t/react", async (importOriginal) => {
@@ -20,8 +26,17 @@ vi.mock("@g3t/react", async (importOriginal) => {
     CytoscapeCanvas: (props: {
       stylesheet?: CyStylesheet[];
       ugm?: unknown;
+      routeRefreshSignal?: number;
+      relayoutSignal?: number;
+      edgeClickIsolate?: boolean;
     }) => {
-      captured.panes.push({ stylesheet: props.stylesheet, ugm: props.ugm });
+      captured.panes.push({
+        stylesheet: props.stylesheet,
+        ugm: props.ugm,
+        routeRefreshSignal: props.routeRefreshSignal,
+        relayoutSignal: props.relayoutSignal,
+        edgeClickIsolate: props.edgeClickIsolate,
+      });
       return <div data-testid="canvas-stub" />;
     },
   };
@@ -89,6 +104,18 @@ describe("LegibilityShell", () => {
     expect(selectors.some((s) => s.includes('type = "pseudoTrunk"'))).toBe(
       true,
     );
+  });
+
+  it("refresh-routes and re-layout buttons bump their signals; edge isolate is on", () => {
+    render(<LegibilityShell />);
+    const start = lastPane();
+    expect(start?.edgeClickIsolate).toBe(true);
+    const startRoute = start?.routeRefreshSignal ?? 0;
+    const startRelayout = start?.relayoutSignal ?? 0;
+    fireEvent.click(screen.getByTestId("legibility-refresh-routes"));
+    expect(lastPane()?.routeRefreshSignal).toBe(startRoute + 1);
+    fireEvent.click(screen.getByTestId("legibility-relayout"));
+    expect(lastPane()?.relayoutSignal).toBe(startRelayout + 1);
   });
 
   it("holon boundary panel passes the containment option through", () => {

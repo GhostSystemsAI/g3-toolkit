@@ -245,13 +245,20 @@ const HOLON_STYLESHEET: CyStylesheet[] = [
   },
 ];
 
+interface OpSignals {
+  routeRefreshSignal?: number;
+  relayoutSignal?: number;
+}
+
 function HubPanel({
   spread,
   routeEdges,
+  routeRefreshSignal,
+  relayoutSignal,
 }: {
   spread: boolean;
   routeEdges?: boolean | { mode?: "direct" | "orthogonal" };
-}) {
+} & OpSignals) {
   const raw = useMemo(() => buildHubFixture(), []);
   const ugm = useMemo(
     () => (spread ? hubBurst(raw, { k: 6 }).ugm : raw),
@@ -263,6 +270,8 @@ function HubPanel({
       ugm={ugm}
       stylesheet={PSEUDO_STYLESHEET}
       routeEdges={routeEdges}
+      routeRefreshSignal={routeRefreshSignal}
+      relayoutSignal={relayoutSignal}
     />
   );
 }
@@ -270,10 +279,12 @@ function HubPanel({
 function BusPanel({
   spread,
   routeEdges,
+  routeRefreshSignal,
+  relayoutSignal,
 }: {
   spread: boolean;
   routeEdges?: boolean | { mode?: "direct" | "orthogonal" };
-}) {
+} & OpSignals) {
   const raw = useMemo(() => buildBusFixture(), []);
   const ugm = useMemo(
     () => (spread ? busCollapse(raw, { kBus: 3 }).ugm : raw),
@@ -285,6 +296,8 @@ function BusPanel({
       ugm={ugm}
       stylesheet={PSEUDO_STYLESHEET}
       routeEdges={routeEdges}
+      routeRefreshSignal={routeRefreshSignal}
+      relayoutSignal={relayoutSignal}
     />
   );
 }
@@ -292,10 +305,12 @@ function BusPanel({
 function HolonPanel({
   view,
   routeEdges,
+  routeRefreshSignal,
+  relayoutSignal,
 }: {
   view: HolonView;
   routeEdges?: boolean | { mode?: "direct" | "orthogonal" };
-}) {
+} & OpSignals) {
   const adapter = useMemo(() => new HolonicAdapter(LEGIBILITY_HOLONS), []);
   const ugm = useMemo(() => {
     const holon = adapter.dataset.holons[0];
@@ -321,6 +336,8 @@ function HolonPanel({
       stylesheet={HOLON_STYLESHEET}
       containment={containment}
       routeEdges={routeEdges}
+      routeRefreshSignal={routeRefreshSignal}
+      relayoutSignal={relayoutSignal}
     />
   );
 }
@@ -331,13 +348,15 @@ function PanelCanvas({
   containment,
   testId,
   routeEdges,
+  routeRefreshSignal,
+  relayoutSignal,
 }: {
   ugm: UGM;
   stylesheet: CyStylesheet[];
   containment?: { edgeType: string; direction: "parentToChild" };
   testId: string;
   routeEdges?: boolean | { mode?: "direct" | "orthogonal" };
-}) {
+} & OpSignals) {
   // Capture the live cy so a projection change (raw ↔ spread) can
   // restore pan/zoom across the required re-init: hubBurst/busCollapse
   // change the node-id set, which is a "different graph" by the canvas
@@ -367,6 +386,9 @@ function PanelCanvas({
         onReady={onReady}
         animate={false}
         routeEdges={routeEdges ?? true}
+        routeRefreshSignal={routeRefreshSignal}
+        relayoutSignal={relayoutSignal}
+        edgeClickIsolate
       />
     </div>
   );
@@ -401,6 +423,8 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
   const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
     "direct",
   );
+  const [routeRefreshSignal, setRouteRefreshSignal] = useState(0);
+  const [relayoutSignal, setRelayoutSignal] = useState(0);
   const routeEdgesConfig =
     routeMode === "off"
       ? (false as const)
@@ -497,6 +521,38 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
             <option value="off">Off (bezier)</option>
           </select>
         </label>
+        <button
+          type="button"
+          data-testid="legibility-refresh-routes"
+          onClick={() => setRouteRefreshSignal((n) => n + 1)}
+          style={{
+            padding: "4px 10px",
+            background: "transparent",
+            color: "#cbd5e1",
+            border: "1px solid #334155",
+            borderRadius: 4,
+            cursor: "pointer",
+            fontSize: 12,
+          }}
+        >
+          Refresh routes
+        </button>
+        <button
+          type="button"
+          data-testid="legibility-relayout"
+          onClick={() => setRelayoutSignal((n) => n + 1)}
+          style={{
+            padding: "4px 10px",
+            background: "transparent",
+            color: "#cbd5e1",
+            border: "1px solid #334155",
+            borderRadius: 4,
+            cursor: "pointer",
+            fontSize: 12,
+          }}
+        >
+          Re-layout
+        </button>
       </div>
 
       <p style={{ margin: "4px 0 0", fontSize: 13, color: "#cbd5e1" }}>
@@ -512,7 +568,12 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
             onChange={setHubSpread}
           />
           <Legend items={HUB_LEGEND} />
-          <HubPanel spread={hubSpread} routeEdges={routeEdgesConfig} />
+          <HubPanel
+            spread={hubSpread}
+            routeEdges={routeEdgesConfig}
+            routeRefreshSignal={routeRefreshSignal}
+            relayoutSignal={relayoutSignal}
+          />
         </>
       )}
       {panel === "bus" && (
@@ -524,7 +585,12 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
             onChange={setBusSpread}
           />
           <Legend items={BUS_LEGEND} />
-          <BusPanel spread={busSpread} routeEdges={routeEdgesConfig} />
+          <BusPanel
+            spread={busSpread}
+            routeEdges={routeEdgesConfig}
+            routeRefreshSignal={routeRefreshSignal}
+            relayoutSignal={relayoutSignal}
+          />
         </>
       )}
       {panel === "holon" && (
@@ -552,7 +618,12 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
             ))}
           </div>
           <Legend items={HOLON_LEGEND} />
-          <HolonPanel view={holonView} routeEdges={routeEdgesConfig} />
+          <HolonPanel
+            view={holonView}
+            routeEdges={routeEdgesConfig}
+            routeRefreshSignal={routeRefreshSignal}
+            relayoutSignal={relayoutSignal}
+          />
         </>
       )}
 

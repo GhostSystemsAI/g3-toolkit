@@ -36,6 +36,9 @@ const captured = vi.hoisted(() => ({
   colorDrivers: [] as Array<string | undefined>,
   animate: [] as Array<boolean | undefined>,
   layoutOptions: [] as Array<Record<string, unknown> | undefined>,
+  routeRefreshSignal: [] as Array<number | undefined>,
+  relayoutSignal: [] as Array<number | undefined>,
+  edgeClickIsolate: [] as Array<boolean | undefined>,
 }));
 
 vi.mock("@g3t/react", async (importOriginal) => {
@@ -48,11 +51,17 @@ vi.mock("@g3t/react", async (importOriginal) => {
       encodingSpec?: { node?: { color?: { driver?: string } } };
       layoutOptions?: Record<string, unknown>;
       animate?: boolean;
+      routeRefreshSignal?: number;
+      relayoutSignal?: number;
+      edgeClickIsolate?: boolean;
     }) => {
       captured.counts.push(props.ugm.getNodeIds().length);
       captured.animate.push(props.animate);
       captured.colorDrivers.push(props.encodingSpec?.node?.color?.driver);
       captured.layoutOptions.push(props.layoutOptions);
+      captured.routeRefreshSignal.push(props.routeRefreshSignal);
+      captured.relayoutSignal.push(props.relayoutSignal);
+      captured.edgeClickIsolate.push(props.edgeClickIsolate);
       if (props.menuManager) captured.menus.push(props.menuManager);
       return <div data-testid="canvas-stub" />;
     },
@@ -223,5 +232,16 @@ describe("ScaleSurface", () => {
       .find((b) => (b.textContent ?? "").includes("cluster around"));
     fireEvent.click(drillRow as HTMLElement);
     expect(screen.queryByTestId("scale-bundle-toggle")).toBeNull();
+  });
+
+  it("refresh-routes / re-layout buttons bump their signal props; edge isolate is on", () => {
+    render(<ScaleSurface onBack={() => {}} />);
+    const startRoute = captured.routeRefreshSignal.at(-1) ?? 0;
+    const startRelayout = captured.relayoutSignal.at(-1) ?? 0;
+    expect(captured.edgeClickIsolate.at(-1)).toBe(true);
+    fireEvent.click(screen.getByTestId("scale-refresh-routes"));
+    expect(captured.routeRefreshSignal.at(-1)).toBe(startRoute + 1);
+    fireEvent.click(screen.getByTestId("scale-relayout"));
+    expect(captured.relayoutSignal.at(-1)).toBe(startRelayout + 1);
   });
 });

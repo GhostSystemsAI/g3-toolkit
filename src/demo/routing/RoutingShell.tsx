@@ -234,7 +234,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   const [size, setSize] = useState<ScenarioSize>("M");
   const [direction, setDirection] = useState<"auto" | "RIGHT" | "DOWN">("auto");
   const [layerGap, setLayerGap] = useState<LayerGap>("default");
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
+  const [routeMode, setRouteMode] = useState<"orthogonal" | "off">(
     "orthogonal",
   );
   const routeEdges = routeMode === "orthogonal";
@@ -262,10 +262,15 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   // not an edge clears it. Hover tracing is pure CSS (ROUTING_STYLES).
   const [tracedEdge, setTracedEdge] = useState<string | null>(null);
 
-  const input: StructuralGraphInput = useMemo(
-    () => scenario.build(size),
-    [scenario, size],
-  );
+  // A54: bump to force a fresh layout pass without changing the scenario;
+  // included in the input useMemo deps so useStructuralLayout sees a new
+  // input object identity and re-runs (same-input skip is bypassed).
+  const [relayoutNonce, setRelayoutNonce] = useState(0);
+  const input: StructuralGraphInput = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    relayoutNonce;
+    return scenario.build(size);
+  }, [scenario, size, relayoutNonce]);
   // A new graph invalidates a pinned edge id; drop the trace (the
   // documented adjust-state-during-render pattern, as in the SVG
   // view's fit reset).
@@ -376,6 +381,14 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
         <button type="button" className="rlab-back" onClick={onBack}>
           {"←"} Scenarios
         </button>
+        <button
+          type="button"
+          className="rlab-back"
+          data-testid="rlab-relayout"
+          onClick={() => setRelayoutNonce((n) => n + 1)}
+        >
+          Re-layout
+        </button>
         <div className="rlab-wordmark">
           <b>Routing Lab</b>
           <span>edge-routing stress bench</span>
@@ -450,14 +463,11 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
                 id="rlab-routes"
                 value={routeMode}
                 onChange={(e) =>
-                  setRouteMode(
-                    e.target.value as "direct" | "orthogonal" | "off",
-                  )
+                  setRouteMode(e.target.value as "orthogonal" | "off")
                 }
               >
-                <option value="orthogonal">Orthogonal (always)</option>
-                <option value="direct">Direct (endpoints)</option>
-                <option value="off">Off (bezier)</option>
+                <option value="orthogonal">Routed (orthogonal)</option>
+                <option value="off">Off (taxi)</option>
               </select>
             </span>
             <span>

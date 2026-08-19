@@ -289,6 +289,8 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
   const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
     "direct",
   );
+  const [routeRefreshSignal, setRouteRefreshSignal] = useState(0);
+  const [relayoutSignal, setRelayoutSignal] = useState(0);
   const routeEdgesConfig =
     routeMode === "off"
       ? (false as const)
@@ -575,6 +577,42 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
                   <option value="off">Off (bezier)</option>
                 </select>
               </label>
+              <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                <button
+                  type="button"
+                  data-testid="scale-refresh-routes"
+                  onClick={() => setRouteRefreshSignal((n) => n + 1)}
+                  style={{
+                    font: "inherit",
+                    fontSize: 11,
+                    padding: "3px 10px",
+                    border: "1px solid #7ee081",
+                    borderRadius: 4,
+                    background: "transparent",
+                    color: "inherit",
+                    cursor: "pointer",
+                  }}
+                >
+                  Refresh routes
+                </button>
+                <button
+                  type="button"
+                  data-testid="scale-relayout"
+                  onClick={() => setRelayoutSignal((n) => n + 1)}
+                  style={{
+                    font: "inherit",
+                    fontSize: 11,
+                    padding: "3px 10px",
+                    border: "1px solid #7ee081",
+                    borderRadius: 4,
+                    background: "transparent",
+                    color: "inherit",
+                    cursor: "pointer",
+                  }}
+                >
+                  Re-layout
+                </button>
+              </div>
             </div>
           )}
           <div style={{ marginTop: 10 }}>
@@ -680,6 +718,9 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
             // 8k-node drill view exceeds the 600-edge cap and would
             // skip anyway. Explicit here so the intent is legible.
             routeEdges={view.kind === "clusters" ? routeEdgesConfig : false}
+            routeRefreshSignal={routeRefreshSignal}
+            relayoutSignal={relayoutSignal}
+            edgeClickIsolate
             onReady={(c) => {
               markReady(view.kind);
               setCore(c);

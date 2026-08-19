@@ -19,14 +19,25 @@ import type { UGM } from "@g3t/core";
 
 const canvasCalls = vi.hoisted(() => ({
   ugms: [] as UGM[],
+  routeRefreshSignal: [] as Array<number | undefined>,
+  relayoutSignal: [] as Array<number | undefined>,
+  edgeClickIsolate: [] as Array<boolean | undefined>,
 }));
 
 vi.mock("@g3t/react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@g3t/react")>();
   return {
     ...actual,
-    CytoscapeCanvas: (props: { ugm: UGM }) => {
+    CytoscapeCanvas: (props: {
+      ugm: UGM;
+      routeRefreshSignal?: number;
+      relayoutSignal?: number;
+      edgeClickIsolate?: boolean;
+    }) => {
       canvasCalls.ugms.push(props.ugm);
+      canvasCalls.routeRefreshSignal.push(props.routeRefreshSignal);
+      canvasCalls.relayoutSignal.push(props.relayoutSignal);
+      canvasCalls.edgeClickIsolate.push(props.edgeClickIsolate);
       return <div data-testid="canvas-stub" />;
     },
   };
@@ -48,6 +59,9 @@ function firstStatementId(ugm: UGM): string {
 afterEach(() => {
   useSelectionStore.getState().clearSelection();
   canvasCalls.ugms.length = 0;
+  canvasCalls.routeRefreshSignal.length = 0;
+  canvasCalls.relayoutSignal.length = 0;
+  canvasCalls.edgeClickIsolate.length = 0;
   cleanup();
 });
 
@@ -105,5 +119,16 @@ describe("Rdf12Shell click-to-inspect + holon drill", () => {
     fireEvent.click(screen.getByTestId("rdf12-breadcrumb-root"));
     const back = canvasCalls.ugms[canvasCalls.ugms.length - 1]!;
     expect(back.nodeCount).toBe(fullCount);
+  });
+
+  it("refresh-routes / re-layout buttons bump their signals; edge isolate is on", () => {
+    render(<Rdf12Shell onBack={() => {}} />);
+    const startRoute = canvasCalls.routeRefreshSignal.at(-1) ?? 0;
+    const startRelayout = canvasCalls.relayoutSignal.at(-1) ?? 0;
+    expect(canvasCalls.edgeClickIsolate.at(-1)).toBe(true);
+    fireEvent.click(screen.getByTestId("rdf12-refresh-routes"));
+    expect(canvasCalls.routeRefreshSignal.at(-1)).toBe(startRoute + 1);
+    fireEvent.click(screen.getByTestId("rdf12-relayout"));
+    expect(canvasCalls.relayoutSignal.at(-1)).toBe(startRelayout + 1);
   });
 });

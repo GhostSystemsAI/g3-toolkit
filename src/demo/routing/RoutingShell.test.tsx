@@ -239,4 +239,16 @@ describe("RoutingShell", () => {
     });
     expect(screen.queryByTestId("rlab-edge-css")).toBeNull();
   });
+
+  it("re-layout button forces useStructuralLayout to re-run (new input identity)", async () => {
+    render(<RoutingShell onBack={() => {}} />);
+    await waitFor(() => expect(captured.scenes.length).toBeGreaterThan(0));
+    const before = captured.scenes.length;
+    const beforeInput = captured.scenes.at(-1)!.input;
+    fireEvent.click(screen.getByTestId("rlab-relayout"));
+    await waitFor(() => expect(captured.scenes.length).toBeGreaterThan(before));
+    // A fresh scenario.build() produces a NEW input object identity, which
+    // is what useStructuralLayout keys on to bypass the same-input skip.
+    expect(captured.scenes.at(-1)!.input).not.toBe(beforeInput);
+  });
 });

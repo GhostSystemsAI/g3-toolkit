@@ -229,6 +229,8 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
   const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
     "direct",
   );
+  const [routeRefreshSignal, setRouteRefreshSignal] = useState(0);
+  const [relayoutSignal, setRelayoutSignal] = useState(0);
   const routeEdgesConfig =
     routeMode === "off"
       ? (false as const)
@@ -303,6 +305,24 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
             <option value="off">Off (bezier)</option>
           </select>
         </label>
+        <button
+          type="button"
+          className="g3t-btn"
+          data-testid="rdf12-refresh-routes"
+          onClick={() => setRouteRefreshSignal((n) => n + 1)}
+          style={{ fontSize: 12 }}
+        >
+          Refresh routes
+        </button>
+        <button
+          type="button"
+          className="g3t-btn"
+          data-testid="rdf12-relayout"
+          onClick={() => setRelayoutSignal((n) => n + 1)}
+          style={{ fontSize: 12 }}
+        >
+          Re-layout
+        </button>
         <div
           role="tablist"
           aria-label="Render mode"
@@ -515,6 +535,9 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
               onReady={publishCanvas("rdf12")}
               animate={!reducedMotion}
               routeEdges={routeEdgesConfig}
+              routeRefreshSignal={routeRefreshSignal}
+              relayoutSignal={relayoutSignal}
+              edgeClickIsolate
             />
           </div>
           <div style={{ padding: 12 }}>
