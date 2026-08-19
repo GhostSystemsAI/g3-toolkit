@@ -60,9 +60,6 @@ import { buildSupplyNetwork, originCoverageByTier } from "./supply-data";
 
 type Tab = "degree" | "scatter" | "stats" | "sankey";
 
-/** Post-layout obstacle-aware routing on this dashboard's canvas.
- *  Per-shell kill-switch (D8): flip to false and re-push to revert. */
-const ROUTE_EDGES = true;
 
 export interface AnalyticsDashboardProps {
   className?: string;
@@ -337,7 +334,8 @@ export function AnalyticsDashboard({ className }: AnalyticsDashboardProps) {
           menuManager={menuManager}
           hidden={hiddenIds}
           onReady={setCore}
-          routeEdges={ROUTE_EDGES}
+          routeEdges={{ mode: "direct" }}
+          edgeClickIsolate
         />
         {(menuStatus !== null || hiddenIds.size > 0 || emphasisActive) && (
           <div

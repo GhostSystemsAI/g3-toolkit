@@ -28,6 +28,10 @@ import {
 import type { CyStylesheet } from "@g3t/react";
 import { UGM } from "@g3t/core";
 import type { StructuralGraphInput, StructuralLayoutOptions } from "@g3t/core";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 // ── Flow-diagram input ──────────────────────────────────────────────
 
@@ -383,13 +387,15 @@ function SizedFlowDiagram({
 // ── Shell ───────────────────────────────────────────────────────────
 
 export function RoutingExplainShell({ onBack }: { onBack?: () => void } = {}) {
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
 
   // Camera-hold ref across a mode change. Mode changes are
   // RESTYLE-ONLY on the same graph (same node-id set), so the canvas
@@ -468,9 +474,17 @@ export function RoutingExplainShell({ onBack }: { onBack?: () => void } = {}) {
             orthogonal detour
           </div>
         </div>
+        <span style={{ marginLeft: "auto" }}>
+          <RoutingControlStrip
+            idPrefix="rexplain"
+            routeMode={routeMode}
+            setRouteMode={setRouteMode}
+            refreshRoutes={refreshRoutes}
+            relayout={relayout}
+          />
+        </span>
         <span
           style={{
-            marginLeft: "auto",
             fontSize: 10,
             fontWeight: 600,
             letterSpacing: "0.1em",
@@ -559,42 +573,6 @@ export function RoutingExplainShell({ onBack }: { onBack?: () => void } = {}) {
         >
           <div style={LABEL_STYLE}>Panel 2 -- Live rule demo</div>
           <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              flexShrink: 0,
-            }}
-          >
-            <label
-              htmlFor="rexplain-mode"
-              style={{ fontSize: 12, color: "#94a3b8" }}
-            >
-              Mode
-            </label>
-            <select
-              id="rexplain-mode"
-              data-testid="rexplain-mode-select"
-              value={routeMode}
-              onChange={(e) =>
-                setRouteMode(e.target.value as "direct" | "orthogonal" | "off")
-              }
-              style={{
-                background: "#1e293b",
-                border: "1px solid #334155",
-                borderRadius: 4,
-                color: "#e2e8f0",
-                fontSize: 12,
-                padding: "4px 8px",
-                cursor: "pointer",
-              }}
-            >
-              <option value="direct">Direct (route crossing edges only)</option>
-              <option value="orthogonal">Orthogonal (route all edges)</option>
-              <option value="off">Off (plain bezier)</option>
-            </select>
-          </div>
-          <div
             data-testid="rexplain-canvas-host"
             style={{ ...CANVAS_CONTAINER_STYLE, flex: 1 }}
           >
@@ -604,6 +582,9 @@ export function RoutingExplainShell({ onBack }: { onBack?: () => void } = {}) {
               stylesheet={DEMO_STYLESHEET}
               animate={false}
               routeEdges={routeEdgesConfig}
+              routeRefreshSignal={routeRefreshSignal}
+              relayoutSignal={relayoutSignal}
+              edgeClickIsolate
               onReady={onCyReady}
             />
           </div>

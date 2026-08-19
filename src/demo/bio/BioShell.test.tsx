@@ -14,15 +14,27 @@ import type { UGM } from "@g3t/core";
 const canvasCalls = vi.hoisted(() => ({
   nodeCounts: [] as number[],
   stylesheets: [] as unknown[],
+  routeRefreshSignal: [] as Array<number | undefined>,
+  relayoutSignal: [] as Array<number | undefined>,
+  edgeClickIsolate: [] as Array<boolean | undefined>,
 }));
 
 vi.mock("@g3t/react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@g3t/react")>();
   return {
     ...actual,
-    CytoscapeCanvas: (props: { ugm: UGM; stylesheet?: unknown }) => {
+    CytoscapeCanvas: (props: {
+      ugm: UGM;
+      stylesheet?: unknown;
+      routeRefreshSignal?: number;
+      relayoutSignal?: number;
+      edgeClickIsolate?: boolean;
+    }) => {
       canvasCalls.nodeCounts.push(props.ugm.getNodeIds().length);
       canvasCalls.stylesheets.push(props.stylesheet);
+      canvasCalls.routeRefreshSignal.push(props.routeRefreshSignal);
+      canvasCalls.relayoutSignal.push(props.relayoutSignal);
+      canvasCalls.edgeClickIsolate.push(props.edgeClickIsolate);
       return <div data-testid="canvas-stub" />;
     },
   };
@@ -34,6 +46,9 @@ import { useSelectionStore } from "@g3t/react";
 afterEach(() => {
   useSelectionStore.getState().selectNodes([]);
   cleanup();
+  canvasCalls.routeRefreshSignal.length = 0;
+  canvasCalls.relayoutSignal.length = 0;
+  canvasCalls.edgeClickIsolate.length = 0;
 });
 
 describe("BioShell SPARQL workbench", () => {
@@ -110,5 +125,16 @@ describe("BioShell SPARQL workbench", () => {
     expect(screen.getByTestId("capability-callout").textContent).toContain(
       "rdfToUgm",
     );
+  });
+
+  it("refresh-routes / re-layout buttons bump their signal props; edge isolate is on", () => {
+    render(<BioShell onBack={() => {}} />);
+    const startRoute = canvasCalls.routeRefreshSignal.at(-1) ?? 0;
+    const startRelayout = canvasCalls.relayoutSignal.at(-1) ?? 0;
+    expect(canvasCalls.edgeClickIsolate.at(-1)).toBe(true);
+    fireEvent.click(screen.getByTestId("bio-refresh-routes"));
+    expect(canvasCalls.routeRefreshSignal.at(-1)).toBe(startRoute + 1);
+    fireEvent.click(screen.getByTestId("bio-relayout"));
+    expect(canvasCalls.relayoutSignal.at(-1)).toBe(startRelayout + 1);
   });
 });

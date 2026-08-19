@@ -54,6 +54,10 @@ import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
 import { useHiddenSuppliersStore } from "./hidden-suppliers-store";
 import { applyConfidenceDim, type ConfidenceCoreLike } from "./confidence-dim";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 type Mode = "none" | ClusterMode;
 
@@ -270,13 +274,15 @@ export function SupplyThreadShell({ onBack }: { onBack: () => void }) {
   // control (see confidence-dim.ts for why a data patch, not a
   // bypass).
   const [confMode, setConfMode] = useState<ConfMode>("off");
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
   // Renderer toggle (G3L Round 46, owner request): the SAME graph,
   // rendered through the headless SVG or Canvas adapters. The cy
   // instance stays mounted (hidden beneath) as the source of truth:
@@ -549,6 +555,9 @@ export function SupplyThreadShell({ onBack }: { onBack: () => void }) {
             animate={!reducedMotion}
             menuManager={menuManager}
             routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
+            routeRefreshSignal={routeRefreshSignal}
+            relayoutSignal={relayoutSignal}
+            edgeClickIsolate
           />
           {hiddenIds.size > 0 && (
             <div className="sc-route-status" data-testid="hidden-suppliers">
@@ -666,31 +675,15 @@ export function SupplyThreadShell({ onBack }: { onBack: () => void }) {
                 </span>
               </span>
             </label>
-            <label
-              className="sc-src-row"
-              style={{
-                cursor: "pointer",
-                alignItems: "baseline",
-                marginTop: 6,
-              }}
-            >
-              <select
-                value={routeMode}
-                onChange={(e) =>
-                  setRouteMode(
-                    e.target.value as "direct" | "orthogonal" | "off",
-                  )
-                }
-                data-testid="sc-route-mode"
-              >
-                <option value="direct">Direct (auto-Z)</option>
-                <option value="orthogonal">Orthogonal (always)</option>
-                <option value="off">Off (bezier)</option>
-              </select>
-              <span className="sc-src-name">
-                <b>Edge routing</b>
-              </span>
-            </label>
+            <div style={{ marginTop: 6 }}>
+              <RoutingControlStrip
+                idPrefix="sc"
+                routeMode={routeMode}
+                setRouteMode={setRouteMode}
+                refreshRoutes={refreshRoutes}
+                relayout={relayout}
+              />
+            </div>
           </div>
 
           <div className="sc-panel-head">Entities per source</div>

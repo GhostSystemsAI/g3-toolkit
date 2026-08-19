@@ -26,6 +26,10 @@ import { CytoscapeCanvas } from "@g3t/react";
 import type { CyStylesheet } from "@g3t/react";
 import { CapabilityBubble } from "../components/CapabilityCallout";
 import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
+import {
   buildBusFixture,
   buildHubFixture,
   LEGIBILITY_HOLONS,
@@ -420,15 +424,15 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
   const [hubSpread, setHubSpread] = useState(true);
   const [busSpread, setBusSpread] = useState(true);
   const [holonView, setHolonView] = useState<HolonView>("boundary");
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const [routeRefreshSignal, setRouteRefreshSignal] = useState(0);
-  const [relayoutSignal, setRelayoutSignal] = useState(0);
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
   const active = PANELS.find((p) => p.id === panel) ?? PANELS[0];
 
   return (
@@ -497,62 +501,15 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
             </button>
           ))}
         </div>
-        <label
-          style={{
-            fontSize: 12,
-            display: "flex",
-            gap: 4,
-            alignItems: "center",
-            color: "#94a3b8",
-            marginLeft: "auto",
-          }}
-        >
-          Routes
-          <select
-            data-testid="legibility-route-mode"
-            value={routeMode}
-            onChange={(e) =>
-              setRouteMode(e.target.value as "direct" | "orthogonal" | "off")
-            }
-            style={{ fontSize: 12 }}
-          >
-            <option value="direct">Direct (auto-Z)</option>
-            <option value="orthogonal">Orthogonal (always)</option>
-            <option value="off">Off (bezier)</option>
-          </select>
-        </label>
-        <button
-          type="button"
-          data-testid="legibility-refresh-routes"
-          onClick={() => setRouteRefreshSignal((n) => n + 1)}
-          style={{
-            padding: "4px 10px",
-            background: "transparent",
-            color: "#cbd5e1",
-            border: "1px solid #334155",
-            borderRadius: 4,
-            cursor: "pointer",
-            fontSize: 12,
-          }}
-        >
-          Refresh routes
-        </button>
-        <button
-          type="button"
-          data-testid="legibility-relayout"
-          onClick={() => setRelayoutSignal((n) => n + 1)}
-          style={{
-            padding: "4px 10px",
-            background: "transparent",
-            color: "#cbd5e1",
-            border: "1px solid #334155",
-            borderRadius: 4,
-            cursor: "pointer",
-            fontSize: 12,
-          }}
-        >
-          Re-layout
-        </button>
+        <span style={{ marginLeft: "auto" }}>
+          <RoutingControlStrip
+            idPrefix="legibility"
+            routeMode={routeMode}
+            setRouteMode={setRouteMode}
+            refreshRoutes={refreshRoutes}
+            relayout={relayout}
+          />
+        </span>
       </div>
 
       <p style={{ margin: "4px 0 0", fontSize: 13, color: "#cbd5e1" }}>

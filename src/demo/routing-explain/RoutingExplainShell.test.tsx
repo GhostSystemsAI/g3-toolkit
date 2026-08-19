@@ -82,7 +82,7 @@ describe("RoutingExplainShell", () => {
   it("mode select defaults to direct and routes the canvas prop correctly", async () => {
     render(<RoutingExplainShell />);
     const select = screen.getByTestId(
-      "rexplain-mode-select",
+      "rexplain-route-mode",
     ) as HTMLSelectElement;
     expect(select.value).toBe("direct");
     await waitFor(() => {
@@ -94,7 +94,7 @@ describe("RoutingExplainShell", () => {
 
   it("switching to orthogonal delivers mode=orthogonal to the canvas", async () => {
     render(<RoutingExplainShell />);
-    fireEvent.change(screen.getByTestId("rexplain-mode-select"), {
+    fireEvent.change(screen.getByTestId("rexplain-route-mode"), {
       target: { value: "orthogonal" },
     });
     await waitFor(() => {
@@ -105,7 +105,7 @@ describe("RoutingExplainShell", () => {
 
   it("switching to off delivers routeEdges=false to the canvas", async () => {
     render(<RoutingExplainShell />);
-    fireEvent.change(screen.getByTestId("rexplain-mode-select"), {
+    fireEvent.change(screen.getByTestId("rexplain-route-mode"), {
       target: { value: "off" },
     });
     await waitFor(() => {

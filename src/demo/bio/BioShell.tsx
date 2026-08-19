@@ -33,6 +33,10 @@ import { OntologyExplorer } from "./OntologyExplorer";
 import { BIO_STYLES } from "./bio-styles";
 import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 /** Wrap width for node labels (px). The long protein/disease names
  *  ("Epidermal growth factor receptor") overlap neighbors unwrapped;
@@ -129,13 +133,15 @@ export function BioShell({ onBack }: { onBack: () => void }) {
     executeSparql(bioGraph, first?.sparql ?? ""),
   );
   const [chartType, setChartType] = useState<"bar" | "scatter">("bar");
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
 
   // Label word-wrap switch. The canvas base rule wraps at 110px by
   // default; ON tightens to LABEL_WRAP_WIDTH, OFF disables wrap
@@ -224,30 +230,13 @@ export function BioShell({ onBack }: { onBack: () => void }) {
             >
               Wrap labels
             </button>
-            <label
-              style={{
-                fontSize: 12,
-                display: "flex",
-                gap: 4,
-                alignItems: "center",
-              }}
-            >
-              Routes
-              <select
-                data-testid="bio-route-mode"
-                value={routeMode}
-                onChange={(e) =>
-                  setRouteMode(
-                    e.target.value as "direct" | "orthogonal" | "off",
-                  )
-                }
-                style={{ fontSize: 12 }}
-              >
-                <option value="direct">Direct (auto-Z)</option>
-                <option value="orthogonal">Orthogonal (always)</option>
-                <option value="off">Off (bezier)</option>
-              </select>
-            </label>
+            <RoutingControlStrip
+              idPrefix="bio"
+              routeMode={routeMode}
+              setRouteMode={setRouteMode}
+              refreshRoutes={refreshRoutes}
+              relayout={relayout}
+            />
             <span className="bio-view-caption" data-testid="bio-view-caption">
               {canvasUgm.getNodeIds().length} nodes ·{" "}
               {canvasView === "raw"
@@ -262,6 +251,9 @@ export function BioShell({ onBack }: { onBack: () => void }) {
             animate={!reducedMotion}
             layoutOptions={BIO_LAYOUT}
             routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
+            routeRefreshSignal={routeRefreshSignal}
+            relayoutSignal={relayoutSignal}
+            edgeClickIsolate
           />
         </main>
 

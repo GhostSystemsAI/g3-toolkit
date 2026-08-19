@@ -40,6 +40,10 @@ import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
 import { publishCanvas } from "../testing/e2e-hooks";
 import { generateScaleGraph, SCALE_SEED } from "./generate";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 /** Color driver switches between the type channel (uniform in the
  *  clusters view: every supernode is a Cluster) and the dominant
@@ -286,15 +290,15 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
   // Well below the maxEdges=2000 cap in every layout; scoped to the
   // clusters view (the raw drill graph exceeds it and would bypass).
   const [bundleOn, setBundleOn] = useState(false);
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const [routeRefreshSignal, setRouteRefreshSignal] = useState(0);
-  const [relayoutSignal, setRelayoutSignal] = useState(0);
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
   const spec = useMemo(
     () =>
       makeSpec(
@@ -552,66 +556,14 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
               >
                 {edgeLabels ? "Hide edge labels" : "Show edge labels"}
               </button>
-              <label
-                style={{
-                  fontSize: 11,
-                  display: "flex",
-                  gap: 4,
-                  alignItems: "center",
-                  marginTop: 6,
-                }}
-              >
-                Routes
-                <select
-                  data-testid="scale-route-mode"
-                  value={routeMode}
-                  onChange={(e) =>
-                    setRouteMode(
-                      e.target.value as "direct" | "orthogonal" | "off",
-                    )
-                  }
-                  style={{ fontSize: 11 }}
-                >
-                  <option value="direct">Direct (auto-Z)</option>
-                  <option value="orthogonal">Orthogonal (always)</option>
-                  <option value="off">Off (bezier)</option>
-                </select>
-              </label>
-              <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                <button
-                  type="button"
-                  data-testid="scale-refresh-routes"
-                  onClick={() => setRouteRefreshSignal((n) => n + 1)}
-                  style={{
-                    font: "inherit",
-                    fontSize: 11,
-                    padding: "3px 10px",
-                    border: "1px solid #7ee081",
-                    borderRadius: 4,
-                    background: "transparent",
-                    color: "inherit",
-                    cursor: "pointer",
-                  }}
-                >
-                  Refresh routes
-                </button>
-                <button
-                  type="button"
-                  data-testid="scale-relayout"
-                  onClick={() => setRelayoutSignal((n) => n + 1)}
-                  style={{
-                    font: "inherit",
-                    fontSize: 11,
-                    padding: "3px 10px",
-                    border: "1px solid #7ee081",
-                    borderRadius: 4,
-                    background: "transparent",
-                    color: "inherit",
-                    cursor: "pointer",
-                  }}
-                >
-                  Re-layout
-                </button>
+              <div style={{ marginTop: 6 }}>
+                <RoutingControlStrip
+                  idPrefix="scale"
+                  routeMode={routeMode}
+                  setRouteMode={setRouteMode}
+                  refreshRoutes={refreshRoutes}
+                  relayout={relayout}
+                />
               </div>
             </div>
           )}

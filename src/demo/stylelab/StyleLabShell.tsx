@@ -47,6 +47,10 @@ import {
   styleLabLegacyStylesheet,
 } from "./style-lab-fixture";
 import { publishCanvas } from "../testing/e2e-hooks";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 interface ParityRow {
   element: string;
@@ -218,13 +222,15 @@ export function StyleLabShell({
     return { rows, checks };
   }, [legacyCy, engineCy]);
 
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
 
   const lodContext = LOD_CONTEXTS[lodIndex] ?? LOD_CONTEXTS[0];
   const lod = resolveLod(DEFAULT_LOD_SCHEDULE, {
@@ -283,28 +289,13 @@ export function StyleLabShell({
           engine-plus-bypass path (right), with the parity computed live from
           cytoscape&apos;s own resolved styles.
         </p>
-        <label
-          style={{
-            fontSize: 12,
-            display: "flex",
-            gap: 4,
-            alignItems: "center",
-          }}
-        >
-          Routes
-          <select
-            data-testid="style-lab-route-mode"
-            value={routeMode}
-            onChange={(e) =>
-              setRouteMode(e.target.value as "direct" | "orthogonal" | "off")
-            }
-            style={{ fontSize: 12 }}
-          >
-            <option value="direct">Direct (auto-Z)</option>
-            <option value="orthogonal">Orthogonal (always)</option>
-            <option value="off">Off (bezier)</option>
-          </select>
-        </label>
+        <RoutingControlStrip
+          idPrefix="style-lab"
+          routeMode={routeMode}
+          setRouteMode={setRouteMode}
+          refreshRoutes={refreshRoutes}
+          relayout={relayout}
+        />
       </header>
 
       <div style={{ display: "flex", gap: 16 }}>
@@ -324,6 +315,9 @@ export function StyleLabShell({
               onReady={onLegacyReady}
               animate={false}
               routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
+              routeRefreshSignal={routeRefreshSignal}
+              relayoutSignal={relayoutSignal}
+              edgeClickIsolate
             />
           </div>
         </section>
@@ -343,6 +337,9 @@ export function StyleLabShell({
               onReady={onEngineReady}
               animate={false}
               routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
+              routeRefreshSignal={routeRefreshSignal}
+              relayoutSignal={relayoutSignal}
+              edgeClickIsolate
             />
           </div>
         </section>
