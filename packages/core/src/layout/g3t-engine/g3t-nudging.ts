@@ -66,7 +66,14 @@ interface MovableSeg {
   axis: "h" | "v";
   perp: number;
   extent: [number, number];
-  fixed: boolean;
+  /** "bar": interior segment, separated by translate.
+   *  "arm": first or last segment with one endpoint pinned to a terminal
+   *  anchor. Separated by inserting a jog so the interior of the run
+   *  moves onto a distinct track while the anchor stays byte-identical. */
+  kind: "bar" | "arm";
+  /** For kind="arm", the polyline index of the anchored endpoint (0 for
+   *  first-segment arms, pts.length-1 for last-segment arms). -1 for bars. */
+  anchoredIdx: number;
 }
 
 interface LayoutBound {
@@ -104,6 +111,15 @@ export function nudgeRoutes(
   );
 
   // Step 1: decompose into axis-aligned segments.
+  //
+  // Arms (first and last segments of a polyline) have one pinned end at
+  // the terminal anchor. They cannot be translated, but their interior
+  // run can be jogged onto a distinct track via inserted bends while the
+  // anchor stays byte-identical. Bars (all interior segments) translate.
+  // Short arms (along-extent < 2*trackGap) cannot fit a clean jog and are
+  // excluded from the movable pool so they remain exactly where the
+  // router put them; they still act as obstacles for other routes via
+  // the shared `obstacles` box list.
   const segments: MovableSeg[] = [];
   for (const [edgeId, pts] of Object.entries(normalized)) {
     if (pts.length < 3) continue; // 2-point straight: never nudged
@@ -123,13 +139,43 @@ export function nudgeRoutes(
         Math.min(along1, along2),
         Math.max(along1, along2),
       ];
-      const fixed = i === 0 || i === pts.length - 2;
-      segments.push({ edgeId, segIndex: i, axis, perp, extent, fixed });
+      const isArm = i === 0 || i === pts.length - 2;
+      if (isArm) {
+        const armAlongExtent = extent[1] - extent[0];
+        // Short arm: cannot fit stub + rejoin without over-jogging past
+        // the far bend. Leave it fixed; skip the movable pool.
+        if (armAlongExtent < 2 * trackGap) continue;
+        const anchoredIdx = i === 0 ? 0 : pts.length - 1;
+        segments.push({
+          edgeId,
+          segIndex: i,
+          axis,
+          perp,
+          extent,
+          kind: "arm",
+          anchoredIdx,
+        });
+      } else {
+        segments.push({
+          edgeId,
+          segIndex: i,
+          axis,
+          perp,
+          extent,
+          kind: "bar",
+          anchoredIdx: -1,
+        });
+      }
     }
   }
 
   // Step 2: group by union-find with split rule.
-  const movable = segments.filter((s) => !s.fixed);
+  //
+  // Arms and bars group freely with each other on the same axis: an arm
+  // next to a bar in the same corridor is a real crowding pattern
+  // (twoParallelHRoutes: two Zs' top arms coincide on y=100 as arm-arm;
+  // their bars coincide at x=30 as bar-bar; each gets its own group).
+  const movable = segments;
   const parent: number[] = movable.map((_, i) => i);
   const parentAt = (i: number): number => {
     const v = parent[i];
@@ -374,7 +420,41 @@ export function nudgeRoutes(
   }
   const finalDemand: CorridorDemand[] = [];
 
-  for (const group of planned) {
+  // Order groups so bar translates (which do not shift indices) run
+  // BEFORE arm jog splices (which do). Within arms, higher segIndex on
+  // an edge runs first: an arm at segIndex=2 splicing pts[2..3] never
+  // shifts the indices of a still-pending arm at segIndex=0, so its
+  // segIndex reference into `committed` stays valid.
+  //
+  // Groups are classified by their first member's kind; a group is
+  // homogeneous by construction (all members share axis + kind bucket
+  // via the union-find split rule and short-arm filter).
+  const groupKind = (g: (typeof planned)[number]): "bar" | "arm" => {
+    const first = g.memberIdxs[0];
+    if (first === undefined) return "bar";
+    const s = movable[first];
+    return s?.kind ?? "bar";
+  };
+  const groupMaxSegIndex = (g: (typeof planned)[number]): number => {
+    let mx = -1;
+    for (const i of g.memberIdxs) {
+      const s = movable[i];
+      if (s && s.segIndex > mx) mx = s.segIndex;
+    }
+    return mx;
+  };
+  const orderedPlanned = planned.slice().sort((a, b) => {
+    const ka = groupKind(a);
+    const kb = groupKind(b);
+    if (ka !== kb) return ka === "bar" ? -1 : 1;
+    if (ka === "arm") {
+      // Descending segIndex among arms so higher-index splices run first.
+      return groupMaxSegIndex(b) - groupMaxSegIndex(a);
+    }
+    return 0;
+  });
+
+  for (const group of orderedPlanned) {
     if (!group.attemptRewrite) {
       finalDemand.push(group.demand);
       continue;
@@ -382,8 +462,9 @@ export function nudgeRoutes(
     const attemptResult = attemptGroupRewrite(
       group.placements,
       movable,
-      normalized,
+      committed,
       obstacles,
+      trackGap,
     );
     if (attemptResult.ok) {
       for (const [edgeId, pts] of Object.entries(attemptResult.rewritten)) {
@@ -414,8 +495,9 @@ export function nudgeRoutes(
     const retry = attemptGroupRewrite(
       halvedPlacements,
       movable,
-      normalized,
+      committed,
       obstacles,
+      trackGap,
     );
     if (retry.ok) {
       for (const [edgeId, pts] of Object.entries(retry.rewritten)) {
@@ -504,20 +586,37 @@ interface RewriteAttempt {
   failureKind?: "box" | "crossing";
 }
 
+interface SegEdit {
+  segIndex: number;
+  newPerp: number;
+  axis: "h" | "v";
+  kind: "bar" | "arm";
+  anchoredIdx: number;
+  /** Stub length for arm jogs. min(trackGap, armAlongExtent/3) so a
+   *  short arm never over-jogs past its own far bend. Ignored for bars. */
+  stubLen: number;
+}
+
 function attemptGroupRewrite(
   placements: { memberIdx: number; newPerp: number }[],
   movable: MovableSeg[],
-  normalized: Record<string, Pt[]>,
+  base: Record<string, Pt[]>,
   obstacles: readonly RouteBox[],
+  trackGap: number,
 ): RewriteAttempt {
-  const bySeg = new Map<
-    string,
-    { segIndex: number; newPerp: number; axis: "h" | "v" }[]
-  >();
+  const bySeg = new Map<string, SegEdit[]>();
   for (const pl of placements) {
     const s = movable[pl.memberIdx];
     if (s === undefined) continue;
-    const entry = { segIndex: s.segIndex, newPerp: pl.newPerp, axis: s.axis };
+    const armAlongExtent = s.extent[1] - s.extent[0];
+    const entry: SegEdit = {
+      segIndex: s.segIndex,
+      newPerp: pl.newPerp,
+      axis: s.axis,
+      kind: s.kind,
+      anchoredIdx: s.anchoredIdx,
+      stubLen: Math.min(trackGap, armAlongExtent / 3),
+    };
     const list = bySeg.get(s.edgeId);
     if (list) list.push(entry);
     else bySeg.set(s.edgeId, [entry]);
@@ -529,18 +628,32 @@ function attemptGroupRewrite(
       const idI = edgeIds[i];
       const idJ = edgeIds[j];
       if (idI === undefined || idJ === undefined) continue;
-      const a = normalized[idI];
-      const b = normalized[idJ];
+      const a = base[idI];
+      const b = base[idJ];
       if (a === undefined || b === undefined) continue;
       originalCrossings.set(`${idI}|${idJ}`, countCrossings(a, b));
     }
   }
   const rewritten: Record<string, Pt[]> = {};
   for (const [edgeId, edits] of bySeg) {
-    const src = normalized[edgeId];
+    const src = base[edgeId];
     if (src === undefined) continue;
-    const pts = src.map((p) => ({ ...p }));
+    let pts: Pt[] = src.map((p) => ({ ...p }));
+
+    // Snapshot anchors so we can assert byte-identity after splices.
+    const armEdits = edits.filter((e) => e.kind === "arm");
+    const anchorSnapshots = armEdits.map((e) => ({
+      edit: e,
+      x: pts[e.anchoredIdx]?.x,
+      y: pts[e.anchoredIdx]?.y,
+    }));
+
+    // Apply bar edits first: translate both endpoints in-place. Bar edits
+    // move a coordinate that is orthogonal to arm axes on either side, so
+    // the arm's shared-endpoint along coordinate can change here; the arm
+    // splice below re-reads pts[segIndex/segIndex+1] to pick that up.
     for (const edit of edits) {
+      if (edit.kind !== "bar") continue;
       const a = pts[edit.segIndex];
       const b = pts[edit.segIndex + 1];
       if (a === undefined || b === undefined) continue;
@@ -552,6 +665,69 @@ function attemptGroupRewrite(
         b.x = edit.newPerp;
       }
     }
+
+    // Apply arm edits from HIGH segIndex to LOW so a low-index splice
+    // does not shift the index of a not-yet-processed high-index arm.
+    const armEditsSorted = armEdits
+      .slice()
+      .sort((a, b) => b.segIndex - a.segIndex);
+    for (const edit of armEditsSorted) {
+      const anchorPt = pts[edit.anchoredIdx];
+      if (anchorPt === undefined) continue;
+      // The "other" endpoint of the arm segment (far bend). For a
+      // first-segment arm (segIndex=0, anchoredIdx=0), far bend is at
+      // segIndex+1. For a last-segment arm (segIndex=N-2, anchoredIdx=N-1),
+      // far bend is at segIndex.
+      const farIdx =
+        edit.anchoredIdx === edit.segIndex ? edit.segIndex + 1 : edit.segIndex;
+      const farPt = pts[farIdx];
+      if (farPt === undefined) continue;
+
+      const along = (p: Pt): number => (edit.axis === "h" ? p.x : p.y);
+      const perpOf = (p: Pt): number => (edit.axis === "h" ? p.y : p.x);
+      const makePt = (alongV: number, perpV: number): Pt =>
+        edit.axis === "h" ? { x: alongV, y: perpV } : { x: perpV, y: alongV };
+
+      const anchorAlong = along(anchorPt);
+      const anchorPerp = perpOf(anchorPt);
+      const farAlong = along(farPt);
+      const delta = farAlong - anchorAlong;
+      if (Math.abs(delta) < 2 * edit.stubLen) {
+        // Post-bar-translate collapse: after a bar moved the shared
+        // endpoint, the arm is now too short to fit stub + rejoin. Leave
+        // it fixed rather than emitting a jog that would overshoot.
+        continue;
+      }
+      const dir = delta >= 0 ? 1 : -1;
+      const stubEndAlong = anchorAlong + edit.stubLen * dir;
+      const stub = makePt(stubEndAlong, anchorPerp);
+      const bend = makePt(stubEndAlong, edit.newPerp);
+      const run = makePt(farAlong, edit.newPerp);
+
+      // Splice: replace segment [pts[segIndex], pts[segIndex+1]] with the
+      // jogged run. Anchor and far bend keep their original references so
+      // the anchor's coordinates are preserved byte-identically.
+      const before = pts.slice(0, edit.segIndex);
+      const after = pts.slice(edit.segIndex + 2);
+      if (edit.anchoredIdx === edit.segIndex) {
+        // First-segment arm: anchor at start, far bend at end.
+        pts = [...before, anchorPt, stub, bend, run, farPt, ...after];
+      } else {
+        // Last-segment arm: far bend at start, anchor at end.
+        pts = [...before, farPt, run, bend, stub, anchorPt, ...after];
+      }
+    }
+
+    // Anchor byte-identity guard: the polyline's terminal anchors must
+    // never move. If an arm splice touched them the pass is unsafe.
+    for (const snap of anchorSnapshots) {
+      const idxAfter = snap.edit.anchoredIdx === 0 ? 0 : pts.length - 1;
+      const p = pts[idxAfter];
+      if (p === undefined || p.x !== snap.x || p.y !== snap.y) {
+        return { ok: false, rewritten: {}, failureKind: "box" };
+      }
+    }
+
     const compact = pts.filter((p, idx) => {
       if (idx === 0) return true;
       const prev = pts[idx - 1];

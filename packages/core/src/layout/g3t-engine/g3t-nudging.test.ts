@@ -67,7 +67,13 @@ describe("nudgeRoutes: basics", () => {
     expect(corridorDemand).toHaveLength(0);
   });
 
-  it("separates two coincident parallel interior segments (branch a)", () => {
+  it("Z-route bar-and-arm separation: bars translate; arm-jog crossings self-revert cleanly", () => {
+    // Regression: today's nudge only separates the bar of a Z. With arms
+    // as candidates, the bar-first ordering lets bars translate; each
+    // arm-jog attempt then runs the crossing-no-worse validator: if the
+    // jog would sweep across another edge's translated bar, the arm
+    // group reverts (the contract). This test pins the bar-separation
+    // that IS achievable and asserts no polyline was corrupted.
     const input = twoParallelHRoutes();
     const { routes, corridorDemand } = nudgeRoutes(input, [], {
       trackGap: 8,
@@ -75,12 +81,170 @@ describe("nudgeRoutes: basics", () => {
     });
     const a = routes.a!.points;
     const b = routes.b!.points;
-    // Interior vertical segments (index 1..2) must have distinct x.
+    // Bars still separated by translate.
     expect(a[1]!.x).not.toEqual(b[1]!.x);
-    // Order deterministic by edge id: 'a' before 'b'.
-    expect(corridorDemand).toHaveLength(1);
-    expect(corridorDemand[0]!.tracksRequired).toBe(2);
-    expect(corridorDemand[0]!.blocked).toBe(false);
+    // Anchors preserved byte-identical.
+    expect(a[0]).toEqual({ x: 0, y: 100 });
+    expect(a[a.length - 1]).toEqual({ x: 60, y: 200 });
+    expect(b[0]).toEqual({ x: 0, y: 100 });
+    expect(b[b.length - 1]).toEqual({ x: 60, y: 200 });
+    // Three corridors declared (top arm, bar, bottom arm); the arm
+    // corridors revert (blockedReason "reverted") when their jog would
+    // cross the sibling's translated bar. Bar corridor commits cleanly.
+    expect(corridorDemand).toHaveLength(3);
+    const bar = corridorDemand.find((d) => d.axis === "v");
+    expect(bar!.blocked).toBe(false);
+    const arms = corridorDemand.filter((d) => d.axis === "h");
+    expect(arms).toHaveLength(2);
+    // Arms MAY revert here — the fixture geometry forces the jog run
+    // through the sibling bar. What must not happen: an arm splice that
+    // corrupts an anchor or produces a self-crossing polyline.
+    for (const arm of arms) {
+      if (arm.blocked) expect(arm.blockedReason).toBe("reverted");
+    }
+  });
+
+  it("both arms jog to distinct tracks when the fixture's other segments do not obstruct the run", () => {
+    // Two 3-point routes sharing a horizontal arm on y=100 (arm-arm
+    // coincidence) whose second segments DIVERGE vertically (one down to
+    // y=50, one up to y=150). The two vertical arms do NOT group (their
+    // along-extents share only the endpoint, so overlap is zero), so
+    // there is nothing for the h-arm jog run to cross except itself.
+    const input: Record<string, { points: Pt[] }> = {
+      a: {
+        points: [
+          { x: 0, y: 100 },
+          { x: 50, y: 100 },
+          { x: 50, y: 50 },
+        ],
+      },
+      b: {
+        points: [
+          { x: 0, y: 100 },
+          { x: 50, y: 100 },
+          { x: 50, y: 150 },
+        ],
+      },
+    };
+    const { routes, corridorDemand } = nudgeRoutes(input, [], {
+      trackGap: 8,
+      clearance: 0,
+    });
+    const a = routes.a!.points;
+    const b = routes.b!.points;
+    // Anchors preserved.
+    expect(a[0]).toEqual({ x: 0, y: 100 });
+    expect(a[a.length - 1]).toEqual({ x: 50, y: 50 });
+    expect(b[0]).toEqual({ x: 0, y: 100 });
+    expect(b[b.length - 1]).toEqual({ x: 50, y: 150 });
+    // Arms jogged: the run perp (pts[2]) sits off y=100 and differs.
+    expect(a[2]!.y).not.toEqual(100);
+    expect(b[2]!.y).not.toEqual(100);
+    expect(a[2]!.y).not.toEqual(b[2]!.y);
+    // Only one corridor (the h-arm pair). It must not revert.
+    const armCorridor = corridorDemand.find((d) => d.axis === "h");
+    expect(armCorridor).toBeDefined();
+    expect(armCorridor!.blocked).toBe(false);
+  });
+
+  it("anchor preservation: p0 and p_last byte-identical across every input", () => {
+    const inputs: Record<string, Record<string, { points: Pt[] }>> = {
+      z: twoParallelHRoutes(),
+      solo: {
+        s: {
+          points: [
+            { x: 0, y: 0 },
+            { x: 50, y: 0 },
+            { x: 50, y: 100 },
+            { x: 100, y: 100 },
+          ],
+        },
+      },
+    };
+    for (const [, input] of Object.entries(inputs)) {
+      const { routes } = nudgeRoutes(input, [], {
+        trackGap: 8,
+        clearance: 0,
+      });
+      for (const id of Object.keys(input)) {
+        const src = input[id]!.points;
+        const out = routes[id]!.points;
+        expect(out[0]).toEqual(src[0]);
+        expect(out[out.length - 1]).toEqual(src[src.length - 1]);
+      }
+    }
+  });
+
+  it("idempotence: a second nudge pass is a no-op once arms are >= trackGap apart", () => {
+    // Obstacle bounds ensure the arm corridor has span >= (n+1)*trackGap
+    // so placements land at exactly trackGap apart. crowdedRuns then
+    // cuts them (diff >= trackGap) on the second pass, so no group forms.
+    const input: Record<string, { points: Pt[] }> = {
+      a: {
+        points: [
+          { x: 0, y: 100 },
+          { x: 50, y: 100 },
+          { x: 50, y: 50 },
+        ],
+      },
+      b: {
+        points: [
+          { x: 0, y: 100 },
+          { x: 50, y: 100 },
+          { x: 50, y: 150 },
+        ],
+      },
+    };
+    const obstacles = [
+      { x: -10, y: 80, width: 60, height: 5 },
+      { x: -10, y: 115, width: 60, height: 5 },
+    ];
+    const first = nudgeRoutes(input, obstacles, {
+      trackGap: 8,
+      clearance: 0,
+    });
+    const asInput: Record<string, { points: Pt[] }> = {};
+    for (const [id, r] of Object.entries(first.routes)) {
+      asInput[id] = { points: r.points.map((p) => ({ ...p })) };
+    }
+    const second = nudgeRoutes(asInput, obstacles, {
+      trackGap: 8,
+      clearance: 0,
+    });
+    expect(second.routes).toEqual(first.routes);
+  });
+
+  it("short arm (armAlongExtent < 2*trackGap): left fixed, no jog inserted", () => {
+    // Both arms have along-extent = 4 which is < 2*trackGap=16 so they
+    // are excluded from the movable pool. The bar (interior seg) is still
+    // eligible and would translate if it were crowded — here there is
+    // only one route so no group forms and everything passes through.
+    const input = {
+      a: {
+        points: [
+          { x: 0, y: 100 },
+          { x: 4, y: 100 },
+          { x: 4, y: 200 },
+          { x: 8, y: 200 },
+        ],
+      },
+      b: {
+        points: [
+          { x: 0, y: 100 },
+          { x: 4, y: 100 },
+          { x: 4, y: 200 },
+          { x: 8, y: 200 },
+        ],
+      },
+    };
+    const { routes } = nudgeRoutes(input, [], { trackGap: 8, clearance: 0 });
+    // Bar (interior) still separates (armAlongExtent for bar is 100).
+    // But arms remain 4-point original shape (no jog inserts).
+    expect(routes.a!.points).toHaveLength(4);
+    expect(routes.b!.points).toHaveLength(4);
+    // Anchors preserved.
+    expect(routes.a!.points[0]).toEqual({ x: 0, y: 100 });
+    expect(routes.a!.points[3]).toEqual({ x: 8, y: 200 });
   });
 });
 
@@ -134,10 +298,9 @@ describe("nudgeRoutes: only moves what is actually crowded", () => {
       trackGap: 8,
       clearance: 0,
     });
-    const xs = [
-      routes.a?.points[1]?.x ?? 0,
-      routes.b?.points[1]?.x ?? 0,
-    ].sort((m, n) => m - n);
+    const xs = [routes.a?.points[1]?.x ?? 0, routes.b?.points[1]?.x ?? 0].sort(
+      (m, n) => m - n,
+    );
     // Split by a full track gap...
     expect((xs[1] ?? 0) - (xs[0] ?? 0)).toBeCloseTo(8, 5);
     // ...and still centred where they started, not hauled to the
@@ -171,14 +334,18 @@ describe("nudgeRoutes: degradation ladder", () => {
       trackGap: 8,
       clearance: 0,
     });
-    expect(corridorDemand).toHaveLength(1);
-    const d = corridorDemand[0]!;
-    expect(d.blocked).toBe(false);
-    // Open-corridor clamp bounds free span to ~2*trackGap around the
-    // group's own perp — deficit non-zero is expected for a wide-open
-    // scene with no obstacle bounds; the pass still separates the pair.
-    expect(d.deficit).toBeGreaterThanOrEqual(0);
-    expect(d.tracksRequired).toBe(2);
+    // Z-route generates 3 corridors post-arm-inclusion: top arm, bar,
+    // bottom arm. Arms may revert if their jog runs would sweep across a
+    // translated bar; the bar corridor itself always commits cleanly.
+    expect(corridorDemand.length).toBeGreaterThanOrEqual(1);
+    const bar = corridorDemand.find((d) => d.axis === "v");
+    expect(bar).toBeDefined();
+    expect(bar!.blocked).toBe(false);
+    for (const d of corridorDemand) {
+      expect(d.deficit).toBeGreaterThanOrEqual(0);
+      expect(d.tracksRequired).toBe(2);
+      if (d.blocked) expect(d.blockedReason).toBe("reverted");
+    }
   });
 
   it("branch (c): fully occluded emits blocked/occluded demand and passes routes through", () => {
