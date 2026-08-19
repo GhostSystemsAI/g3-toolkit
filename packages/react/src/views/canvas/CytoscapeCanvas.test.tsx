@@ -619,11 +619,24 @@ describe("multi-select drag (review 4.8)", () => {
   }
 
   function handlersByEvent() {
-    const map = new Map<string, (evt: unknown) => void>();
+    // Real cytoscape dispatches to EVERY listener registered for an
+    // event; the canvas registers both the multi-select drag handlers
+    // and the routing pass's drag-free reroute on ("free", "node").
+    // Mirror that by fanning one synthetic event out to all of them.
+    const lists = new Map<string, ((evt: unknown) => void)[]>();
     for (const call of mockCy.on.mock.calls) {
       if (call.length === 3 && call[1] === "node") {
-        map.set(call[0] as string, call[2] as (evt: unknown) => void);
+        const key = call[0] as string;
+        const list = lists.get(key) ?? [];
+        list.push(call[2] as (evt: unknown) => void);
+        lists.set(key, list);
       }
+    }
+    const map = new Map<string, (evt: unknown) => void>();
+    for (const [key, list] of lists) {
+      map.set(key, (evt: unknown) => {
+        for (const h of list) h(evt);
+      });
     }
     return map;
   }

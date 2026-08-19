@@ -928,6 +928,35 @@ export interface CytoscapeCanvasProps {
   edgeClickIsolate?: boolean;
 }
 
+/** Resolve the public `routeEdges` prop shape into the concrete options
+ *  `runCanvasEdgeRouting` takes. Shared by the init-effect handlers and
+ *  the prop-change / refresh / relayout effects so every pass resolves
+ *  the SAME way from the LIVE prop value (the handlers previously
+ *  captured a snapshot at cy init, so a Routes-mode change never reached
+ *  drag-free or layoutstop reroutes). */
+function resolveRouteCfg(
+  routeConfig: NonNullable<Exclude<CytoscapeCanvasProps["routeEdges"], false>>,
+): {
+  maxEdges: number;
+  clearance?: number;
+  bendPenalty?: number;
+  minStub?: number;
+  mode: "direct-unless-crossing" | "always";
+} {
+  return routeConfig === true
+    ? { maxEdges: 600, mode: "direct-unless-crossing" }
+    : {
+        maxEdges: routeConfig.maxEdges ?? 600,
+        clearance: routeConfig.clearance,
+        bendPenalty: routeConfig.bendPenalty,
+        minStub: routeConfig.minStub,
+        mode:
+          routeConfig.mode === "orthogonal"
+            ? "always"
+            : "direct-unless-crossing",
+      };
+}
+
 /** ROUTE_EDGES pass (routeEdges prop). Reads current node bounding boxes
  *  from the live Cytoscape instance, runs the pure `routeSceneEdges`
  *  routing pass, and writes `_segDist`/`_segWeight` + the
@@ -1795,24 +1824,21 @@ export function CytoscapeCanvas({
     // after a fresher layoutstop has superseded it (rapid successive
     // relayouts): only the callback whose captured generation matches
     // the live counter runs.
-    const routeConfig = routeEdgesRef.current;
-    if (routeConfig && !structural) {
-      const cfg =
-        routeConfig === true
-          ? { maxEdges: 600, mode: "direct-unless-crossing" as const }
-          : {
-              maxEdges: routeConfig.maxEdges ?? 600,
-              clearance: routeConfig.clearance,
-              bendPenalty: routeConfig.bendPenalty,
-              minStub: routeConfig.minStub,
-              mode:
-                routeConfig.mode === "orthogonal"
-                  ? ("always" as const)
-                  : ("direct-unless-crossing" as const),
-            };
+    if (!structural) {
       let routingGeneration = 0;
       let warnedScale = false;
+      // Resolve the config INSIDE the pass, from the live ref: these
+      // handlers outlive prop changes (they are torn down only on cy
+      // re-init), so a captured snapshot would pin the Routes mode from
+      // mount time — a drag after switching Direct -> Orthogonal used to
+      // reroute incident edges in the OLD mode (observed live: dragging
+      // in Orthogonal un-routed the dragged node's edges). Wiring is also
+      // unconditional for non-structural scenes so enabling routing after
+      // mount still gets layoutstop/drag reroutes.
       const runPass = (incidentTo?: string): void => {
+        const live = routeEdgesRef.current;
+        if (!live) return;
+        const cfg = resolveRouteCfg(live);
         const r = runCanvasEdgeRouting(cy, cfg, incidentTo);
         if (
           r.skipped &&
@@ -2040,20 +2066,7 @@ export function CytoscapeCanvas({
       // Scale demo's first-visit flash. Prop flips AFTER settle still
       // route immediately (the intended change-handler behavior).
       if (!layoutSettledRef.current) return;
-      const cfg =
-        routeEdges === true
-          ? { maxEdges: 600, mode: "direct-unless-crossing" as const }
-          : {
-              maxEdges: routeEdges.maxEdges ?? 600,
-              clearance: routeEdges.clearance,
-              bendPenalty: routeEdges.bendPenalty,
-              minStub: routeEdges.minStub,
-              mode:
-                routeEdges.mode === "orthogonal"
-                  ? ("always" as const)
-                  : ("direct-unless-crossing" as const),
-            };
-      runCanvasEdgeRouting(cy, cfg);
+      runCanvasEdgeRouting(cy, resolveRouteCfg(routeEdges));
     } else {
       // Clear any previously stamped routing data so edges revert.
       cy.batch(() => {
@@ -2081,20 +2094,7 @@ export function CytoscapeCanvas({
     lastRouteRefreshSignalRef.current = routeRefreshSignal;
     const cfg = routeEdgesRef.current;
     if (!cfg) return;
-    const opts =
-      cfg === true
-        ? { maxEdges: 600, mode: "direct-unless-crossing" as const }
-        : {
-            maxEdges: cfg.maxEdges ?? 600,
-            clearance: cfg.clearance,
-            bendPenalty: cfg.bendPenalty,
-            minStub: cfg.minStub,
-            mode:
-              cfg.mode === "orthogonal"
-                ? ("always" as const)
-                : ("direct-unless-crossing" as const),
-          };
-    runCanvasEdgeRouting(cy, opts);
+    runCanvasEdgeRouting(cy, resolveRouteCfg(cfg));
   }, [routeRefreshSignal]);
 
   // Re-layout / untangle (brief 23, A54): explicit user op — reads current
@@ -2113,20 +2113,7 @@ export function CytoscapeCanvas({
     if (r.skipped) return;
     const cfg = routeEdgesRef.current;
     if (!cfg) return;
-    const opts =
-      cfg === true
-        ? { maxEdges: 600, mode: "direct-unless-crossing" as const }
-        : {
-            maxEdges: cfg.maxEdges ?? 600,
-            clearance: cfg.clearance,
-            bendPenalty: cfg.bendPenalty,
-            minStub: cfg.minStub,
-            mode:
-              cfg.mode === "orthogonal"
-                ? ("always" as const)
-                : ("direct-unless-crossing" as const),
-          };
-    runCanvasEdgeRouting(cy, opts);
+    runCanvasEdgeRouting(cy, resolveRouteCfg(cfg));
   }, [relayoutSignal]);
 
   // Visibility filter (hidden prop): a batched class toggle, applied on
