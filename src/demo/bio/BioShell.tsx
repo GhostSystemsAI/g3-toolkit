@@ -43,6 +43,26 @@ const LABEL_WRAP_WIDTH = 90;
  *  look regresses under visual review. */
 const ROUTE_EDGES = true;
 
+/** fcose spacing for this shell. The projected KG is small (16 nodes)
+ *  but the generic canvas fcose defaults (idealEdgeLength 100,
+ *  nodeRepulsion 10000, label-size ignored) pack the gene/protein/
+ *  disease/drug clusters tight enough that the long protein names
+ *  overlap neighbors and edges thread between nodes. Widen the ideal
+ *  edge length and repulsion, add explicit node separation, and set
+ *  nodeDimensionsIncludeLabels so the layout reserves room for the
+ *  wrapped labels instead of colliding them. Module-const (stable
+ *  reference) so it never churns the relayout contract. */
+const BIO_LAYOUT = {
+  idealEdgeLength: 145,
+  nodeRepulsion: 22000,
+  nodeSeparation: 140,
+  gravity: 0.12,
+  gravityRange: 2.0,
+  numIter: 3000,
+  nodeDimensionsIncludeLabels: true,
+  packComponents: true,
+};
+
 const SPEC: EncodingSpec = {
   version: 1,
   node: {
@@ -240,6 +260,7 @@ export function BioShell({ onBack }: { onBack: () => void }) {
             encodingSpec={SPEC}
             stylesheet={wrapStylesheet}
             animate={!reducedMotion}
+            layoutOptions={BIO_LAYOUT}
             routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
           />
         </main>
