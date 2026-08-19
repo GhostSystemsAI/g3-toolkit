@@ -192,23 +192,39 @@ const hidden = useMemo(() => {
 ### Route edges around nodes on any layout
 
 `CytoscapeCanvas` can post-process every non-structural layout to route edges
-ORTHOGONALLY around intervening nodes, using the same A\* obstacle-aware
-router the structural view uses. Pass `routeEdges` (default off in the
-library; the shipped demo shells set it to `true`). Structural scenes are
-detected automatically and the pass is skipped there.
+around intervening nodes, using an A\* obstacle-aware router. Pass `routeEdges`
+(default off in the library; the shipped demo shells enable it). Structural
+scenes are detected automatically and the pass is skipped there.
+
+**Routing modes** (set via `routeEdges={{ mode: "..." }}`):
+
+| Mode                 | Behaviour                                                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `"direct"` (default) | Only routes edges whose straight line crosses a node box. Clear edges stay as bezier curves — the common case keeps its natural look. |
+| `"orthogonal"`       | Routes every edge orthogonally regardless of crossing, matching the look of the structural block router.                              |
+
+`routeEdges={true}` or `routeEdges` (bare) uses `"direct"` mode.
 
 ```tsx
 import { CytoscapeCanvas } from "@g3t/react";
 
-// Simple opt-in: routing on with defaults (clearance 12, bendPenalty 30,
-// minStub 28; maxEdges 600 scale cap).
+// Direct mode (default): only edges that would cross a node get routed.
 export const Simple = () => <CytoscapeCanvas ugm={ugm} routeEdges />;
 
-// Or with tuning:
+// Orthogonal mode: always route every edge as an L-/Z-shape.
+export const AlwaysOrthogonal = () => (
+  <CytoscapeCanvas ugm={ugm} routeEdges={{ mode: "orthogonal" }} />
+);
+
+// Off: bezier (Cytoscape default), no obstacle-aware pass.
+export const Off = () => <CytoscapeCanvas ugm={ugm} routeEdges={false} />;
+
+// Tuning options compose with mode:
 export const Tuned = () => (
   <CytoscapeCanvas
     ugm={ugm}
     routeEdges={{
+      mode: "direct",
       maxEdges: 400,
       clearance: 16, // more breathing room around obstacles
       bendPenalty: 60, // straighter routes, fewer corners

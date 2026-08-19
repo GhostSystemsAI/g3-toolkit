@@ -286,6 +286,13 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
   // Well below the maxEdges=2000 cap in every layout; scoped to the
   // clusters view (the raw drill graph exceeds it and would bypass).
   const [bundleOn, setBundleOn] = useState(false);
+  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
+    "direct",
+  );
+  const routeEdgesConfig =
+    routeMode === "off"
+      ? (false as const)
+      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
   const spec = useMemo(
     () =>
       makeSpec(
@@ -543,6 +550,31 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
               >
                 {edgeLabels ? "Hide edge labels" : "Show edge labels"}
               </button>
+              <label
+                style={{
+                  fontSize: 11,
+                  display: "flex",
+                  gap: 4,
+                  alignItems: "center",
+                  marginTop: 6,
+                }}
+              >
+                Routes
+                <select
+                  data-testid="scale-route-mode"
+                  value={routeMode}
+                  onChange={(e) =>
+                    setRouteMode(
+                      e.target.value as "direct" | "orthogonal" | "off",
+                    )
+                  }
+                  style={{ fontSize: 11 }}
+                >
+                  <option value="direct">Direct (auto-Z)</option>
+                  <option value="orthogonal">Orthogonal (always)</option>
+                  <option value="off">Off (bezier)</option>
+                </select>
+              </label>
             </div>
           )}
           <div style={{ marginTop: 10 }}>
@@ -647,7 +679,7 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
             // D3: route only in the collapsed clusters view; the raw
             // 8k-node drill view exceeds the 600-edge cap and would
             // skip anyway. Explicit here so the intent is legible.
-            routeEdges={view.kind === "clusters"}
+            routeEdges={view.kind === "clusters" ? routeEdgesConfig : false}
             onReady={(c) => {
               markReady(view.kind);
               setCore(c);

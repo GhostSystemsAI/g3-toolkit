@@ -109,6 +109,13 @@ export function BioShell({ onBack }: { onBack: () => void }) {
     executeSparql(bioGraph, first?.sparql ?? ""),
   );
   const [chartType, setChartType] = useState<"bar" | "scatter">("bar");
+  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
+    "direct",
+  );
+  const routeEdgesConfig =
+    routeMode === "off"
+      ? (false as const)
+      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
 
   // Label word-wrap switch. The canvas base rule wraps at 110px by
   // default; ON tightens to LABEL_WRAP_WIDTH, OFF disables wrap
@@ -197,6 +204,30 @@ export function BioShell({ onBack }: { onBack: () => void }) {
             >
               Wrap labels
             </button>
+            <label
+              style={{
+                fontSize: 12,
+                display: "flex",
+                gap: 4,
+                alignItems: "center",
+              }}
+            >
+              Routes
+              <select
+                data-testid="bio-route-mode"
+                value={routeMode}
+                onChange={(e) =>
+                  setRouteMode(
+                    e.target.value as "direct" | "orthogonal" | "off",
+                  )
+                }
+                style={{ fontSize: 12 }}
+              >
+                <option value="direct">Direct (auto-Z)</option>
+                <option value="orthogonal">Orthogonal (always)</option>
+                <option value="off">Off (bezier)</option>
+              </select>
+            </label>
             <span className="bio-view-caption" data-testid="bio-view-caption">
               {canvasUgm.getNodeIds().length} nodes ·{" "}
               {canvasView === "raw"
@@ -209,7 +240,7 @@ export function BioShell({ onBack }: { onBack: () => void }) {
             encodingSpec={SPEC}
             stylesheet={wrapStylesheet}
             animate={!reducedMotion}
-            routeEdges={ROUTE_EDGES}
+            routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
           />
         </main>
 

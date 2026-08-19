@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0 (continued): 2026-08-19 (direct-unless-crossing default, routing pulldown on 8 shells)
+
+**Brief 19 — direct-unless-crossing routing default + per-shell routing pulldown.**
+
+- **`routeSceneEdges` mode field.** `RouteSceneOptions` gains `mode?: "direct-unless-crossing" | "always"`. Default is `"direct-unless-crossing"`: the router checks each edge's straight segment against the obstacle set and skips routing when the path is clear, leaving those edges as bezier curves. Use `"always"` to replicate the previous behavior (route every edge regardless). The crossing check reuses the already-exported `polylineIntersectsBoxes` primitive.
+- **`CytoscapeCanvas` `routeEdges` prop extended.** `routeEdges` now accepts `{ mode?: "direct" | "orthogonal" }` in addition to the existing tuning options (`maxEdges`, `clearance`, `bendPenalty`, `minStub`). `"direct"` maps to core `"direct-unless-crossing"`; `"orthogonal"` maps to `"always"`. `routeEdges={true}` (bare) uses `"direct"` mode. This is a library-wide default change: existing shells that pass `routeEdges={true}` now route direct-unless-crossing instead of always-orthogonal.
+- **3-state routing pulldown on 8 shells.** Routing Lab, Ontology Workbench, RDF 1.2 Hyperarcs, Legibility Lab, Biomedical, Style Lab, Supply Chain Digital Thread, and Scale now all expose a `Routes` select with three options: `Direct (auto-Z)` / `Orthogonal (always)` / `Off (bezier)`. Per-shell `ROUTE_EDGES` kill-switches remain as the emergency revert path; the pulldown is additive.
+- **Wiring guide updated.** The "Route edges around nodes" section now documents the mode options and the direct/orthogonal trade-off with a mode table. Executable wiring test twin extended with two new mode tests.
+
 ## 1.0.0 (continued): 2026-08-18 (anchor capacity, edge hover, Routing Lab controls)
 
 Three findings from the Routing Lab review, two of them the same root

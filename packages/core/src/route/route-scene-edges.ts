@@ -17,6 +17,7 @@
 
 import {
   routeOrthogonal,
+  polylineIntersectsBoxes,
   type RouteBox,
   type RouteSide,
 } from "./orthogonal-router";
@@ -42,6 +43,14 @@ export interface RouteSceneOptions {
   bendPenalty?: number;
   /** Minimum length of first/last route segment. Default 28. */
   minStub?: number;
+  /**
+   * Routing mode. Default "direct-unless-crossing".
+   * - "direct-unless-crossing": route orthogonally only when the straight
+   *   segment between box centers crosses another node's box; otherwise
+   *   leave the edge unrouted (bezier).
+   * - "always": route every edge orthogonally regardless of obstacles.
+   */
+  mode?: "direct-unless-crossing" | "always";
 }
 
 export interface SceneRoutedEdge {
@@ -93,6 +102,8 @@ export function routeSceneEdges(
   for (const n of nodes) byId.set(n.id, n);
   const routed = new Map<string, { x: number; y: number }[]>();
 
+  const mode = opts.mode ?? "direct-unless-crossing";
+
   for (const e of edges) {
     if (e.source === e.target) continue; // self-loops passed through
     const s = byId.get(e.source);
@@ -105,6 +116,16 @@ export function routeSceneEdges(
     for (const n of nodes) {
       if (n.id === s.id || n.id === t.id) continue;
       obstacles.push({ x: n.x, y: n.y, width: n.width, height: n.height });
+    }
+    // direct-unless-crossing: skip routing when the straight segment
+    // between box centers does not pass through any obstacle box. The
+    // edge stays unrouted (bezier). Only fall through to routeOrthogonal
+    // when the direct shot is blocked OR the mode is "always".
+    if (
+      mode === "direct-unless-crossing" &&
+      !polylineIntersectsBoxes([sc, tc], obstacles)
+    ) {
+      continue;
     }
     const res = routeOrthogonal({
       source: { point: sc, side: sourceSide },

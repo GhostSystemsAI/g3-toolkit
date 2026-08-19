@@ -234,7 +234,10 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   const [size, setSize] = useState<ScenarioSize>("M");
   const [direction, setDirection] = useState<"auto" | "RIGHT" | "DOWN">("auto");
   const [layerGap, setLayerGap] = useState<LayerGap>("default");
-  const [routeEdges, setRouteEdges] = useState(true);
+  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
+    "orthogonal",
+  );
+  const routeEdges = routeMode === "orthogonal";
   // Nudge defaults ON in the lab (owner ruling A35, 2026-08-14) even
   // though the library default is still false: the bench exists to
   // evaluate separation, so the post-pass must be visible by default.
@@ -291,7 +294,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
     [
       dir,
       layerGap,
-      routeEdges,
+      routeMode,
       nudge,
       longEdge,
       anchor,
@@ -310,7 +313,6 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
     () => (scene ? gradeRoutes(scene.input, scene.geometry) : null),
     [scene],
   );
-
 
   /**
    * Clicking the pinned edge again unpins it.
@@ -446,11 +448,16 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
               <label htmlFor="rlab-routes">Routes</label>
               <select
                 id="rlab-routes"
-                value={routeEdges ? "on" : "off"}
-                onChange={(e) => setRouteEdges(e.target.value === "on")}
+                value={routeMode}
+                onChange={(e) =>
+                  setRouteMode(
+                    e.target.value as "direct" | "orthogonal" | "off",
+                  )
+                }
               >
-                <option value="on">Engine-routed</option>
-                <option value="off">Endpoint-only</option>
+                <option value="orthogonal">Orthogonal (always)</option>
+                <option value="direct">Direct (endpoints)</option>
+                <option value="off">Off (bezier)</option>
               </select>
             </span>
             <span>

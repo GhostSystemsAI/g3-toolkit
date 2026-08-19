@@ -226,6 +226,13 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
   const selectedIsStatement =
     selection?.type === "node" &&
     displayUgm.getNode(selection.id)?.properties[RDF_STATEMENT_FLAG] === true;
+  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
+    "direct",
+  );
+  const routeEdgesConfig =
+    routeMode === "off"
+      ? (false as const)
+      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
 
   const enterInterior = (id: string) => {
     setDrill((d) => [...d, id]);
@@ -272,10 +279,34 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
             annotation edges
           </span>
         </div>
+        <label
+          style={{
+            marginLeft: "auto",
+            fontSize: 12,
+            display: "flex",
+            gap: 6,
+            alignItems: "center",
+            color: "#8b949e",
+          }}
+        >
+          Routes
+          <select
+            data-testid="rdf12-route-mode"
+            value={routeMode}
+            onChange={(e) =>
+              setRouteMode(e.target.value as "direct" | "orthogonal" | "off")
+            }
+            style={{ fontSize: 12 }}
+          >
+            <option value="direct">Direct (auto-Z)</option>
+            <option value="orthogonal">Orthogonal (always)</option>
+            <option value="off">Off (bezier)</option>
+          </select>
+        </label>
         <div
           role="tablist"
           aria-label="Render mode"
-          style={{ marginLeft: "auto", display: "flex", gap: 6 }}
+          style={{ display: "flex", gap: 6 }}
         >
           {(["hyperarc", "asserted"] as const).map((m) => (
             <button
@@ -483,7 +514,7 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
               stylesheet={stylesheet}
               onReady={publishCanvas("rdf12")}
               animate={!reducedMotion}
-              routeEdges
+              routeEdges={routeEdgesConfig}
             />
           </div>
           <div style={{ padding: 12 }}>

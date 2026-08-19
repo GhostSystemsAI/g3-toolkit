@@ -972,6 +972,49 @@ describe("routeEdges (guide: Route edges around nodes on any layout)", () => {
     expect(seg.distances.length).toBe(seg.weights.length);
     expect(seg.distances.length).toBeGreaterThan(0);
   });
+
+  it("mode: direct — clear edge left as bezier, crossing edge routed", () => {
+    // Verifies the prop API documented in the wiring guide:
+    //   routeEdges={{ mode: "direct" }} (the default)
+    // Clear A -> B (no obstacle between them) → not routed (stays bezier).
+    const clearNodes = [
+      { id: "a", x: 0, y: 0, width: 40, height: 40 },
+      { id: "b", x: 200, y: 200, width: 40, height: 40 },
+    ];
+    const { routed: clearRouted } = routeSceneEdges(
+      clearNodes,
+      [{ id: "e", source: "a", target: "b" }],
+      { mode: "direct-unless-crossing" },
+    );
+    expect(clearRouted.has("e")).toBe(false);
+
+    // A -> B with an obstacle on the straight path → must route.
+    const blockedNodes = [
+      { id: "a", x: 0, y: 40, width: 40, height: 40 },
+      { id: "obst", x: 100, y: 0, width: 60, height: 200 },
+      { id: "b", x: 240, y: 40, width: 40, height: 40 },
+    ];
+    const { routed: blockedRouted } = routeSceneEdges(
+      blockedNodes,
+      [{ id: "e", source: "a", target: "b" }],
+      { mode: "direct-unless-crossing" },
+    );
+    expect(blockedRouted.has("e")).toBe(true);
+  });
+
+  it("mode: always — routes every edge regardless of crossing", () => {
+    // Verifies routeEdges={{ mode: "orthogonal" }} (mapped to "always" in core).
+    const nodes = [
+      { id: "a", x: 0, y: 0, width: 40, height: 40 },
+      { id: "b", x: 200, y: 0, width: 40, height: 40 },
+    ];
+    const { routed } = routeSceneEdges(
+      nodes,
+      [{ id: "e", source: "a", target: "b" }],
+      { mode: "always" },
+    );
+    expect(routed.has("e")).toBe(true);
+  });
 });
 
 describe("holon boundary (guide: Holon boundary views)", () => {

@@ -218,6 +218,14 @@ export function StyleLabShell({
     return { rows, checks };
   }, [legacyCy, engineCy]);
 
+  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
+    "direct",
+  );
+  const routeEdgesConfig =
+    routeMode === "off"
+      ? (false as const)
+      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+
   const lodContext = LOD_CONTEXTS[lodIndex] ?? LOD_CONTEXTS[0];
   const lod = resolveLod(DEFAULT_LOD_SCHEDULE, {
     zoom: lodContext.zoom,
@@ -275,6 +283,28 @@ export function StyleLabShell({
           engine-plus-bypass path (right), with the parity computed live from
           cytoscape&apos;s own resolved styles.
         </p>
+        <label
+          style={{
+            fontSize: 12,
+            display: "flex",
+            gap: 4,
+            alignItems: "center",
+          }}
+        >
+          Routes
+          <select
+            data-testid="style-lab-route-mode"
+            value={routeMode}
+            onChange={(e) =>
+              setRouteMode(e.target.value as "direct" | "orthogonal" | "off")
+            }
+            style={{ fontSize: 12 }}
+          >
+            <option value="direct">Direct (auto-Z)</option>
+            <option value="orthogonal">Orthogonal (always)</option>
+            <option value="off">Off (bezier)</option>
+          </select>
+        </label>
       </header>
 
       <div style={{ display: "flex", gap: 16 }}>
@@ -293,7 +323,7 @@ export function StyleLabShell({
               layout="grid"
               onReady={onLegacyReady}
               animate={false}
-              routeEdges={ROUTE_EDGES}
+              routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
             />
           </div>
         </section>
@@ -312,7 +342,7 @@ export function StyleLabShell({
               layout="grid"
               onReady={onEngineReady}
               animate={false}
-              routeEdges={ROUTE_EDGES}
+              routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
             />
           </div>
         </section>

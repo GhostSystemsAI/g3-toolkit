@@ -245,7 +245,13 @@ const HOLON_STYLESHEET: CyStylesheet[] = [
   },
 ];
 
-function HubPanel({ spread }: { spread: boolean }) {
+function HubPanel({
+  spread,
+  routeEdges,
+}: {
+  spread: boolean;
+  routeEdges?: boolean | { mode?: "direct" | "orthogonal" };
+}) {
   const raw = useMemo(() => buildHubFixture(), []);
   const ugm = useMemo(
     () => (spread ? hubBurst(raw, { k: 6 }).ugm : raw),
@@ -256,11 +262,18 @@ function HubPanel({ spread }: { spread: boolean }) {
       testId="legibility-hub-canvas"
       ugm={ugm}
       stylesheet={PSEUDO_STYLESHEET}
+      routeEdges={routeEdges}
     />
   );
 }
 
-function BusPanel({ spread }: { spread: boolean }) {
+function BusPanel({
+  spread,
+  routeEdges,
+}: {
+  spread: boolean;
+  routeEdges?: boolean | { mode?: "direct" | "orthogonal" };
+}) {
   const raw = useMemo(() => buildBusFixture(), []);
   const ugm = useMemo(
     () => (spread ? busCollapse(raw, { kBus: 3 }).ugm : raw),
@@ -271,11 +284,18 @@ function BusPanel({ spread }: { spread: boolean }) {
       testId="legibility-bus-canvas"
       ugm={ugm}
       stylesheet={PSEUDO_STYLESHEET}
+      routeEdges={routeEdges}
     />
   );
 }
 
-function HolonPanel({ view }: { view: HolonView }) {
+function HolonPanel({
+  view,
+  routeEdges,
+}: {
+  view: HolonView;
+  routeEdges?: boolean | { mode?: "direct" | "orthogonal" };
+}) {
   const adapter = useMemo(() => new HolonicAdapter(LEGIBILITY_HOLONS), []);
   const ugm = useMemo(() => {
     const holon = adapter.dataset.holons[0];
@@ -300,6 +320,7 @@ function HolonPanel({ view }: { view: HolonView }) {
       ugm={ugm}
       stylesheet={HOLON_STYLESHEET}
       containment={containment}
+      routeEdges={routeEdges}
     />
   );
 }
@@ -309,11 +330,13 @@ function PanelCanvas({
   stylesheet,
   containment,
   testId,
+  routeEdges,
 }: {
   ugm: UGM;
   stylesheet: CyStylesheet[];
   containment?: { edgeType: string; direction: "parentToChild" };
   testId: string;
+  routeEdges?: boolean | { mode?: "direct" | "orthogonal" };
 }) {
   // Capture the live cy so a projection change (raw ↔ spread) can
   // restore pan/zoom across the required re-init: hubBurst/busCollapse
@@ -343,7 +366,7 @@ function PanelCanvas({
         containment={containment}
         onReady={onReady}
         animate={false}
-        routeEdges
+        routeEdges={routeEdges ?? true}
       />
     </div>
   );
@@ -375,6 +398,13 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
   const [hubSpread, setHubSpread] = useState(true);
   const [busSpread, setBusSpread] = useState(true);
   const [holonView, setHolonView] = useState<HolonView>("boundary");
+  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
+    "direct",
+  );
+  const routeEdgesConfig =
+    routeMode === "off"
+      ? (false as const)
+      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
   const active = PANELS.find((p) => p.id === panel) ?? PANELS[0];
 
   return (
@@ -409,31 +439,64 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
       </header>
 
       <div
-        role="tablist"
-        data-testid="legibility-tabs"
-        style={{ display: "flex", gap: 6 }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
       >
-        {PANELS.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            role="tab"
-            aria-selected={panel === p.id}
-            data-testid={`legibility-tab-${p.id}`}
-            onClick={() => setPanel(p.id)}
-            style={{
-              padding: "6px 12px",
-              background: panel === p.id ? ACCENT : "transparent",
-              color: panel === p.id ? "#0b1120" : "#cbd5e1",
-              border: `1px solid ${panel === p.id ? ACCENT : "#334155"}`,
-              borderRadius: 4,
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
+        <div
+          role="tablist"
+          data-testid="legibility-tabs"
+          style={{ display: "flex", gap: 6 }}
+        >
+          {PANELS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              role="tab"
+              aria-selected={panel === p.id}
+              data-testid={`legibility-tab-${p.id}`}
+              onClick={() => setPanel(p.id)}
+              style={{
+                padding: "6px 12px",
+                background: panel === p.id ? ACCENT : "transparent",
+                color: panel === p.id ? "#0b1120" : "#cbd5e1",
+                border: `1px solid ${panel === p.id ? ACCENT : "#334155"}`,
+                borderRadius: 4,
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <label
+          style={{
+            fontSize: 12,
+            display: "flex",
+            gap: 4,
+            alignItems: "center",
+            color: "#94a3b8",
+            marginLeft: "auto",
+          }}
+        >
+          Routes
+          <select
+            data-testid="legibility-route-mode"
+            value={routeMode}
+            onChange={(e) =>
+              setRouteMode(e.target.value as "direct" | "orthogonal" | "off")
+            }
+            style={{ fontSize: 12 }}
           >
-            {p.label}
-          </button>
-        ))}
+            <option value="direct">Direct (auto-Z)</option>
+            <option value="orthogonal">Orthogonal (always)</option>
+            <option value="off">Off (bezier)</option>
+          </select>
+        </label>
       </div>
 
       <p style={{ margin: "4px 0 0", fontSize: 13, color: "#cbd5e1" }}>
@@ -449,7 +512,7 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
             onChange={setHubSpread}
           />
           <Legend items={HUB_LEGEND} />
-          <HubPanel spread={hubSpread} />
+          <HubPanel spread={hubSpread} routeEdges={routeEdgesConfig} />
         </>
       )}
       {panel === "bus" && (
@@ -461,7 +524,7 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
             onChange={setBusSpread}
           />
           <Legend items={BUS_LEGEND} />
-          <BusPanel spread={busSpread} />
+          <BusPanel spread={busSpread} routeEdges={routeEdgesConfig} />
         </>
       )}
       {panel === "holon" && (
@@ -489,7 +552,7 @@ export function LegibilityShell({ onBack }: { onBack?: () => void } = {}) {
             ))}
           </div>
           <Legend items={HOLON_LEGEND} />
-          <HolonPanel view={holonView} />
+          <HolonPanel view={holonView} routeEdges={routeEdgesConfig} />
         </>
       )}
 

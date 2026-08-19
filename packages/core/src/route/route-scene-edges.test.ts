@@ -141,6 +141,62 @@ describe("routeSceneEdges", () => {
     expect(routed.has("dangling")).toBe(false);
   });
 
+  it("direct-unless-crossing: clear diagonal edge is NOT routed", () => {
+    const nodes: SceneNodeBox[] = [
+      { id: "a", x: 0, y: 0, width: 40, height: 40 },
+      { id: "b", x: 200, y: 200, width: 40, height: 40 },
+    ];
+    const { routed } = routeSceneEdges(
+      nodes,
+      [{ id: "e1", source: "a", target: "b" }],
+      { mode: "direct-unless-crossing" },
+    );
+    // No obstacle between a and b; direct shot is clear → leave unrouted.
+    expect(routed.has("e1")).toBe(false);
+  });
+
+  it("direct-unless-crossing: edge crossing an obstacle IS routed", () => {
+    const nodes: SceneNodeBox[] = [
+      { id: "a", x: 0, y: 40, width: 40, height: 40 },
+      { id: "obst", x: 100, y: 0, width: 60, height: 200 },
+      { id: "b", x: 240, y: 40, width: 40, height: 40 },
+    ];
+    const { routed } = routeSceneEdges(
+      nodes,
+      [{ id: "e1", source: "a", target: "b" }],
+      { mode: "direct-unless-crossing" },
+    );
+    // Direct shot from a to b passes through obst → must route around it.
+    const pts = routed.get("e1");
+    expect(pts).toBeDefined();
+    if (pts) expect(pts.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("mode 'always': routes even a clear edge", () => {
+    const nodes: SceneNodeBox[] = [
+      { id: "a", x: 0, y: 0, width: 40, height: 40 },
+      { id: "b", x: 200, y: 0, width: 40, height: 40 },
+    ];
+    const { routed } = routeSceneEdges(
+      nodes,
+      [{ id: "e1", source: "a", target: "b" }],
+      { mode: "always" },
+    );
+    // Always mode: routes the edge even though no obstacles intervene.
+    expect(routed.has("e1")).toBe(true);
+  });
+
+  it("default (no mode) == direct-unless-crossing: clear edge unrouted", () => {
+    const nodes: SceneNodeBox[] = [
+      { id: "a", x: 0, y: 0, width: 40, height: 40 },
+      { id: "b", x: 200, y: 200, width: 40, height: 40 },
+    ];
+    const { routed } = routeSceneEdges(nodes, [
+      { id: "e1", source: "a", target: "b" },
+    ]);
+    expect(routed.has("e1")).toBe(false);
+  });
+
   it("handles dense scenes above the router's 64-obstacle pruning threshold", () => {
     const nodes: SceneNodeBox[] = [
       { id: "a", x: 0, y: 500, width: 40, height: 40 },
@@ -160,9 +216,14 @@ describe("routeSceneEdges", () => {
         height: 20,
       });
     }
-    const { routed } = routeSceneEdges(nodes, [
-      { id: "e1", source: "a", target: "b" },
-    ]);
+    // Use mode:"always" to exercise the router even though the direct
+    // path is clear (filler boxes are well above y=500); verifies the
+    // router handles >64 obstacles without crashing.
+    const { routed } = routeSceneEdges(
+      nodes,
+      [{ id: "e1", source: "a", target: "b" }],
+      { mode: "always" },
+    );
     expect(routed.has("e1")).toBe(true);
   });
 });

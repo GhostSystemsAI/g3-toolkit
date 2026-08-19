@@ -297,6 +297,13 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
   // 9.28: starts collapsed per Zach's pass; the header row with the
   // live count remains the affordance.
   const [dockOpen, setDockOpen] = useState(false);
+  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
+    "direct",
+  );
+  const routeEdgesConfig =
+    routeMode === "off"
+      ? (false as const)
+      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
 
   // ── Projections ──────────────────────────────────────────────────
   const hierUgm = useMemo(
@@ -649,6 +656,30 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                 alignItems: "center",
               }}
             >
+              Routes
+              <select
+                data-testid="ow-route-mode"
+                value={routeMode}
+                onChange={(e) =>
+                  setRouteMode(
+                    e.target.value as "direct" | "orthogonal" | "off",
+                  )
+                }
+                style={{ fontSize: 11 }}
+              >
+                <option value="direct">Direct (auto-Z)</option>
+                <option value="orthogonal">Orthogonal (always)</option>
+                <option value="off">Off (bezier)</option>
+              </select>
+            </label>
+            <label
+              style={{
+                fontSize: 11,
+                display: "flex",
+                gap: 4,
+                alignItems: "center",
+              }}
+            >
               <input
                 data-testid="ow-inference-toggle"
                 type="checkbox"
@@ -734,7 +765,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                     layout={inferenceOn ? "fcose" : "breadthfirst"}
                     onReady={setViewCore}
                     animate={!reducedMotion}
-                    routeEdges
+                    routeEdges={routeEdgesConfig}
                   />
                 </div>
               </>
@@ -807,7 +838,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                         }
                         onReady={setViewCore}
                         animate={!reducedMotion}
-                        routeEdges
+                        routeEdges={routeEdgesConfig}
                       />
                       <FloatingLegend
                         ugm={neighborhood}
@@ -877,7 +908,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                     stylesheet={MULTI_TYPE_PIE_RULES}
                     onReady={setViewCore}
                     animate={!reducedMotion}
-                    routeEdges
+                    routeEdges={routeEdgesConfig}
                   />
                   <FloatingLegend
                     ugm={instUgm}
@@ -1035,7 +1066,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                         : undefined
                     }
                     animate={!reducedMotion}
-                    routeEdges
+                    routeEdges={routeEdgesConfig}
                   />
                 </div>
               </>

@@ -890,6 +890,13 @@ export interface CytoscapeCanvasProps {
         clearance?: number;
         bendPenalty?: number;
         minStub?: number;
+        /**
+         * Routing mode. Default "direct" (route only edges whose straight
+         * segment crosses a node box). "orthogonal" routes every edge
+         * axis-aligned regardless of obstacles; "direct" (the default) leaves
+         * clear edges as bezier and only detours around actual crossings.
+         */
+        mode?: "direct" | "orthogonal";
       };
 }
 
@@ -913,6 +920,7 @@ export function runCanvasEdgeRouting(
     clearance?: number;
     bendPenalty?: number;
     minStub?: number;
+    mode?: "direct-unless-crossing" | "always";
   },
   incidentTo?: string,
 ): { skipped: boolean; routedCount: number } {
@@ -957,6 +965,7 @@ export function runCanvasEdgeRouting(
     clearance: opts.clearance,
     bendPenalty: opts.bendPenalty,
     minStub: opts.minStub,
+    mode: opts.mode,
   });
   let routedCount = 0;
   cy.batch(() => {
@@ -1663,8 +1672,17 @@ export function CytoscapeCanvas({
     if (routeConfig && !structural) {
       const cfg =
         routeConfig === true
-          ? { maxEdges: 600 }
-          : { maxEdges: routeConfig.maxEdges ?? 600, ...routeConfig };
+          ? { maxEdges: 600, mode: "direct-unless-crossing" as const }
+          : {
+              maxEdges: routeConfig.maxEdges ?? 600,
+              clearance: routeConfig.clearance,
+              bendPenalty: routeConfig.bendPenalty,
+              minStub: routeConfig.minStub,
+              mode:
+                routeConfig.mode === "orthogonal"
+                  ? ("always" as const)
+                  : ("direct-unless-crossing" as const),
+            };
       let routingGeneration = 0;
       let warnedScale = false;
       const runPass = (incidentTo?: string): void => {
@@ -1897,8 +1915,17 @@ export function CytoscapeCanvas({
       if (!layoutSettledRef.current) return;
       const cfg =
         routeEdges === true
-          ? { maxEdges: 600 }
-          : { maxEdges: routeEdges.maxEdges ?? 600, ...routeEdges };
+          ? { maxEdges: 600, mode: "direct-unless-crossing" as const }
+          : {
+              maxEdges: routeEdges.maxEdges ?? 600,
+              clearance: routeEdges.clearance,
+              bendPenalty: routeEdges.bendPenalty,
+              minStub: routeEdges.minStub,
+              mode:
+                routeEdges.mode === "orthogonal"
+                  ? ("always" as const)
+                  : ("direct-unless-crossing" as const),
+            };
       runCanvasEdgeRouting(cy, cfg);
     } else {
       // Clear any previously stamped routing data so edges revert.
