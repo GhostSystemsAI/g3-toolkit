@@ -208,9 +208,9 @@
             Ten surfaces driving the graph canvas: Provenance Auditor, MBSE
             Satellite Workbench, Supply Chain Digital Thread, Biomedical
             Knowledge Graph, Analytics Dashboard, Scale, Routing Lab, RDF 1.2
-            Hyperarcs, Legibility Lab, Ontology Workbench. Style Lab is
-            dev-only and Scale is deployment-only, so <code>pnpm run
-            dev</code> shows a different set.
+            Hyperarcs, Legibility Lab, Ontology Workbench. Style Lab is dev-only
+            and Scale is deployment-only, so <code>pnpm run dev</code> shows a
+            different set.
             <!-- SURFACES:END -->
           </p>
         </a>
@@ -261,7 +261,9 @@
 pnpm add @g3t/core @g3t/react react react-dom \
   cytoscape cytoscape-fcose zustand echarts</pre>
 
-      <pre data-snippet="tsx"><span style="color:var(--muted)">// Minimal graph render</span>
+      <pre
+        data-snippet="tsx"
+      ><span style="color:var(--muted)">// Minimal graph render</span>
 import { UGM } from "@g3t/core";
 import { CytoscapeCanvas } from "@g3t/react";
 <span style="color:var(--muted)">// Required: the packages ship CSS as a separate file and do not
@@ -315,7 +317,8 @@ function App() {
       </div>
 
       <footer>
-        Apache-2.0 · Built with TypeDoc + Storybook · Deployed via GitHub Pages
+        Apache-2.0 · v__VERSION__ · __BUILD_SHA__ · built __BUILD_DATE__ · Built
+        with TypeDoc + Storybook · Deployed via GitHub Pages
       </footer>
     </div>
   </body>
