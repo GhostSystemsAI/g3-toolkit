@@ -84,6 +84,7 @@
     "layoutStructural",
     "layoutStructuralWithChangeSet",
     "localName",
+    "optimizePlacement",
     "overlayFromPath",
     "overridesToCytoscapeStyles",
     "overridesToStructuralStyles",

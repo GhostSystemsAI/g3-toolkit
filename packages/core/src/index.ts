@@ -443,6 +443,13 @@ export {
 } from "./model/document-errors";
 export type { DocumentKind, DocumentErrorCode } from "./model/document-errors";
 export { layoutStructuralWithChangeSet } from "./layout/change-driven-layout";
+export { optimizePlacement } from "./layout/crossing-aware-placement";
+export type {
+  PlacementNode,
+  PlacementEdge,
+  OptimizePlacementOptions,
+  PlacementResult,
+} from "./layout/crossing-aware-placement";
 export type {
   ChangeDrivenLayoutResult,
   ChangeDrivenLayoutOptions,
