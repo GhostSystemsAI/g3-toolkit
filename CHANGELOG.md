@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.3: 2026-08-19 (scene-route shear fix: label-inclusive bounding boxes)
+
+**Bugfix — routed edges rendered with sheared, non-orthogonal corners and
+cut back across node bodies (Bio / Scale / Provenance Auditor / Supply
+Chain).** `runCanvasEdgeRouting` and `runCanvasRelayout` read
+`n.boundingBox()` with defaults, which INCLUDE the rendered label.
+Node labels sit below the node (`text-valign: bottom`, wrapped at
+110px), so each box center sat below the node's actual position.
+Cytoscape renders `curve-style: segments` relative to the node
+POSITIONS, so every interior bend point was projected against a
+displaced source→target line: orthogonal Z-routes rendered as diagonal
+"triangle" jogs, and detours computed around invisible label
+rectangles appeared to route over the node itself. The wrap change of
+2026-08-14 (multi-line labels) made the displacement large, and the
+direct-unless-crossing default (brief 19) made it conspicuous by
+mixing straight beziers with the sheared detours. Both passes now read
+`boundingBox({ includeLabels: false, includeOverlays: false })`: route
+terminals coincide with node positions (exact segment projection) and
+the relayout write-back no longer drifts nodes downward by half the
+label height per press. Trade-off: edges may once again cross label
+text (the pre-wrap behavior); label-aware obstacle boxes would need a
+separate anchor model and are not attempted here.
+
 ## 1.0.0 (continued): 2026-08-19 (Routing Explained DEV shell, brief 20)
 
 **Brief 20 — "Routing Explained" DEV-only explainer shell.**

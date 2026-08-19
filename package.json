@@ -1,6 +1,6 @@
 {
   "name": "g3-toolkit",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A composable, paradigm-neutral graph visualization toolkit for RDF, LPG, and Holonic architectures.",
   "type": "module",
   "license": "Apache-2.0",

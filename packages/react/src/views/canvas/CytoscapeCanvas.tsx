@@ -967,7 +967,12 @@ export function runCanvasEdgeRouting(
     // boxes already cover the interior, so excluding them keeps edges
     // from bending around empty container geometry.
     if (n.isParent()) return;
-    const bb = n.boundingBox();
+    // Labels MUST be excluded: cytoscape renders `curve-style: segments`
+    // relative to the node POSITIONS (body centers), so route terminals
+    // must be body-box centers. A label-inclusive box (labels sit below
+    // the node) shifts the center off the position and shears every bend
+    // point when the polyline is projected onto segment weights.
+    const bb = n.boundingBox({ includeLabels: false, includeOverlays: false });
     nodeBoxes.push({
       id: n.id(),
       x: bb.x1,
@@ -1044,7 +1049,10 @@ export function runCanvasRelayout(
   const nodes: PlacementNode[] = [];
   cy.nodes(":visible").forEach((n) => {
     if (n.isParent()) return;
-    const bb = n.boundingBox();
+    // Body box only: the write-back below maps box center -> position(),
+    // so a label-inclusive box would drift every node downward by half
+    // the label height on each relayout press.
+    const bb = n.boundingBox({ includeLabels: false, includeOverlays: false });
     nodes.push({
       id: n.id(),
       x: bb.x1,
