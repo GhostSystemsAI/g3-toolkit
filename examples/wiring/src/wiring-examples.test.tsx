@@ -42,6 +42,7 @@ import {
   buildSubgraph,
   bundleEdges,
   bundledPolylineToSegments,
+  optimizePlacement,
   G3tEventBus,
   HolonicAdapter,
   projectTripleTermsAsEdges,
@@ -72,6 +73,7 @@ import {
   createTheme,
   createCameraController,
   labelWrapRule,
+  useEmphasisStore,
   ProvenanceTrace,
   Minimap,
   createDefaultMenuManager,
@@ -1014,6 +1016,46 @@ describe("routeEdges (guide: Route edges around nodes on any layout)", () => {
       { mode: "always" },
     );
     expect(routed.has("e")).toBe(true);
+  });
+});
+
+describe("refresh routes / re-layout / edge isolate (guide: Refresh routes / re-layout / isolate an edge)", () => {
+  it("optimizePlacement reduces (or preserves) crossings — the primitive relayoutSignal drives", () => {
+    // Four nodes wired as a K(2,2) storm: the two "cross" edges intersect
+    // on straight lines. optimizePlacement is what the CytoscapeCanvas
+    // relayoutSignal effect calls under the hood.
+    const nodes = [
+      { id: "a", x: 0, y: 0, width: 40, height: 40 },
+      { id: "b", x: 200, y: 0, width: 40, height: 40 },
+      { id: "c", x: 0, y: 200, width: 40, height: 40 },
+      { id: "d", x: 200, y: 200, width: 40, height: 40 },
+    ];
+    const edges = [
+      { id: "e1", source: "a", target: "d" },
+      { id: "e2", source: "b", target: "c" },
+    ];
+    const result = optimizePlacement(nodes, edges, { budgetMs: 50, seed: 7 });
+    expect(result.crossingsAfter).toBeLessThanOrEqual(result.crossingsBefore);
+    // Positions returned for every node (id set preserved — the canvas
+    // relies on this to apply positions without re-init).
+    for (const n of nodes) expect(result.positions.has(n.id)).toBe(true);
+  });
+
+  it("useEmphasisStore.setPathEffect / clear is the isolate contract (edgeClickIsolate)", () => {
+    // With edgeClickIsolate on, an edge tap calls setPathEffect for that
+    // single edge; a repeat tap (or a background tap) calls clear. The
+    // canvas talks to this exact store shape.
+    const store = useEmphasisStore.getState();
+    store.clear();
+    store.setPathEffect([], ["e-42"], "e-42");
+    const s1 = useEmphasisStore.getState();
+    expect(s1.active).toBe(true);
+    expect(s1.emphasizedEdgeIds.has("e-42")).toBe(true);
+    expect(s1.emphasizedEdgeIds.size).toBe(1);
+    useEmphasisStore.getState().clear();
+    const s2 = useEmphasisStore.getState();
+    expect(s2.active).toBe(false);
+    expect(s2.emphasizedEdgeIds.size).toBe(0);
   });
 });
 

@@ -239,6 +239,43 @@ The pass runs on every `layoutstop` (subject to the `maxEdges` cap) and on
 re-init: camera and positions hold. Edges that fail to route (or whose
 polyline is straight) revert to bezier without phantom polylines.
 
+### Refresh routes / re-layout / isolate an edge
+
+Three developer ops that live on `CytoscapeCanvas` as counter-based signal
+props (host bumps the number, canvas fires on real change) plus an opt-in edge
+tap mode. Signals are per-instance — no global command bus — so several
+canvases on a page respond only to their own bumps.
+
+| Prop                          | What it does                                                                                                                                                                                                                             |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `routeRefreshSignal?: number` | Re-runs the routing pass on the **current** node positions without moving any node. Use after a manual drag to clean up incident and neighbor edges. No-op when `routeEdges` is off/undefined or the scene is structural.                |
+| `relayoutSignal?: number`     | Runs the crossing-aware placement optimizer over the visible scene, applies the returned positions, then re-runs routing. An explicit user op — this MOVES nodes; camera hold does not apply (same class as reheat). Non-structural.     |
+| `edgeClickIsolate?: boolean`  | When true, tapping an edge isolates it via the emphasis layer (dims everything else, highlights the tapped line). Tapping the same edge or the background clears the isolate. Off by default so existing canvases keep click-to-select.  |
+
+```tsx
+import { useState } from "react";
+import { CytoscapeCanvas } from "@g3t/react";
+
+export function CanvasWithOps({ ugm }) {
+  const [refresh, setRefresh] = useState(0);
+  const [relayout, setRelayout] = useState(0);
+  return (
+    <>
+      <button onClick={() => setRefresh((n) => n + 1)}>Refresh routes</button>
+      <button onClick={() => setRelayout((n) => n + 1)}>Untangle</button>
+      <CytoscapeCanvas
+        ugm={ugm}
+        routeEdges
+        edgeClickIsolate
+        routeRefreshSignal={refresh}
+        relayoutSignal={relayout}
+      />
+    </>
+  );
+}
+```
+
+
 ### Register an algorithm result from your backend
 
 ```tsx

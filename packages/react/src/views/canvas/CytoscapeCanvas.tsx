@@ -144,8 +144,11 @@ import {
   prefersReducedMotion,
   routeSceneEdges,
   polylineToCytoscapeSegments,
+  optimizePlacement,
   type SceneEdgeEndpoints,
   type SceneNodeBox,
+  type PlacementNode,
+  type PlacementEdge,
 } from "@g3t/core";
 
 export type CyStylesheet = cytoscape.StylesheetCSS | cytoscape.StylesheetStyle;
@@ -898,6 +901,31 @@ export interface CytoscapeCanvasProps {
          */
         mode?: "direct" | "orthogonal";
       };
+  /**
+   * Refresh-routes signal (brief 23, A54). Bump this counter to re-run the
+   * obstacle-aware routing pass over ALL visible edges on the CURRENT node
+   * positions, without moving any node. Explicit user op (a "Refresh routes"
+   * button). No-op when `routeEdges` is off/undefined or the scene is
+   * structural. Uses signal-counter semantics for multi-instance safety: no
+   * global command store, each canvas responds only to its own prop bump.
+   */
+  routeRefreshSignal?: number;
+  /**
+   * Re-layout (untangle) signal (brief 23, A54). Bump this counter to run
+   * the crossing-aware placement optimizer on the current visible scene,
+   * apply the returned positions, then re-run the routing pass. Explicit
+   * user op — the camera/position-hold rule does NOT apply here (same
+   * class as reheat/fit/zoom). Non-structural scenes only.
+   */
+  relayoutSignal?: number;
+  /**
+   * When true, an edge tap isolates that edge via the emphasis layer
+   * (`useEmphasisStore.setPathEffect`) instead of firing a plain
+   * selection. Tapping the currently-isolated edge again, or the
+   * background, clears the isolate. Opt-in; default false so existing
+   * canvases keep click-to-select. Brief 23 (A54).
+   */
+  edgeClickIsolate?: boolean;
 }
 
 /** ROUTE_EDGES pass (routeEdges prop). Reads current node bounding boxes
@@ -990,6 +1018,70 @@ export function runCanvasEdgeRouting(
     });
   });
   return { skipped: false, routedCount };
+}
+
+/** Re-layout (untangle) pass (relayoutSignal prop, brief 23). Reads current
+ *  visible node boxes + visible edge endpoint pairs from the live cy, runs
+ *  the pure `optimizePlacement` optimizer, and applies the returned
+ *  positions inside `cy.batch()`. Skipped on structural scenes (they carry
+ *  their own placement pipeline). The optimizer returns box TOP-LEFT
+ *  coordinates (same convention as MetricsNode); Cytoscape's node.position()
+ *  is CENTER, so we translate by half-extent on write. Pure with respect to
+ *  the graph: node id set is preserved (reposition only). Exported for
+ *  direct unit-testing against a fake cy. */
+export function runCanvasRelayout(
+  cy: Core,
+  opts?: { budgetMs?: number; seed?: number },
+): {
+  skipped: boolean;
+  moved: number;
+  crossingsBefore: number;
+  crossingsAfter: number;
+} {
+  if (cy.edges(".g3t-structural-edge-routed").length > 0) {
+    return { skipped: true, moved: 0, crossingsBefore: 0, crossingsAfter: 0 };
+  }
+  const nodes: PlacementNode[] = [];
+  cy.nodes(":visible").forEach((n) => {
+    if (n.isParent()) return;
+    const bb = n.boundingBox();
+    nodes.push({
+      id: n.id(),
+      x: bb.x1,
+      y: bb.y1,
+      width: bb.w,
+      height: bb.h,
+    });
+  });
+  const edges: PlacementEdge[] = [];
+  cy.edges(":visible").forEach((e) => {
+    const d = e.data() as { id?: string; source?: string; target?: string };
+    if (d.id && d.source && d.target) {
+      edges.push({ id: d.id, source: d.source, target: d.target });
+    }
+  });
+  const result = optimizePlacement(nodes, edges, {
+    budgetMs: opts?.budgetMs ?? 350,
+    ...(opts?.seed !== undefined ? { seed: opts.seed } : {}),
+  });
+  let moved = 0;
+  cy.batch(() => {
+    for (const n of nodes) {
+      const p = result.positions.get(n.id);
+      if (!p) continue;
+      if (p.x !== n.x || p.y !== n.y) moved++;
+      cy.getElementById(n.id).position({
+        x: p.x + n.width / 2,
+        y: p.y + n.height / 2,
+      });
+    }
+  });
+  return {
+    skipped: false,
+    moved,
+    crossingsBefore: result.crossingsBefore,
+    crossingsAfter: result.crossingsAfter,
+  };
 }
 
 /** Apply the visibility filter as a batched class toggle: hidden nodes
@@ -1096,6 +1188,9 @@ export function CytoscapeCanvas({
   structuralEdgeLayer = "cytoscape",
   hidden,
   routeEdges,
+  routeRefreshSignal,
+  relayoutSignal,
+  edgeClickIsolate = false,
 }: CytoscapeCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -1168,6 +1263,11 @@ export function CytoscapeCanvas({
   const routeEdgesRef = useRef(routeEdges);
   // eslint-disable-next-line react-hooks/refs
   routeEdgesRef.current = routeEdges;
+  // Live prop reads from within listeners attached once at init (edge/bg
+  // tap handlers). Prop changes must not require a canvas re-init.
+  const edgeClickIsolateRef = useRef(edgeClickIsolate);
+  // eslint-disable-next-line react-hooks/refs
+  edgeClickIsolateRef.current = edgeClickIsolate;
   // True once layoutstop has fired on the current cy instance; guards
   // the prop-change effect from routing against pre-layout positions
   // during a graph rebuild (init effect and the change effect both
@@ -1563,12 +1663,31 @@ export function CytoscapeCanvas({
     });
 
     cy.on("tap", "edge", (evt) => {
-      selectEdges([evt.target.id()]);
+      const id = evt.target.id();
+      // Brief 23 (A54): edgeClickIsolate lights the tapped edge via the
+      // emphasis layer; tapping the currently-isolated edge again clears.
+      // Single-edge check because the isolate contract is one-edge-at-a-time
+      // (setPathEffect over a multi-edge set is a different affordance).
+      if (edgeClickIsolateRef.current) {
+        const st = useEmphasisStore.getState();
+        const emph = st.emphasizedEdgeIds;
+        if (emph.size === 1 && emph.has(id)) {
+          st.clear();
+        } else {
+          st.setPathEffect([], [id], id);
+        }
+        return;
+      }
+      selectEdges([id]);
     });
 
-    // Background tap clears selection
+    // Background tap clears selection AND any active isolate (brief 23).
     cy.on("tap", (evt) => {
       if (evt.target === cy) {
+        if (edgeClickIsolateRef.current) {
+          const st = useEmphasisStore.getState();
+          if (st.active) st.clear();
+        }
         clearSelection();
       }
     });
@@ -1939,6 +2058,68 @@ export function CytoscapeCanvas({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeEdgesKey, ugm]);
+
+  // Refresh routes (brief 23, A54): explicit re-run of the routing pass
+  // on CURRENT node boxes. Signal-counter API: host bumps the number, we
+  // fire on real change. No-op when routing is off or the scene is
+  // structural (runCanvasEdgeRouting itself guards structural). We skip
+  // the initial mount (lastSignalRef seeded to the first value) so mount
+  // does not double-fire against the init effect's layoutstop handler.
+  const lastRouteRefreshSignalRef = useRef(routeRefreshSignal);
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    if (routeRefreshSignal === lastRouteRefreshSignalRef.current) return;
+    lastRouteRefreshSignalRef.current = routeRefreshSignal;
+    const cfg = routeEdgesRef.current;
+    if (!cfg) return;
+    const opts =
+      cfg === true
+        ? { maxEdges: 600, mode: "direct-unless-crossing" as const }
+        : {
+            maxEdges: cfg.maxEdges ?? 600,
+            clearance: cfg.clearance,
+            bendPenalty: cfg.bendPenalty,
+            minStub: cfg.minStub,
+            mode:
+              cfg.mode === "orthogonal"
+                ? ("always" as const)
+                : ("direct-unless-crossing" as const),
+          };
+    runCanvasEdgeRouting(cy, opts);
+  }, [routeRefreshSignal]);
+
+  // Re-layout / untangle (brief 23, A54): explicit user op — reads current
+  // boxes, runs the crossing-aware placement optimizer, applies the new
+  // positions, then re-runs the routing pass. Non-structural only. This
+  // moves nodes deliberately (not a same-graph camera hold — same class as
+  // reheat/fit/zoom, per the camera-stability doctrine).
+  const lastRelayoutSignalRef = useRef(relayoutSignal);
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    if (relayoutSignal === lastRelayoutSignalRef.current) return;
+    lastRelayoutSignalRef.current = relayoutSignal;
+    if (structuralRef.current) return;
+    const r = runCanvasRelayout(cy);
+    if (r.skipped) return;
+    const cfg = routeEdgesRef.current;
+    if (!cfg) return;
+    const opts =
+      cfg === true
+        ? { maxEdges: 600, mode: "direct-unless-crossing" as const }
+        : {
+            maxEdges: cfg.maxEdges ?? 600,
+            clearance: cfg.clearance,
+            bendPenalty: cfg.bendPenalty,
+            minStub: cfg.minStub,
+            mode:
+              cfg.mode === "orthogonal"
+                ? ("always" as const)
+                : ("direct-unless-crossing" as const),
+          };
+    runCanvasEdgeRouting(cy, opts);
+  }, [relayoutSignal]);
 
   // Visibility filter (hidden prop): a batched class toggle, applied on
   // every hidden-set change. NOT in the init dep array, so toggling the
