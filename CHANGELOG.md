@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0 (continued): 2026-08-19 (Routing Explained DEV shell, brief 20)
+
+**Brief 20 — "Routing Explained" DEV-only explainer shell.**
+
+- **`RoutingExplainShell` (DEV-only).** New capability surface `routing-explain` (gated `import.meta.env.DEV`) that teaches the routing pipeline through three vertical panels: a live `StructuralSvgView`-rendered flow diagram of the `routeSceneEdges` decision tree (DOWN layout, the same structural engine documenting itself), a live `CytoscapeCanvas` demo with a 6-node dense graph, and a prose legend. The 3-state mode select (Direct / Orthogonal / Off) changes only the `routeEdges` prop — same UGM/graph, no re-init or refit per the camera-stability doctrine.
+- **`DemoLanding` and `Demo` updated.** `CAPABILITY_SURFACES` gains the `routing-explain` card (lime-green accent, `⤳` icon, tags: routeEdges, A\* router, direct-unless-crossing). `SHELL_MAP` gets the loader. `scripts/build-landing.mjs` GATES array and `docs/landing.html` updated to account for the new dev-only surface (now: Style Lab + Routing Explained dev-only, Scale prod-only).
+- **Smoke test.** `RoutingExplainShell.test.tsx` covers mount, back affordance, default mode, mode switching (orthogonal and off), flow diagram delivery to `StructuralSvgView`, and the DEV-only badge (7 tests, all pass).
+
 ## 1.0.0 (continued): 2026-08-19 (direct-unless-crossing default, routing pulldown on 8 shells)
 
 **Brief 19 — direct-unless-crossing routing default + per-shell routing pulldown.**

@@ -44,6 +44,7 @@ describe("DemoLanding", () => {
       "legibility",
       "ontology-workbench",
       "rdf12-hyperarcs",
+      "routing-explain",
       "routing-lab",
       "scale",
       "style-lab",

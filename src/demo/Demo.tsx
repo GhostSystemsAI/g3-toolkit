@@ -66,6 +66,10 @@ const SHELL_MAP: Record<string, ShellLoader> = {
     import("./legibility/LegibilityShell").then((m) => ({
       default: m.LegibilityShell,
     })),
+  "routing-explain": () =>
+    import("./routing-explain/RoutingExplainShell").then((m) => ({
+      default: m.RoutingExplainShell,
+    })),
 };
 
 export function Demo() {

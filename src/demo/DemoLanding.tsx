@@ -47,6 +47,7 @@ function surfaceVisibleHere(id: string): boolean {
   }
   if (id === "scale") return !import.meta.env.DEV;
   if (id === "style-lab") return import.meta.env.DEV;
+  if (id === "routing-explain") return import.meta.env.DEV;
   return true;
 }
 
@@ -127,6 +128,17 @@ export const CAPABILITY_SURFACES: Scenario[] = [
     accentGlow: "rgba(112, 72, 232, 0.15)",
     icon: "\u2726",
     tags: ["RDFS-plus", "SHACL", "SPARQL", "import"],
+  },
+  {
+    id: "routing-explain",
+    title: "Routing Explained",
+    subtitle: "Flow diagram of the scene-router decision logic",
+    description:
+      "A didactic surface showing how the scene router decides between a straight bezier and an orthogonal A* detour. A structural flow diagram documents the direct-unless-crossing gate, the three user-facing modes (Direct, Orthogonal, Off), and where the structural/MBSE engine sits separately. A live canvas lets you flip the mode and watch two edges change in real time.",
+    accent: "#a3e635",
+    accentGlow: "rgba(163, 230, 53, 0.15)",
+    icon: "\u2933",
+    tags: ["routeEdges", "A* router", "direct-unless-crossing"],
   },
 ];
 
