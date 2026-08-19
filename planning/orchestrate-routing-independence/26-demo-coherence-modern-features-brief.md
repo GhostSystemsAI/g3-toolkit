@@ -1,3 +1,7 @@
+---
+part_of: https://forge.tail515200.ts.net/ontology/kb/codex/Plan/brief-26-demo-coherence-sweep-every-shell-on-the-full-modern-27a99bf8
+---
+
 # Brief 26 — Demo coherence sweep: every shell on the full modern canvas surface
 
 ## Why
