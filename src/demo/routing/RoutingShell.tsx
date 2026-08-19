@@ -262,15 +262,26 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   // not an edge clears it. Hover tracing is pure CSS (ROUTING_STYLES).
   const [tracedEdge, setTracedEdge] = useState<string | null>(null);
 
-  // A54: bump to force a fresh layout pass without changing the scenario;
-  // included in the input useMemo deps so useStructuralLayout sees a new
-  // input object identity and re-runs (same-input skip is bypassed).
-  const [relayoutNonce, setRelayoutNonce] = useState(0);
-  const input: StructuralGraphInput = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    relayoutNonce;
-    return scenario.build(size);
-  }, [scenario, size, relayoutNonce]);
+  // A54 / brief 25: Re-layout is REAL work, not a nonce. The
+  // structural engine's `orderLayers` is deterministic barycenter +
+  // transpose from a canonical initial permutation, so a bare rebuild
+  // lands byte-identical positions. Instead we drive the opt-in
+  // seeded crossing-aware restarts. A FIXED seed with an INCREASING
+  // restart count means each press adds a deterministic batch of
+  // new candidate initial permutations to the already-tried set (the
+  // first candidate is always the deterministic default order), so
+  // best-crossings monotonically DECREASES or holds. Repeated presses
+  // converge to the best seen, they do not oscillate worse.
+  const RELAYOUT_SEED = 0xc0ded;
+  const RELAYOUT_STEP = 6;
+  const RELAYOUT_CAP = 16;
+  const [orderRestarts, setOrderRestarts] = useState<number | undefined>(
+    undefined,
+  );
+  const input: StructuralGraphInput = useMemo(
+    () => scenario.build(size),
+    [scenario, size],
+  );
   // A new graph invalidates a pinned edge id; drop the trace (the
   // documented adjust-state-during-render pattern, as in the SVG
   // view's fit reset).
@@ -278,6 +289,10 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   if (lastInput !== input) {
     setLastInput(input);
     setTracedEdge(null);
+    // A new scenario resets the Re-layout accumulator so the fresh
+    // scene lays out with the byte-identical default pass first; the
+    // reviewer starts from the same baseline every scenario.
+    setOrderRestarts(undefined);
   }
   const dir = direction === "auto" ? scenario.direction : direction;
   const options: Omit<StructuralLayoutOptions, "sketch"> = useMemo(
@@ -295,6 +310,11 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
       placement,
       layering,
       ...EFFORTS[effort],
+      // Only set when the user has pressed Re-layout at least once.
+      // Unset (undefined) preserves the byte-identical default pass.
+      ...(orderRestarts !== undefined
+        ? { orderSeed: RELAYOUT_SEED, orderRestarts }
+        : {}),
     }),
     [
       dir,
@@ -308,6 +328,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
       placement,
       layering,
       effort,
+      orderRestarts,
     ],
   );
 
@@ -385,10 +406,24 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
           type="button"
           className="rlab-back"
           data-testid="rlab-relayout"
-          onClick={() => setRelayoutNonce((n) => n + 1)}
+          onClick={() =>
+            setOrderRestarts((r) =>
+              Math.min(RELAYOUT_CAP, (r ?? 1) + RELAYOUT_STEP),
+            )
+          }
+          title="Add more seeded initial-order candidates and keep the arrangement with the lowest crossing count."
         >
           Re-layout
         </button>
+        {quality && (
+          <span
+            className="rlab-mono"
+            data-testid="rlab-crossings"
+            style={{ marginLeft: 8, fontSize: 12, opacity: 0.85 }}
+          >
+            crossings: {quality.crossings}
+          </span>
+        )}
         <div className="rlab-wordmark">
           <b>Routing Lab</b>
           <span>edge-routing stress bench</span>

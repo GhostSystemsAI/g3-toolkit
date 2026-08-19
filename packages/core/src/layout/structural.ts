@@ -764,6 +764,11 @@ function layoutOptionsKey(options?: StructuralLayoutOptions): string {
       placement: options?.placement ?? "brandes-koepf",
       layeringBudgetMs: options?.layeringBudgetMs ?? 80,
       orderingBudgetMs: options?.orderingBudgetMs ?? 60,
+      // Seeded crossing-aware restarts (opt-in). null keeps the
+      // serialized key stable when unset, so the default single-pass
+      // behavior shares its cache entry with previously-run inputs.
+      orderSeed: options?.orderSeed ?? null,
+      orderRestarts: options?.orderRestarts ?? null,
       routingBudgetMs: options?.routingBudgetMs ?? 80,
       longEdgeNear: options?.longEdgeNear ?? 12,
       // Participates in the key: changing the pitch changes the
