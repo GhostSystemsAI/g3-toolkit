@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0-rc008: 2026-08-20 (version bump to rc008)
+
+Version bump across all four workspace packages (`@g3t/core`, `@g3t/react`,
+`@g3t/charts`, root). No functional change; all work on `work/post-rc007`
+accumulates here. GUI footer reflects the new RC number immediately via the
+`__APP_VERSION__` Vite define.
+
 ## 1.0.4: 2026-08-20 (MBSE activity diagrams + routing-engine flowcharts)
 
 **Feature — `"act"` activity-diagram type in the MBSE Satellite
