@@ -36,6 +36,10 @@ type ShellLoader = () => Promise<{
 const SHELL_MAP: Record<string, ShellLoader> = {
   mbse: () =>
     import("./mbse/MbseShell").then((m) => ({ default: m.MbseShell })),
+  "routing-flowcharts": () =>
+    import("./flowchart/FlowchartShell").then((m) => ({
+      default: m.FlowchartShell,
+    })),
   auditor: () =>
     import("./audit/AuditShell").then((m) => ({ default: m.AuditShell })),
   "supply-chain": () =>

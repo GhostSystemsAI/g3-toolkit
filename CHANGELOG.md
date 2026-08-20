@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.0.0-rc010: 2026-08-20 (Routing Flowcharts on their own card)
+
+**Feature — dedicated "Routing Flowcharts" capability surface.** The two
+routing-engine activity diagrams moved OUT of the MBSE Satellite
+Workbench into their own landing card + shell
+(`src/demo/flowchart/`), so the satellite model is purely SysML again
+(bdd/ibd/par/req) and the flowcharts stand alone. The new
+`FlowchartShell` reuses `layoutStructural`, the mbse `ContainmentTree`,
+and the mbse shell CSS, but is scoped to `act` diagrams and drills
+flowchart-to-flowchart via a node→diagram `DRILL_MAP` (distinct from the
+mbse block-context drill). Four diagrams:
+
+- **Interaction Overview** (default) — how a scene is routed by the
+  structural (layered) router vs the direct-unless-crossing scene
+  router; the two routers do not call each other, the choice is by scene
+  type. Drills into each router.
+- **Scene Router** / **Structural Router** — the two pipelines, verbatim
+  from the retired MBSE package.
+- **Structural Router Internals** (A45) — the single "escalation ladder"
+  box expanded to its per-attempt obstacle rungs
+  (`g3t-routing.ts` ~L1173-1235): the ≤64-obstacle / 80 ms guard, the
+  three `routeOrthogonal` attempts (clearance 12 → 4 → endpoint
+  exclusion), the VR-9 detour, and the honest simple fallback. Reached
+  by drilling the structural router's `st.escalate` node.
+
+`StructuralNode.shape` glyphs plus a drill map are the reusable recipe:
+this card is the worked example for authoring your own flowcharts. Card
+visible in both dev and prod; `docs/landing.html` regenerated (11
+deployed surfaces).
+
 ## 1.0.0-rc008: 2026-08-20 (version bump to rc008)
 
 Version bump across all four workspace packages (`@g3t/core`, `@g3t/react`,

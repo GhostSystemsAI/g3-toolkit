@@ -53,6 +53,17 @@ function surfaceVisibleHere(id: string): boolean {
 
 export const CAPABILITY_SURFACES: Scenario[] = [
   {
+    id: "routing-flowcharts",
+    title: "Routing Flowcharts",
+    subtitle: "The edge routers charted as drillable activity diagrams",
+    description:
+      "The library's own two edge routers documented as UML activity flowcharts, rendered by the same structural engine they drive. An interaction overview shows how a scene is routed by the structural (layered) router or the direct-unless-crossing scene router; drill a router to its pipeline, and drill the structural router's escalation ladder to its per-attempt internals. Built from StructuralNode.shape glyphs (diamond decisions, initial/final terminals) plus a node-to-diagram drill map: the reusable recipe for authoring your own flowcharts.",
+    accent: "#34d399",
+    accentGlow: "rgba(52, 211, 153, 0.15)",
+    icon: "⤳",
+    tags: ["activity shapes", "drill-down", "layoutStructural"],
+  },
+  {
     id: "analytics-dashboard",
     title: "Analytics Dashboard",
     subtitle: "Charts, stats, algorithms, derived properties, coverage",

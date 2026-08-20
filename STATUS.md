@@ -1,5 +1,15 @@
 # g3-toolkit Status
 
+**Round note (2026-08-20, rc010): Routing Flowcharts card.** The two
+routing-engine activity diagrams moved out of the MBSE workbench into a
+dedicated "Routing Flowcharts" capability card + `FlowchartShell`
+(`src/demo/flowchart/`); the satellite model is SysML-only again. Added
+an Interaction Overview (scene-router vs structural-router selection) and
+a Structural Router Internals diagram expanding the escalation ladder to
+its per-attempt rungs, drillable node→diagram via `DRILL_MAP`. All five
+gates green (1880 tests). AWAITS VISUAL REVIEW: rendered flowchart layout
++ drill affordance are not covered by any gate.
+
 **As of:** 2026-08-17 (active: **the routing/legibility feature arc and
 the audit-remediation arc are now on one tree.** `ai-agent-guide` merged
 with `fable-updates`; the two forked from one commit on 2026-08-14 and
