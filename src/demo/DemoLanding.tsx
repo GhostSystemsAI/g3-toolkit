@@ -456,7 +456,7 @@ export function DemoLanding({
             letterSpacing: "0.04em",
           }}
         >
-          v{__APP_VERSION__}
+          V{__APP_VERSION__}
         </div>
       </div>
     </div>

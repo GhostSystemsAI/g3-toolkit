@@ -50,5 +50,5 @@ for (const [token, value] of [
 
 writeFileSync(out, html);
 console.log(
-  `stamp-landing: wrote ${out} (v${version} · ${sha} · ${buildDate})`,
+  `stamp-landing: wrote ${out} (V${version} · ${sha} · ${buildDate})`,
 );
