@@ -89,7 +89,7 @@ function buildFlowInput(): StructuralGraphInput {
             rows: [
               {
                 id: "r-g1",
-                text: "polylineIntersectsBoxes([sc, tc], obstacles)",
+                text: "segmentIntersectsBoxes(sc, tc, obstacles)",
               },
               {
                 id: "r-g2",

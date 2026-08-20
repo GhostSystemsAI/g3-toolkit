@@ -3,6 +3,7 @@ import {
   inferTerminalSides,
   polylineToCytoscapeSegments,
   routeSceneEdges,
+  segmentIntersectsBoxes,
   type SceneEdgeEndpoints,
   type SceneNodeBox,
 } from "./route-scene-edges";
@@ -155,6 +156,24 @@ describe("routeSceneEdges", () => {
     expect(routed.has("e1")).toBe(false);
   });
 
+  it("direct-unless-crossing: obstacle inside the diagonal bbox but OFF the line stays straight", () => {
+    // a->b is a diagonal (line y=x through the centers). The obstacle sits in
+    // the segment's bounding rectangle but nowhere near the line, so the
+    // straight shot misses it. The old bounding-box test flagged this as a
+    // crossing and forced a Z-detour; the exact segment test keeps it straight.
+    const nodes: SceneNodeBox[] = [
+      { id: "a", x: 0, y: 0, width: 40, height: 40 }, // center (20,20)
+      { id: "b", x: 200, y: 200, width: 40, height: 40 }, // center (220,220)
+      { id: "off", x: 0, y: 150, width: 40, height: 40 }, // in bbox, off line
+    ];
+    const { routed } = routeSceneEdges(
+      nodes,
+      [{ id: "e1", source: "a", target: "b" }],
+      { mode: "direct-unless-crossing" },
+    );
+    expect(routed.has("e1")).toBe(false);
+  });
+
   it("direct-unless-crossing: edge crossing an obstacle IS routed", () => {
     const nodes: SceneNodeBox[] = [
       { id: "a", x: 0, y: 40, width: 40, height: 40 },
@@ -225,6 +244,35 @@ describe("routeSceneEdges", () => {
       { mode: "always" },
     );
     expect(routed.has("e1")).toBe(true);
+  });
+});
+
+describe("segmentIntersectsBoxes", () => {
+  const box = { x: 100, y: 100, width: 40, height: 40 }; // x[100,140] y[100,140]
+  it("diagonal line passing through the box is a hit", () => {
+    expect(segmentIntersectsBoxes({ x: 0, y: 0 }, { x: 240, y: 240 }, [box])).toBe(
+      true,
+    );
+  });
+  it("diagonal line whose x-span overlaps the box but stays below it is a miss", () => {
+    // x spans [0,200] (overlaps the box's x[100,140]) so a bounding-box test
+    // would flag it, but y stays >=200, well below the box's y[100,140].
+    expect(
+      segmentIntersectsBoxes({ x: 0, y: 200 }, { x: 200, y: 260 }, [box]),
+    ).toBe(false);
+  });
+  it("horizontal line through the box is a hit", () => {
+    expect(
+      segmentIntersectsBoxes({ x: 0, y: 120 }, { x: 300, y: 120 }, [box]),
+    ).toBe(true);
+  });
+  it("horizontal line above the box is a miss", () => {
+    expect(
+      segmentIntersectsBoxes({ x: 0, y: 50 }, { x: 300, y: 50 }, [box]),
+    ).toBe(false);
+  });
+  it("empty obstacle set is always a miss", () => {
+    expect(segmentIntersectsBoxes({ x: 0, y: 0 }, { x: 9, y: 9 }, [])).toBe(false);
   });
 });
 

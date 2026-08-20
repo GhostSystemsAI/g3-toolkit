@@ -17,7 +17,6 @@
 
 import {
   routeOrthogonal,
-  polylineIntersectsBoxes,
   type RouteBox,
   type RouteSide,
 } from "./orthogonal-router";
@@ -46,8 +45,11 @@ export interface RouteSceneOptions {
   /**
    * Routing mode. Default "direct-unless-crossing".
    * - "direct-unless-crossing": route orthogonally only when the straight
-   *   segment between box centers crosses another node's box; otherwise
-   *   leave the edge unrouted (bezier).
+   *   LINE between box centers actually passes through another node's box
+   *   (exact segment-vs-rectangle test); otherwise leave the edge unrouted
+   *   (bezier). Straight is strongly preferred: an edge only detours when its
+   *   direct shot genuinely crosses a node body, not merely when a node sits
+   *   inside the shot's bounding rectangle.
    * - "always": route every edge orthogonally regardless of obstacles.
    */
   mode?: "direct-unless-crossing" | "always";
@@ -91,6 +93,57 @@ function boxCenter(b: SceneNodeBox): { x: number; y: number } {
   return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
 }
 
+/** True iff the straight segment a->b actually passes through any of the
+ *  axis-aligned boxes (Liang-Barsky slab clip). Unlike
+ *  `polylineIntersectsBoxes`, which tests each segment's BOUNDING BOX (exact
+ *  only for axis-aligned segments), this is exact for a DIAGONAL center-to-
+ *  center shot: a node that merely sits inside the shot's bounding rectangle
+ *  but off the line does NOT count as a crossing. This is what makes the
+ *  "direct-unless-crossing" mode strongly prefer straight edges. Endpoints
+ *  are assumed to lie outside every box (callers exclude the edge's own
+ *  source/target from `boxes`). Exported for direct unit testing. */
+export function segmentIntersectsBoxes(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  boxes: readonly RouteBox[],
+): boolean {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  for (const box of boxes) {
+    const minX = box.x;
+    const minY = box.y;
+    const maxX = box.x + box.width;
+    const maxY = box.y + box.height;
+    let t0 = 0;
+    let t1 = 1;
+    // Clip the parametric segment a + t*(b-a), t in [0,1], against one slab.
+    // p<0: candidate entering; p>0: candidate leaving; p==0: parallel (outside
+    // iff q<0). Returns false when the segment is wholly outside this boundary.
+    const clip = (p: number, q: number): boolean => {
+      if (Math.abs(p) < 1e-12) return q >= 0;
+      const r = q / p;
+      if (p < 0) {
+        if (r > t1) return false;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return false;
+        if (r < t1) t1 = r;
+      }
+      return true;
+    };
+    if (
+      clip(-dx, a.x - minX) &&
+      clip(dx, maxX - a.x) &&
+      clip(-dy, a.y - minY) &&
+      clip(dy, maxY - a.y) &&
+      t0 <= t1
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Route every edge in the scene around every other node. Self-loops and
  *  edges with unresolved endpoints are omitted from the returned map. */
 export function routeSceneEdges(
@@ -117,13 +170,15 @@ export function routeSceneEdges(
       if (n.id === s.id || n.id === t.id) continue;
       obstacles.push({ x: n.x, y: n.y, width: n.width, height: n.height });
     }
-    // direct-unless-crossing: skip routing when the straight segment
-    // between box centers does not pass through any obstacle box. The
-    // edge stays unrouted (bezier). Only fall through to routeOrthogonal
-    // when the direct shot is blocked OR the mode is "always".
+    // direct-unless-crossing: skip routing when the straight LINE between box
+    // centers does not actually pass through any obstacle box (exact segment-
+    // vs-rectangle test, not the bounding-box overlap that over-counted every
+    // node inside the diagonal's bbox). The edge stays unrouted (bezier). Only
+    // fall through to routeOrthogonal when the direct shot genuinely crosses a
+    // node OR the mode is "always".
     if (
       mode === "direct-unless-crossing" &&
-      !polylineIntersectsBoxes([sc, tc], obstacles)
+      !segmentIntersectsBoxes(sc, tc, obstacles)
     ) {
       continue;
     }
