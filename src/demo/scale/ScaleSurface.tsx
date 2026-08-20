@@ -482,6 +482,15 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
             Clusters are Louvain communities detected in-browser; each is named
             by its dominant member type and its most-connected member.
           </div>
+          <div style={{ padding: "6px 12px 0" }}>
+            <RoutingControlStrip
+              idPrefix="scale"
+              routeMode={routeMode}
+              setRouteMode={setRouteMode}
+              refreshRoutes={refreshRoutes}
+              relayout={relayout}
+            />
+          </div>
           {view.kind === "clusters" && (
             <div style={{ padding: "6px 12px 0" }}>
               <button
@@ -556,15 +565,6 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
               >
                 {edgeLabels ? "Hide edge labels" : "Show edge labels"}
               </button>
-              <div style={{ marginTop: 6 }}>
-                <RoutingControlStrip
-                  idPrefix="scale"
-                  routeMode={routeMode}
-                  setRouteMode={setRouteMode}
-                  refreshRoutes={refreshRoutes}
-                  relayout={relayout}
-                />
-              </div>
             </div>
           )}
           <div style={{ marginTop: 10 }}>
@@ -666,10 +666,7 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
             ]}
             layoutOptions={layoutOptions}
             layout={cachedPositions ? "preset" : undefined}
-            // D3: route only in the collapsed clusters view; the raw
-            // 8k-node drill view exceeds the 600-edge cap and would
-            // skip anyway. Explicit here so the intent is legible.
-            routeEdges={view.kind === "clusters" ? routeEdgesConfig : false}
+            routeEdges={routeEdgesConfig}
             routeRefreshSignal={routeRefreshSignal}
             relayoutSignal={relayoutSignal}
             edgeClickIsolate
