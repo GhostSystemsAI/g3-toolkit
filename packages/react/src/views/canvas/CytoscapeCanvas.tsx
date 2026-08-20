@@ -899,6 +899,14 @@ export interface CytoscapeCanvasProps {
         bendPenalty?: number;
         minStub?: number;
         /**
+         * Grazing tolerance (px) for "direct" mode. An edge whose straight
+         * shot only clips the outer `grazeTolerance` shell of a node stays
+         * bezier; only a shot that cuts deeper into a node body Z-routes.
+         * Higher = fewer routed/cornered edges. Default 8. Ignored in
+         * "orthogonal" mode.
+         */
+        grazeTolerance?: number;
+        /**
          * Routing mode. Default "direct" (route only edges whose straight
          * segment crosses a node box). "orthogonal" routes every edge
          * axis-aligned regardless of obstacles; "direct" (the default) leaves
@@ -946,15 +954,17 @@ function resolveRouteCfg(
   clearance?: number;
   bendPenalty?: number;
   minStub?: number;
+  grazeTolerance?: number;
   mode: "direct-unless-crossing" | "always";
 } {
   return routeConfig === true
-    ? { maxEdges: 600, mode: "direct-unless-crossing" }
+    ? { maxEdges: 600, grazeTolerance: 8, mode: "direct-unless-crossing" }
     : {
         maxEdges: routeConfig.maxEdges ?? 600,
         clearance: routeConfig.clearance,
         bendPenalty: routeConfig.bendPenalty,
         minStub: routeConfig.minStub,
+        grazeTolerance: routeConfig.grazeTolerance ?? 8,
         mode:
           routeConfig.mode === "orthogonal"
             ? "always"
@@ -982,6 +992,7 @@ export function runCanvasEdgeRouting(
     clearance?: number;
     bendPenalty?: number;
     minStub?: number;
+    grazeTolerance?: number;
     mode?: "direct-unless-crossing" | "always";
   },
   incidentTo?: string,
@@ -1032,6 +1043,7 @@ export function runCanvasEdgeRouting(
     clearance: opts.clearance,
     bendPenalty: opts.bendPenalty,
     minStub: opts.minStub,
+    grazeTolerance: opts.grazeTolerance,
     mode: opts.mode,
   });
   let routedCount = 0;

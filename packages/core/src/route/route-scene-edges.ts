@@ -43,6 +43,19 @@ export interface RouteSceneOptions {
   /** Minimum length of first/last route segment. Default 28. */
   minStub?: number;
   /**
+   * Grazing tolerance (px). Before the "direct-unless-crossing" decision each
+   * obstacle box is INSET by this margin on all sides, so an edge whose
+   * straight shot only clips the outer `grazeTolerance` shell of a node is
+   * treated as NOT crossing and stays bezier. Only a shot that penetrates
+   * deeper than the margin into a node body triggers a Z-route, which reduces
+   * the number of routed (cornered) edges in sparse scenes. Applies to the
+   * DECISION ONLY; the actual routeOrthogonal obstacle set keeps full box
+   * geometry, so any route that does fire still clears node bodies with full
+   * clearance. Default 0 (exact body test, no tolerance). Ignored in "always"
+   * mode (which routes everything regardless of obstacles).
+   */
+  grazeTolerance?: number;
+  /**
    * Routing mode. Default "direct-unless-crossing".
    * - "direct-unless-crossing": route orthogonally only when the straight
    *   LINE between box centers actually passes through another node's box
@@ -91,6 +104,21 @@ export function inferTerminalSides(
 
 function boxCenter(b: SceneNodeBox): { x: number; y: number } {
   return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+}
+
+/** Shrink each box inward by `margin` on all sides for the grazing-tolerance
+ *  crossing DECISION only (never for the actual route obstacle set). Boxes that
+ *  collapse to non-positive extent (smaller than 2*margin in either axis) can
+ *  only ever be grazed, so they are dropped from the decision entirely. */
+function insetBoxes(boxes: readonly RouteBox[], margin: number): RouteBox[] {
+  const out: RouteBox[] = [];
+  for (const b of boxes) {
+    const w = b.width - 2 * margin;
+    const h = b.height - 2 * margin;
+    if (w <= 0 || h <= 0) continue;
+    out.push({ x: b.x + margin, y: b.y + margin, width: w, height: h });
+  }
+  return out;
 }
 
 /** True iff the straight segment a->b actually passes through any of the
@@ -176,9 +204,11 @@ export function routeSceneEdges(
     // node inside the diagonal's bbox). The edge stays unrouted (bezier). Only
     // fall through to routeOrthogonal when the direct shot genuinely crosses a
     // node OR the mode is "always".
+    const graze = opts.grazeTolerance ?? 0;
+    const decisionBoxes = graze > 0 ? insetBoxes(obstacles, graze) : obstacles;
     if (
       mode === "direct-unless-crossing" &&
-      !segmentIntersectsBoxes(sc, tc, obstacles)
+      !segmentIntersectsBoxes(sc, tc, decisionBoxes)
     ) {
       continue;
     }
