@@ -17,6 +17,7 @@ const DIAGRAM_BADGE: Record<DiagramType, { label: string; hint: string }> = {
   ibd: { label: "IBD", hint: "Internal Block Diagram" },
   par: { label: "PAR", hint: "Parametric Diagram" },
   req: { label: "REQ", hint: "Requirement Diagram" },
+  act: { label: "ACT", hint: "Activity Diagram (flowchart)" },
 };
 
 /** Small monochrome glyph per node kind; color comes from the parent style. */

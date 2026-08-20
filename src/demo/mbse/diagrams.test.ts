@@ -106,6 +106,24 @@ describe("SysML diagram projections", () => {
     ).toBe(true);
   });
 
+  it("act: returns the authored activity graph verbatim, with shape glyphs", () => {
+    const g = projectDiagram(satelliteModel, "dg.act.scene");
+    // The flowchart IS the document: nodes carry UML activity shapes.
+    const start = g.nodes.find((n) => n.id === "sr.start");
+    expect(start?.shape).toBe("initial");
+    expect(g.nodes.some((n) => n.shape === "diamond")).toBe(true);
+    expect(g.nodes.some((n) => n.shape === "final")).toBe(true);
+    // Decision branches carry guard labels.
+    const yes = g.edges.find(
+      (e) => e.source === "sr.self" && e.label === "yes",
+    );
+    expect(yes?.target).toBe("sr.skip");
+    // The structural router flowchart is the larger authored graph.
+    const st = projectDiagram(satelliteModel, "dg.act.structural");
+    expect(st.nodes.length).toBeGreaterThan(g.nodes.length);
+    expect(st.nodes.find((n) => n.id === "st.nudge")?.shape).toBe("ellipse");
+  });
+
   it("projectDiagram returns empty for an unknown diagram id", () => {
     expect(projectDiagram(satelliteModel, "nope")).toEqual({
       nodes: [],
@@ -114,11 +132,23 @@ describe("SysML diagram projections", () => {
   });
 
   // Integration: every projected diagram must be a valid layout input.
-  for (const id of ["dg.bdd", "dg.ibd", "dg.par", "dg.req"]) {
+  const DOWN_DIAGRAMS = new Set([
+    "dg.req",
+    "dg.act.scene",
+    "dg.act.structural",
+  ]);
+  for (const id of [
+    "dg.bdd",
+    "dg.ibd",
+    "dg.par",
+    "dg.req",
+    "dg.act.scene",
+    "dg.act.structural",
+  ]) {
     it(`layout smoke: ${id} lays out without error and places every node`, async () => {
       const g = projectDiagram(satelliteModel, id);
       const geometry = await layoutStructural(g, {
-        direction: id === "dg.req" ? "DOWN" : "RIGHT",
+        direction: DOWN_DIAGRAMS.has(id) ? "DOWN" : "RIGHT",
       });
       for (const n of g.nodes) {
         expect(

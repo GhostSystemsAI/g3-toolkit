@@ -288,6 +288,19 @@ function projectRequirements(
   return { nodes, edges };
 }
 
+/**
+ * Activity diagram: the flowchart IS the authored document. Unlike the
+ * four SysML projections, an act diagram carries its StructuralGraphInput
+ * pre-built (nodes with `shape` glyphs, guard-labelled edges), so the
+ * projector returns it verbatim.
+ */
+function projectACT(
+  _model: SysMLModel,
+  diagram: Diagram,
+): StructuralGraphInput {
+  return diagram.activityGraph ?? EMPTY;
+}
+
 /** Project a diagram (by id) into a structural graph for the linked view. */
 export function projectDiagram(
   model: SysMLModel,
@@ -304,6 +317,8 @@ export function projectDiagram(
       return projectParametric(model, diagram);
     case "req":
       return projectRequirements(model, diagram);
+    case "act":
+      return projectACT(model, diagram);
     default:
       return EMPTY;
   }

@@ -165,6 +165,99 @@ function glyphBox(
   }
 }
 
+/** Activity-diagram node shapes (flowchart support, R-13). "rect" is
+ *  the default rounded box; the rest are UML activity glyphs.
+ *  initial/final/fork carry no text label. */
+type NodeShape = "rect" | "diamond" | "ellipse" | "initial" | "final" | "fork";
+
+const LABELLESS_SHAPES: ReadonlySet<NodeShape> = new Set<NodeShape>([
+  "initial",
+  "final",
+  "fork",
+]);
+
+interface ShapeStyle {
+  fill: string;
+  stroke: string;
+  opacity?: number;
+  strokeWidth: number;
+}
+
+/** Draw a plain node's body as its declared activity shape. Every
+ *  shape is inscribed in the SAME bounding box the layout produced, so
+ *  the bounding-box hit test and the box-avoiding router are unchanged:
+ *  a diamond is grabbed and routed-around exactly as its rect would be. */
+function nodeShapeElement(
+  shape: NodeShape,
+  g: { x: number; y: number; width: number; height: number },
+  s: ShapeStyle,
+): React.JSX.Element {
+  const { x, y, width: w, height: h } = g;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const box = {
+    fill: s.fill,
+    stroke: s.stroke,
+    opacity: s.opacity,
+    strokeWidth: s.strokeWidth,
+  };
+  switch (shape) {
+    case "diamond":
+      return (
+        <path
+          d={`M${cx} ${y} L${x + w} ${cy} L${cx} ${y + h} L${x} ${cy} Z`}
+          {...box}
+        />
+      );
+    case "ellipse":
+      return <ellipse cx={cx} cy={cy} rx={w / 2} ry={h / 2} {...box} />;
+    case "initial": {
+      const r = Math.min(w, h) / 2;
+      return (
+        <circle cx={cx} cy={cy} r={r} fill={s.stroke} opacity={s.opacity} />
+      );
+    }
+    case "final": {
+      const r = Math.min(w, h) / 2;
+      return (
+        <>
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke={s.stroke}
+            strokeWidth={s.strokeWidth}
+            opacity={s.opacity}
+          />
+          <circle
+            cx={cx}
+            cy={cy}
+            r={Math.max(1, r - 3.5)}
+            fill={s.stroke}
+            opacity={s.opacity}
+          />
+        </>
+      );
+    }
+    case "fork":
+      return (
+        <rect
+          x={x}
+          y={cy - 3}
+          width={w}
+          height={6}
+          rx={1}
+          fill={s.stroke}
+          opacity={s.opacity}
+        />
+      );
+    case "rect":
+    default:
+      return <rect x={x} y={y} width={w} height={h} rx={6} {...box} />;
+  }
+}
+
 export interface StructuralSvgViewProps extends ElementPointerHandlers<StructuralHit> {
   /** R-2 (round 17): per-node affordance drawn as a bordered box in
    *  the header strip, with its own hit zone ("glyph") so consumers
@@ -939,7 +1032,9 @@ export function StructuralSvgView({
           // features apply here too; a plain node has no header
           // strip, so the glyph sits inside the box's own corner and
           // the two-line form splits the label.
-          const header = input.nodes.find((n) => n.id === id)?.header;
+          const inputNode = input.nodes.find((n) => n.id === id);
+          const header = inputNode?.header;
+          const shape: NodeShape = inputNode?.shape ?? "rect";
           const twoLine =
             headerLines === 2 &&
             header?.stereotype !== undefined &&
@@ -947,54 +1042,55 @@ export function StructuralSvgView({
           const glyph = glyphs?.get(id);
           const label = g.text ?? header?.name ?? id;
           return (
-            <g key={id} data-ssv-node={id} data-ssv-kind="node">
-              <rect
-                x={g.x}
-                y={g.y}
-                width={g.width}
-                height={g.height}
-                rx={6}
-                fill={nodeStyles?.get(id)?.fill ?? theme.nodeFill}
-                stroke={nodeStyles?.get(id)?.stroke ?? theme.containerStroke}
-                opacity={nodeStyles?.get(id)?.opacity}
-                strokeWidth={nodeStyles?.get(id)?.strokeWidth ?? 1.2}
-              />
-              {twoLine && header ? (
-                <>
+            <g
+              key={id}
+              data-ssv-node={id}
+              data-ssv-kind="node"
+              data-ssv-shape={shape}
+            >
+              {nodeShapeElement(shape, g, {
+                fill: nodeStyles?.get(id)?.fill ?? theme.nodeFill,
+                stroke: nodeStyles?.get(id)?.stroke ?? theme.containerStroke,
+                opacity: nodeStyles?.get(id)?.opacity,
+                strokeWidth: nodeStyles?.get(id)?.strokeWidth ?? 1.2,
+              })}
+              {!LABELLESS_SHAPES.has(shape) &&
+                (twoLine && header ? (
+                  <>
+                    <text
+                      x={g.x + g.width / 2}
+                      y={g.y + g.height / 2 - 3}
+                      textAnchor="middle"
+                      fontSize={9.5}
+                      fontWeight={500}
+                      fill={theme.nodeText}
+                      data-ssv-label-stereotype={id}
+                    >
+                      {`\u00ab${header.stereotype ?? ""}\u00bb`}
+                    </text>
+                    <text
+                      x={g.x + g.width / 2}
+                      y={g.y + g.height / 2 + 10}
+                      textAnchor="middle"
+                      fontSize={11}
+                      fill={theme.nodeText}
+                      data-ssv-label={id}
+                    >
+                      {header.name}
+                    </text>
+                  </>
+                ) : (
                   <text
                     x={g.x + g.width / 2}
-                    y={g.y + g.height / 2 - 3}
-                    textAnchor="middle"
-                    fontSize={9.5}
-                    fontWeight={500}
-                    fill={theme.nodeText}
-                    data-ssv-label-stereotype={id}
-                  >
-                    {`\u00ab${header.stereotype ?? ""}\u00bb`}
-                  </text>
-                  <text
-                    x={g.x + g.width / 2}
-                    y={g.y + g.height / 2 + 10}
+                    y={g.y + g.height / 2 + 4}
                     textAnchor="middle"
                     fontSize={11}
                     fill={theme.nodeText}
                     data-ssv-label={id}
                   >
-                    {header.name}
+                    {label}
                   </text>
-                </>
-              ) : (
-                <text
-                  x={g.x + g.width / 2}
-                  y={g.y + g.height / 2 + 4}
-                  textAnchor="middle"
-                  fontSize={11}
-                  fill={theme.nodeText}
-                  data-ssv-label={id}
-                >
-                  {label}
-                </text>
-              )}
+                ))}
               {glyph !== undefined && (
                 <g
                   className="g3t-ssv-glyph"

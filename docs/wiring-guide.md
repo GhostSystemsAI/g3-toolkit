@@ -246,11 +246,11 @@ props (host bumps the number, canvas fires on real change) plus an opt-in edge
 tap mode. Signals are per-instance — no global command bus — so several
 canvases on a page respond only to their own bumps.
 
-| Prop                          | What it does                                                                                                                                                                                                                             |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `routeRefreshSignal?: number` | Re-runs the routing pass on the **current** node positions without moving any node. Use after a manual drag to clean up incident and neighbor edges. No-op when `routeEdges` is off/undefined or the scene is structural.                |
-| `relayoutSignal?: number`     | Runs the crossing-aware placement optimizer over the visible scene, applies the returned positions, then re-runs routing. An explicit user op — this MOVES nodes; camera hold does not apply (same class as reheat). Non-structural.     |
-| `edgeClickIsolate?: boolean`  | When true, tapping an edge isolates it via the emphasis layer (dims everything else, highlights the tapped line). Tapping the same edge or the background clears the isolate. Off by default so existing canvases keep click-to-select.  |
+| Prop                          | What it does                                                                                                                                                                                                                            |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `routeRefreshSignal?: number` | Re-runs the routing pass on the **current** node positions without moving any node. Use after a manual drag to clean up incident and neighbor edges. No-op when `routeEdges` is off/undefined or the scene is structural.               |
+| `relayoutSignal?: number`     | Runs the crossing-aware placement optimizer over the visible scene, applies the returned positions, then re-runs routing. An explicit user op — this MOVES nodes; camera hold does not apply (same class as reheat). Non-structural.    |
+| `edgeClickIsolate?: boolean`  | When true, tapping an edge isolates it via the emphasis layer (dims everything else, highlights the tapped line). Tapping the same edge or the background clears the isolate. Off by default so existing canvases keep click-to-select. |
 
 ```tsx no-check
 import { useState } from "react";
@@ -274,7 +274,6 @@ export function CanvasWithOps({ ugm }) {
   );
 }
 ```
-
 
 ### Register an algorithm result from your backend
 
@@ -873,6 +872,54 @@ halved per cycle), `stepSize` (0.4, halved per cycle), `stiffness`
 paper. Increase `compatibilityThreshold` to bundle only near-parallel
 edges; lower it to bundle more aggressively at the cost of longer
 routes.
+
+## Flowchart / Activity shapes
+
+`StructuralNode.shape` turns any plain node (one with no compartments)
+into a UML activity glyph, so the same structural layout that draws
+block diagrams also draws flowcharts. The layout and hit-testing stay
+bounding-box regardless of shape, so diamond decisions, ellipse
+actions, initial/final terminals, and fork/join bars all participate in
+obstacle-aware routing exactly as rectangles do. Shape is ignored on
+compartmented containers (those are always the box).
+
+```ts
+import { layoutStructural } from "@g3t/core";
+import type { StructuralGraphInput } from "@g3t/core";
+
+const graph: StructuralGraphInput = {
+  nodes: [
+    { id: "start", shape: "initial", width: 20, height: 20 },
+    { id: "action", header: { name: "Do something" } },
+    {
+      id: "decide",
+      shape: "diamond",
+      header: { name: "OK?" },
+      width: 120,
+      height: 56,
+    },
+    { id: "end", shape: "final", width: 20, height: 20 },
+  ],
+  edges: [
+    { id: "e1", source: "start", target: "action" },
+    { id: "e2", source: "action", target: "decide" },
+    { id: "e3", source: "decide", target: "end", label: "yes" },
+    { id: "e4", source: "decide", target: "action", label: "no" },
+  ],
+};
+
+const geometry = await layoutStructural(graph, { direction: "DOWN" });
+```
+
+Shape values: `"rect"` (default rounded rectangle), `"diamond"`
+(decision), `"ellipse"` (action / state), `"initial"` (filled start
+dot), `"final"` (ringed end dot), `"fork"` (synchronization bar).
+Terminals and bars suppress their label. Feed the graph to
+`layoutStructural` in your own shell, or set it as `activityGraph` on an
+MBSE `Diagram` with `type: "act"` (see the MBSE Satellite Workbench's
+Routing Engine package, which documents the toolkit's own scene and
+structural routers as two activity diagrams). The executable twin is
+`examples/wiring/src/flowchart-activity.test.tsx`.
 
 ## When a view fails to render
 

@@ -446,7 +446,13 @@ const BUDGETS = {
   // branch tip (unrelated to this brief's changes, which touch core
   // and demo only, not @g3t/react). Absorbing here so the gate
   // reflects reality; the drift was already present before this brief.
-  react: 398 * 1024,
+  react: 399 * 1024,
+  // ACT activity shapes (2026-08-20): 398 -> 399 KB. Measured 398.1 KB.
+  // First-party react growth: nodeShapeElement in structural-svg-view.tsx
+  // now draws six UML activity glyphs (diamond/ellipse/initial/final/fork
+  // + rect default) so StructuralNode.shape renders flowchart nodes. The
+  // glyph geometry is the added weight; it is a library feature (the MBSE
+  // act diagrams and the wiring-guide flowchart section both consume it).
   // React ledger:
   // - 390 -> 397 KB, 2026-08-17 (MERGE of ai-agent-guide into
   //   fable-updates). Measured 393.9 KB. Same shape as the core entry:

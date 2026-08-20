@@ -121,6 +121,22 @@ export interface StructuralNode {
   /** Plain nodes (no compartments) may fix their own size. */
   width?: number;
   height?: number;
+  /**
+   * Optional glyph shape for flowchart / activity-diagram nodes.
+   * Meaningful only on PLAIN nodes (no compartments): the SVG renderer
+   * switches the drawn primitive from the default rounded rectangle to
+   * a UML activity shape. Containers ignore it (they are always the
+   * compartmented box). Hit-testing stays bounding-box for every shape,
+   * so a diamond, ellipse, or terminal is grabbed by its box exactly as
+   * a rect is.
+   * - "rect" (default): rounded rectangle, unchanged.
+   * - "diamond": decision node (rhombus inscribed in the box).
+   * - "ellipse": rounded action / state.
+   * - "initial": filled start dot (label suppressed).
+   * - "final": ringed final dot (label suppressed).
+   * - "fork": solid synchronization bar (label suppressed).
+   */
+  shape?: "rect" | "diamond" | "ellipse" | "initial" | "final" | "fork";
 }
 
 /** An edge between structural nodes, optionally attaching to ports. */

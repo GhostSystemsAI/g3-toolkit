@@ -8,12 +8,13 @@
  * open diagram's notation, so the view reads as a modeling tool rather than a
  * generic graph.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CytoscapeCanvas,
   StructuralSvgView,
   ContextMenuManager,
   useStructuralLayout,
+  type StructuralSvgViewProps,
 } from "@g3t/react";
 import { publishCanvas, publishScene } from "../testing/e2e-hooks";
 import {
@@ -34,6 +35,7 @@ const DIRECTION: Record<DiagramType, "DOWN" | "RIGHT"> = {
   req: "DOWN",
   ibd: "RIGHT",
   par: "RIGHT",
+  act: "DOWN",
 };
 
 const NOTATION: Record<
@@ -80,6 +82,16 @@ const NOTATION: Record<
       },
     ],
   },
+  act: {
+    title: "Activity Diagram",
+    blurb:
+      "A control-flow flowchart built from activity shapes. Here it documents the library's own edge routers stage by stage; decisions branch on guard-labelled arrows from the start node to the final node.",
+    legend: [
+      { mark: "\u25CF", text: "initial / final node" },
+      { mark: "\u25C7", text: "decision (guarded branch)" },
+      { mark: "\u2500\u25B6", text: "control flow" },
+    ],
+  },
 };
 
 /** MR-11 round-3 (owner: "the visible canvas is smaller than the
@@ -88,9 +100,13 @@ const NOTATION: Record<
 function SizedStructuralSvg({
   scene,
   direction,
+  glyphs,
+  onElementClick,
 }: {
   scene: { input: StructuralGraphInput; geometry: StructuralGeometry };
   direction: "RIGHT" | "LEFT" | "DOWN" | "UP";
+  glyphs?: StructuralSvgViewProps["glyphs"];
+  onElementClick?: StructuralSvgViewProps["onElementClick"];
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({
@@ -119,6 +135,8 @@ function SizedStructuralSvg({
         geometry={scene.geometry}
         width={size.w}
         height={size.h}
+        glyphs={glyphs}
+        onElementClick={onElementClick}
         data-testid="mbse-structural-svg"
       />
     </div>
@@ -137,6 +155,49 @@ export function MbseShell({ onBack }: { onBack: () => void }) {
   const input: StructuralGraphInput = useMemo(
     () => projectDiagram(satelliteModel, diagramId),
     [diagramId],
+  );
+
+  // Cameo-style drill-down: a block that is the CONTEXT of some OTHER
+  // diagram owns a sub-diagram. Map block id -> that diagram, then a ▶
+  // glyph on the block opens it (onElementClick, hit.zone === "glyph").
+  const drillTarget = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of Object.values(satelliteModel.diagrams)) {
+      if (d.id === diagramId) continue;
+      if (satelliteModel.blocks[d.context] && !m.has(d.context)) {
+        m.set(d.context, d.id);
+      }
+    }
+    return m;
+  }, [diagramId]);
+
+  const glyphs = useMemo(() => {
+    const g = new Map<
+      string,
+      { slot: "top-right"; text: string; title?: string }
+    >();
+    for (const n of input.nodes) {
+      const target = drillTarget.get(n.id);
+      if (target !== undefined) {
+        g.set(n.id, {
+          slot: "top-right",
+          text: "▶",
+          title: `Open ${satelliteModel.diagrams[target]?.name ?? target}`,
+        });
+      }
+    }
+    return g;
+  }, [input, drillTarget]);
+
+  const onDrillClick = useCallback<
+    NonNullable<StructuralSvgViewProps["onElementClick"]>
+  >(
+    (info) => {
+      if (info.hit.zone !== "glyph") return;
+      const target = drillTarget.get(info.hit.elementId);
+      if (target !== undefined) setDiagramId(target);
+    },
+    [drillTarget],
   );
 
   const reducedMotion = usePrefersReducedMotion();
@@ -218,7 +279,12 @@ export function MbseShell({ onBack }: { onBack: () => void }) {
           </div>
           <div className="mbse-canvas-host">
             {scene && renderer === "svg" ? (
-              <SizedStructuralSvg scene={scene} direction={DIRECTION[type]} />
+              <SizedStructuralSvg
+                scene={scene}
+                direction={DIRECTION[type]}
+                glyphs={glyphs}
+                onElementClick={onDrillClick}
+              />
             ) : scene ? (
               <CytoscapeCanvas
                 ugm={ugm}

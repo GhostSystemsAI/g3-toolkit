@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.4: 2026-08-20 (MBSE activity diagrams + routing-engine flowcharts)
+
+**Feature — `"act"` activity-diagram type in the MBSE Satellite
+Workbench.** `StructuralNode.shape` (`"diamond" | "ellipse" | "initial"
+| "final" | "fork"`, default `"rect"`) turns any plain node into a UML
+activity glyph; the SVG renderer draws the primitive while layout and
+hit-testing stay bounding-box, so flowchart nodes route around
+obstacles exactly as rectangles do. A new "Routing Engine" package ships
+two act diagrams that document the toolkit's own routers as flowcharts:
+the Scene Router (direct-unless-crossing) and the Structural Router
+(layered gap + escalation ladder + nudge). Blocks that own an act
+diagram expose a `▶` glyph; clicking it (`onElementClick`, `hit.zone ===
+"glyph"`) drills into the diagram, and the containment tree lists act
+diagrams with an `ACT` badge. Shapes are a general library feature:
+`docs/wiring-guide.md` documents building flowcharts from
+`StructuralNode.shape`, with the executable twin
+`examples/wiring/src/flowchart-activity.test.tsx`. Deferred: fork/join
+concurrent-flow nodes and a deeper escalation-ladder sub-diagram.
+
 ## 1.0.3: 2026-08-19 (scene-route shear fix: label-inclusive bounding boxes)
 
 **Bugfix — routed edges rendered with sheared, non-orthogonal corners and
@@ -94,7 +113,7 @@ cause seen from different ends.
   for more forced spacing in medium and large graphs, the obvious move
   is to raise the nudge track gap, and on its own that does not work.
   The corridor gap is `min(factor * layerSpacing, demand * trackGap +
-  2 * clearance)`, so at the default 80px layer spacing the cap binds
+2 * clearance)`, so at the default 80px layer spacing the cap binds
   above 28 edges per corridor and everything past that is spread across
   a fixed 240px however wide the tracks were asked to be. Going 8 to 12
   with the factor left at 3 changes a 40-edge corridor not at all (6.0px
@@ -493,7 +512,6 @@ dates across the two arcs as concurrent, not sequential.
   including one that caught a substring-matching bug in the checker's
   first draft: entry names nest, so a row listing only `@g3t/core/x`
   appeared to cover `@g3t/core` too.
-
 
 - **Added the community files the repository was missing, and corrected
   the docs that described a surface it no longer has.** New:
@@ -928,7 +946,7 @@ dates across the two arcs as concurrent, not sequential.
 
 - New `CytoscapeCanvas` prop `routeEdges` runs a post-layout
   obstacle-aware routing pass on any NON-structural scene, using the
-  same A* router that already backs the structural view. Off by
+  same A\* router that already backs the structural view. Off by
   default in the library; the demo shells (Auditor, Supply Chain,
   Biomedical, Analytics dashboard, Style Lab both panes) all set it
   to `true` via a module-level `ROUTE_EDGES` constant that acts as a
@@ -973,7 +991,7 @@ dates across the two arcs as concurrent, not sequential.
   oracle covers both style paths with the same base stack, so parity
   is unaffected.
 - The override knob for that default: `labelWrapRule(maxWidthPx |
-  false)`, exported from `@g3t/react` and passed through the
+false)`, exported from `@g3t/react` and passed through the
   `stylesheet` prop (a style refresh; positions and camera hold). A
   number re-widths the wrap, `false` disables it. The biomedical shell
   demonstrates it live with a "Wrap labels" switch (default on, 90px),
@@ -981,7 +999,6 @@ dates across the two arcs as concurrent, not sequential.
   now links the wiring guide, llms.txt, and AGENTS.md; both AI guides
   cover the new surface plus the opt-in `nudge` routing option and the
   Routing Lab dashboard.
-
 
 ## 1.0.0 (continued): register of 2026-08-06 (R-15, R-16, R-17)
 
@@ -1214,9 +1231,9 @@ features):
   docs/consuming-g3t.md covering what types cannot express: which
   props re-run layout, the interaction contracts (click
   suppression, hit zones, init-time-only options), the
-  _color/_shape styling escape hatch and the stylesheet merge
+  \_color/\_shape styling escape hatch and the stylesheet merge
   order, the vendored-tarball override recipe, and the known
-  limitations (typed CJS, static vis-* peers).
+  limitations (typed CJS, static vis-\* peers).
 - **New release gate**: verify:package checks that every entry
   point in every publishable package's main/module/types/exports
   actually EXISTS after a build, and that files[] covers what it
@@ -1324,12 +1341,12 @@ features):
 - **Directive 2, congestion sizing (first increment)**: derived
   box sizes now honor per-side attachment demand: declared ports
   are EXACT (E/W ports stretch height, N/S ports width, pitch 20
-  + margin 24) and box-edge fans get a degree-based floor
-  (ceil(degree/2) on the cross extent). Two oracles: a six-spoke
-  hub grows past its declared height; five WEST ports force 124.
-  The side-exact two-pass (grow after side assignment) remains
-  available as a follow-up if the floor under-provisions in
-  practice.
+  - margin 24) and box-edge fans get a degree-based floor
+    (ceil(degree/2) on the cross extent). Two oracles: a six-spoke
+    hub grows past its declared height; five WEST ports force 124.
+    The side-exact two-pass (grow after side assignment) remains
+    available as a follow-up if the floor under-provisions in
+    practice.
 - **Directive 3, the patterns catalog**: docs/structural-patterns.md
   names five supported recipes (flat blocks; containment; blocks
   with ports; containment WITH ports: the requested combined
@@ -1488,9 +1505,9 @@ features):
 - VR-2b (owner-found): leaving Color mode never reverted. Root
   cause: the spec effect only APPLIED patches; a spec that drops
   a channel writes nothing, and nothing removed the stale
-  _ecolor, so edge[_ecolor] matched forever. The effect now
-  clears encoding-managed keys (_ecolor/_ewidth; _color/_icon/
-  _size) absent from the new patch; the presentation oracle
+  \_ecolor, so edge[_ecolor] matched forever. The effect now
+  clears encoding-managed keys (\_ecolor/\_ewidth; \_color/\_icon/
+  \_size) absent from the new patch; the presentation oracle
   asserts the revert.
 - VR-2c: the edge color channel had NO legend representation;
   SpecLegend renders categorical edge-color rows now.
@@ -1756,7 +1773,7 @@ features):
 - The compositing mechanism ALREADY existed (composePinStack,
   rounds 26/4.7/12.1): the residual collision was a THIRD writer
   outside its contract. The spec path and the appearance editor
-  maintained two separate truths for icons: the spec stamps _icon
+  maintained two separate truths for icons: the spec stamps \_icon
   DATA (which the node[_icon] class rule and the pin compositor
   read), while the editor's override path wrote background-image
   directly as a flat style bypass: invisible to composePinStack
@@ -1764,11 +1781,11 @@ features):
   mismatch produces BOTH reported symptoms: "icon replaces pin"
   (the flat bypass overwrites the composed [icon, badge] stack)
   and "pin change removes the icon until other changes" (the pin
-  effect re-composes from _icon data, where the editor icon never
+  effect re-composes from \_icon data, where the editor icon never
   lived; a later recolor re-applied the override and brought it
   back).
-- Fix: icon overrides now travel as _icon DATA through a pure,
-  unit-tested split (splitIconFromOverrideStyle): background-*
+- Fix: icon overrides now travel as \_icon DATA through a pure,
+  unit-tested split (splitIconFromOverrideStyle): background-\*
   leaves the bypass, unpinned nodes render via the class rule,
   pinned nodes re-compose after every override pass, and restore
   clears only the override's own stamp (a spec re-stamp wins).
@@ -2005,7 +2022,7 @@ features):
   EXPLICITLY (unshakeable), the package glob widened to the
   recursive form, and the treeshake gate's expectation updated to
   the CORRECT declaration (its old expectation enforced the bug).
-  Proven empirically: dist gained index-*.css (10.75 kB) carrying
+  Proven empirically: dist gained index-\*.css (10.75 kB) carrying
   the toolbar selectors, previously absent.
 - **Stylesheet witness in e2e**: an unstyled toolbar mounts and
   stays console-clean, so mount smokes MISS this class of break.
@@ -2082,12 +2099,12 @@ features):
      "Scenarios/Back": the universal-affordance regex broadened.
   3. Supply smoke: the landing card is "Supply Chain Digital
      Thread", not "Supply Thread": title corrected.
-  Notable: the SCALE smoke PASSED: the graph toolbar mounts
-  console-clean in production on this tree, and the switcher shows
-  all four engines. The owner's earlier "toolbar broken in preview"
-  is either the renamed engine option (a real, visible round-45
-  change), behavioral beyond mount-clean, or resolved: a symptom
-  description on round 48 decides.
+     Notable: the SCALE smoke PASSED: the graph toolbar mounts
+     console-clean in production on this tree, and the switcher shows
+     all four engines. The owner's earlier "toolbar broken in preview"
+     is either the renamed engine option (a real, visible round-45
+     change), behavioral beyond mount-clean, or resolved: a symptom
+     description on round 48 decides.
 - **test-results-failures.json (owner request)**:
   scripts/filter-e2e-failures.mjs distills the playwright JSON to
   failures only: stats, per-failure error (ANSI-stripped), last
@@ -2256,9 +2273,9 @@ features):
   capture read cy's live sourceEndpoint/targetEndpoint (compounds
   clip against the PADDED bbox, not the geometry box) and host
   sizing read cy's padded width/height. Both now come from truth
-  carried in data: the converter stamps _geomBox ("x y w h") on
+  carried in data: the converter stamps \_geomBox ("x y w h") on
   every top-level structural node, and capture takes endpoints AND
-  bends from _routePts (cy endpoints only as a legacy fallback).
+  bends from \_routePts (cy endpoints only as a legacy fallback).
   Sides derive against geometry boxes. Straight resolver results
   now write via the converter's 2-point degenerate doctrine at both
   drag sites (they previously went silent).
@@ -2291,11 +2308,11 @@ features):
   geometry boxes the converter clips against), skewing every bend
   into diagonals.** Fixed by removing reconstruction from the
   visual path entirely: routed edges carry ABSOLUTE points
-  (_routePts) written by the converter, rendered verbatim by the
+  (\_routePts) written by the converter, rendered verbatim by the
   overlay, rewritten each drag frame, canonicalized on settle, and
   restored verbatim on return-to-grab (MR-9). Seg data remains only
   for cy's suppressed hit-testable edge. Oracles: converter pin
-  asserts _routePts equals the geometry route byte-for-byte; the
+  asserts \_routePts equals the geometry route byte-for-byte; the
   drag oracle asserts rewrite-on-drag and verbatim restore.
 - **Scale**: the owner's phase paste both FIXED and SPLIT the
   problem: return-to-clusters settles in 137 ms (fcose owned that

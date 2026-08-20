@@ -77,6 +77,24 @@ items are a prioritized synthesis of 25 deduped top findings, NOT the
 since 7 of 11 passes hit the findings cap with roughly 27 findings seen
 and unwritten, putting the true phase-1 total nearer 154.)
 
+**ACT activity diagrams + routing-engine flowcharts (LANDED 2026-08-20,
+`work/post-rc007`).** `StructuralNode.shape` (diamond/ellipse/initial/
+final/fork, default rect) makes the structural layout draw flowcharts;
+`nodeShapeElement` in `structural-svg-view.tsx` renders the glyphs while
+layout and hit-testing stay bounding-box, so shaped nodes route around
+obstacles like rects. The MBSE Satellite Workbench gains an `"act"`
+diagram type and a "Routing Engine" package with two flowcharts
+documenting the toolkit's own routers (Scene Router
+direct-unless-crossing; Structural Router layered gap + escalation +
+nudge), a `▶` glyph drill-down (`onElementClick`, `hit.zone === "glyph"`)
+from blocks that own an act diagram, and an `ACT` badge in the
+containment tree. Shapes are a general feature: documented in
+`docs/wiring-guide.md` with the executable twin
+`examples/wiring/src/flowchart-activity.test.tsx`. Gates green (1874
+tests; @g3t/react ledger raised 398 -> 399 KB for the glyph geometry).
+DEFERRED: fork/join concurrent-flow nodes and a deeper escalation-ladder
+sub-diagram. AWAITS Zach's playground review (rendered activity shapes).
+
 ## PRIOR SNAPSHOT (2026-08-16 remediation round)
 
 
