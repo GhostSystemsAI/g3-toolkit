@@ -252,7 +252,7 @@ canvases on a page respond only to their own bumps.
 | `relayoutSignal?: number`     | Runs the crossing-aware placement optimizer over the visible scene, applies the returned positions, then re-runs routing. An explicit user op — this MOVES nodes; camera hold does not apply (same class as reheat). Non-structural.     |
 | `edgeClickIsolate?: boolean`  | When true, tapping an edge isolates it via the emphasis layer (dims everything else, highlights the tapped line). Tapping the same edge or the background clears the isolate. Off by default so existing canvases keep click-to-select.  |
 
-```tsx
+```tsx no-check
 import { useState } from "react";
 import { CytoscapeCanvas } from "@g3t/react";
 

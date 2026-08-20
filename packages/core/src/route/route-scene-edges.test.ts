@@ -216,6 +216,48 @@ describe("routeSceneEdges", () => {
     expect(routed.has("e1")).toBe(false);
   });
 
+  it("grazeTolerance=0 (default): edge clipping 1px into obstacle IS routed", () => {
+    // obst box: x[90,130] y[0,80] center (110,40).
+    // a->b straight line passes through x=110, which is 1px inside the obst left edge.
+    // With grazeTolerance=0 the full box is used for the decision -> crossing detected.
+    const nodes: SceneNodeBox[] = [
+      { id: "a", x: 0, y: 20, width: 40, height: 40 }, // center (20,40)
+      { id: "obst", x: 90, y: 0, width: 40, height: 80 }, // x[90,130]: left edge at 90
+      { id: "b", x: 200, y: 20, width: 40, height: 40 }, // center (220,40)
+    ];
+    // Direct shot from (20,40) to (220,40) is horizontal — passes through obst.
+    const { routed } = routeSceneEdges(
+      nodes,
+      [{ id: "e1", source: "a", target: "b" }],
+      {
+        grazeTolerance: 0,
+      },
+    );
+    expect(routed.has("e1")).toBe(true);
+  });
+
+  it("grazeTolerance clips outer shell: edge that only grazes the margin stays bezier", () => {
+    // obst box: x[90,130] y[0,200]. a->b direct shot goes through y=100 at x=110,
+    // which is 20px inside the left edge.  With grazeTolerance=25 the decision box
+    // insets to x[115,105] — non-positive width, so the box is DROPPED entirely;
+    // the shot sees no decision obstacles and stays unrouted.
+    const nodes: SceneNodeBox[] = [
+      { id: "a", x: 0, y: 80, width: 40, height: 40 }, // center (20,100)
+      { id: "obst", x: 90, y: 0, width: 40, height: 200 }, // narrow obstacle
+      { id: "b", x: 200, y: 80, width: 40, height: 40 }, // center (220,100)
+    ];
+    const { routed } = routeSceneEdges(
+      nodes,
+      [{ id: "e1", source: "a", target: "b" }],
+      {
+        grazeTolerance: 25,
+      },
+    );
+    // Inset collapses the 40px-wide obstacle (margin*2=50 > 40) → dropped from decision.
+    // Direct shot has no remaining decision obstacles → stays bezier (unrouted).
+    expect(routed.has("e1")).toBe(false);
+  });
+
   it("handles dense scenes above the router's 64-obstacle pruning threshold", () => {
     const nodes: SceneNodeBox[] = [
       { id: "a", x: 0, y: 500, width: 40, height: 40 },
