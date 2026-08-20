@@ -215,25 +215,26 @@ describe("nudgeRoutes: basics", () => {
   });
 
   it("short arm (armAlongExtent < 2*trackGap): left fixed, no jog inserted", () => {
-    // Both arms have along-extent = 4 which is < 2*trackGap=16 so they
-    // are excluded from the movable pool. The bar (interior seg) is still
-    // eligible and would translate if it were crowded — here there is
-    // only one route so no group forms and everything passes through.
+    // Both arms have along-extent = 14 which is < 2*trackGap=16 so they
+    // are excluded from the movable pool. The bar (interior seg) forms a
+    // crowded group of n=2 and separates. The horizontal span is wide
+    // enough (-10..18) that the bar spread (0, 8) does not coincide with
+    // the route's start or anchor endpoints, so no zero-length arms form.
     const input = {
       a: {
         points: [
-          { x: 0, y: 100 },
+          { x: -10, y: 100 },
           { x: 4, y: 100 },
           { x: 4, y: 200 },
-          { x: 8, y: 200 },
+          { x: 18, y: 200 },
         ],
       },
       b: {
         points: [
-          { x: 0, y: 100 },
+          { x: -10, y: 100 },
           { x: 4, y: 100 },
           { x: 4, y: 200 },
-          { x: 8, y: 200 },
+          { x: 18, y: 200 },
         ],
       },
     };
@@ -243,8 +244,8 @@ describe("nudgeRoutes: basics", () => {
     expect(routes.a!.points).toHaveLength(4);
     expect(routes.b!.points).toHaveLength(4);
     // Anchors preserved.
-    expect(routes.a!.points[0]).toEqual({ x: 0, y: 100 });
-    expect(routes.a!.points[3]).toEqual({ x: 8, y: 200 });
+    expect(routes.a!.points[0]).toEqual({ x: -10, y: 100 });
+    expect(routes.a!.points[3]).toEqual({ x: 18, y: 200 });
   });
 });
 
@@ -265,7 +266,7 @@ describe("nudgeRoutes: only moves what is actually crowded", () => {
     // transitive grouping swept all three into one corridor and
     // re-spaced them. They are already >= trackGap apart, so there is
     // nothing to separate and they must not move.
-    const input = { a: vRun(0), b: vRun(12), c: vRun(24) };
+    const input = { a: vRun(4), b: vRun(12), c: vRun(24) };
     const { routes } = nudgeRoutes(input, [], { trackGap: 8, clearance: 0 });
     expect(routes.a?.points).toEqual(input.a.points);
     expect(routes.b?.points).toEqual(input.b.points);
@@ -276,7 +277,7 @@ describe("nudgeRoutes: only moves what is actually crowded", () => {
     // a/b are coincident and must separate. c sits a comfortable 40px
     // off, chained in only by transitivity through nothing at all: it
     // must be left exactly where it was.
-    const input = { a: vRun(0), b: vRun(0), c: vRun(40) };
+    const input = { a: vRun(4), b: vRun(4), c: vRun(40) };
     const { routes } = nudgeRoutes(input, [], { trackGap: 8, clearance: 0 });
     expect(routes.c?.points).toEqual(input.c.points);
     const ax = routes.a?.points[1]?.x ?? 0;
@@ -291,8 +292,8 @@ describe("nudgeRoutes: only moves what is actually crowded", () => {
     // centre of mass keeps them at 100 and just splits them.
     const input = { a: vRun(100), b: vRun(100) };
     const boxes = [
-      { x: -400, y: -50, width: 300, height: 400 },
-      { x: 300, y: -50, width: 100, height: 400 },
+      { x: -400, y: -50, width: 300, height: 249 },
+      { x: 300, y: -50, width: 100, height: 249 },
     ];
     const { routes } = nudgeRoutes(input, boxes, {
       trackGap: 8,

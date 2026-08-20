@@ -250,9 +250,9 @@ describe("routeSceneEdges", () => {
 describe("segmentIntersectsBoxes", () => {
   const box = { x: 100, y: 100, width: 40, height: 40 }; // x[100,140] y[100,140]
   it("diagonal line passing through the box is a hit", () => {
-    expect(segmentIntersectsBoxes({ x: 0, y: 0 }, { x: 240, y: 240 }, [box])).toBe(
-      true,
-    );
+    expect(
+      segmentIntersectsBoxes({ x: 0, y: 0 }, { x: 240, y: 240 }, [box]),
+    ).toBe(true);
   });
   it("diagonal line whose x-span overlaps the box but stays below it is a miss", () => {
     // x spans [0,200] (overlaps the box's x[100,140]) so a bounding-box test
@@ -272,7 +272,9 @@ describe("segmentIntersectsBoxes", () => {
     ).toBe(false);
   });
   it("empty obstacle set is always a miss", () => {
-    expect(segmentIntersectsBoxes({ x: 0, y: 0 }, { x: 9, y: 9 }, [])).toBe(false);
+    expect(segmentIntersectsBoxes({ x: 0, y: 0 }, { x: 9, y: 9 }, [])).toBe(
+      false,
+    );
   });
 });
 

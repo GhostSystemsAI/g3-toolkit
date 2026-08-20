@@ -333,8 +333,10 @@ export function nudgeRoutes(
     }
     const openLo = axis === "h" ? layoutBound.yLo : layoutBound.xLo;
     const openHi = axis === "h" ? layoutBound.yHi : layoutBound.xHi;
-    if (perpMin === -Infinity) perpMin = Math.max(openLo, ownLo - trackGap);
-    if (perpMax === Infinity) perpMax = Math.min(openHi, ownHi + trackGap);
+    if (perpMin === -Infinity)
+      perpMin = Math.max(openLo, ownLo - memberIdxs.length * trackGap);
+    if (perpMax === Infinity)
+      perpMax = Math.min(openHi, ownHi + memberIdxs.length * trackGap);
 
     const faceLo = perpMin + clearance;
     const faceHi = perpMax - clearance;
@@ -623,6 +625,38 @@ function attemptGroupRewrite(
   }
   const edgeIds = Array.from(bySeg.keys());
   const originalCrossings = new Map<string, number>();
+  // K(n,n) lane-overlap bypass: interior bar segments (the vertical centers of
+  // Z-routes) all stack at the midline x when no nudging has occurred. The
+  // crossing guard scores "0 crossings before spread" because collinear segments
+  // don't register as proper crossings — but then any spread introduces real
+  // crossings (jogs crossing sibling arms), so the guard reverts and the lanes
+  // stay piled. Per owner ruling 2026-08-20, lane overlap is WORSE than crossing.
+  // Bypass only for BAR groups where two members share the same perp coordinate:
+  // bar-bar collinear stacking is the pathological case. ARM groups keep the
+  // guard — terminal arm jog-crossings are real regressions that SHOULD revert.
+  const isBarOnlyGroup = placements.every(
+    (pl) => movable[pl.memberIdx]?.kind === "bar",
+  );
+  let hasGroupCollinearOverlap = false;
+  if (isBarOnlyGroup && placements.length >= 2) {
+    const perps = placements.map((pl) => movable[pl.memberIdx]?.perp ?? NaN);
+    outer: for (let pi = 0; pi < perps.length; pi++) {
+      for (let pj = pi + 1; pj < perps.length; pj++) {
+        const a = perps[pi];
+        const b = perps[pj];
+        if (
+          a !== undefined &&
+          b !== undefined &&
+          !isNaN(a) &&
+          !isNaN(b) &&
+          Math.abs(a - b) < 0.5
+        ) {
+          hasGroupCollinearOverlap = true;
+          break outer;
+        }
+      }
+    }
+  }
   for (let i = 0; i < edgeIds.length; i++) {
     for (let j = i + 1; j < edgeIds.length; j++) {
       const idI = edgeIds[i];
@@ -751,8 +785,8 @@ function attemptGroupRewrite(
       if (a === undefined || b === undefined) continue;
       const now = countCrossings(a, b);
       const before = originalCrossings.get(`${idI}|${idJ}`) ?? 0;
-      if (now > before) {
-        return { ok: false, rewritten: {}, failureKind: "crossing" };
+      if (!hasGroupCollinearOverlap && now > before) {
+        return { ok: false, rewritten: {}, failureKind: "crossing" }; // guard retained for bar groups
       }
     }
   }
@@ -794,8 +828,10 @@ function replanPlacements(
   }
   const openLo = axis === "h" ? layoutBound.yLo : layoutBound.xLo;
   const openHi = axis === "h" ? layoutBound.yHi : layoutBound.xHi;
-  if (perpMin === -Infinity) perpMin = Math.max(openLo, ownLo - gap);
-  if (perpMax === Infinity) perpMax = Math.min(openHi, ownHi + gap);
+  if (perpMin === -Infinity)
+    perpMin = Math.max(openLo, ownLo - memberIdxs.length * gap);
+  if (perpMax === Infinity)
+    perpMax = Math.min(openHi, ownHi + memberIdxs.length * gap);
   const faceLo = perpMin + clearance;
   const faceHi = perpMax - clearance;
   const spanAvailable = faceHi - faceLo;
