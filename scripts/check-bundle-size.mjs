@@ -82,7 +82,16 @@ const BUDGETS = {
   // Baseline at branch tip measured 213.5 KB, so this window covers
   // both the pre-existing overrun on the branch and the +1.0 KB of
   // opt-in restart machinery; unset options keep the fast path.
-  core: 216 * 1024,
+  // 216 -> 218 KB, 2026-08-20 (nudge two-pass arm separation): measured
+  // 217.2 KB, +1.2 KB. nudgeRoutes now runs a second ARMS-ONLY pass
+  // (computeRawArmOverlaps + armPairKey + the pre-existing-overlap
+  // discriminator threaded through attemptGroupRewrite) to separate the
+  // horizontal arms that the first-pass bar-spread pulls into a shared y
+  // in a K(n,n) storm. The pre-existing set is what keeps the pass from
+  // disturbing arms the router already stacked, so it is load-bearing,
+  // not removable padding. Headroom 0.8 KB, held tight; ARC-009 (extract
+  // @g3t/layout) remains the standing way back under the envelope.
+  core: 218 * 1024,
   // Core ledger:
   // - 169.0 -> 209 KB, 2026-08-17 (MERGE of ai-agent-guide into
   //   fable-updates). Measured 206.3 KB.

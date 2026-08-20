@@ -87,11 +87,114 @@ interface LayoutBound {
  * Nudge a route map so parallel interior segments spread across
  * distinct tracks. Idempotent: a route with no group members is
  * emitted as `dedupeCollinear(input)` and never modified further.
+ *
+ * Runs the separation pass TWICE (owner ruling 2026-08-20b). The first
+ * pass spreads the coincident jog BARS of a K(n,n) storm apart. That
+ * spread lengthens the horizontal ARMS that fed those bars, and two
+ * arms of a crossing edge-pair (wi_j / wj_i) that used to meet exactly
+ * at the shared midline now overlap along a shared y — a new collinear
+ * overlap that did not exist in the pass-1 input, so pass 1's grouping
+ * (which decomposes the PRE-spread geometry) cannot see it. A second
+ * pass decomposes the committed pass-1 geometry, sees the now-overlapping
+ * arms, and separates them. The drift assertion consumes pass 1's
+ * corridorDemand unchanged, so the measurement contract is preserved.
+ * Converges: pass-1 already separates bars beyond trackGap, so pass 2's
+ * crowded-run cut leaves them untouched and only acts on the residual
+ * arm overlaps.
  */
 export function nudgeRoutes(
   input: Record<string, { points: Pt[] }>,
   obstacles: readonly RouteBox[],
   options?: NudgingOptions,
+): NudgeResult {
+  // Arms coincident in the RAW input are a pre-existing pattern the router
+  // chose; the nudge must not disturb them (the "only move what is actually
+  // crowded" invariant). Only arm overlaps CREATED by the pass-1 bar-spread
+  // are the pass-2 target. Capture the pre-existing set so pass 2 can tell
+  // the two apart.
+  const preExisting = computeRawArmOverlaps(input);
+  const first = nudgePass(input, obstacles, options, false, null);
+  // Pass 2 is ARMS-ONLY: it exists solely to catch arm overlaps that the
+  // pass-1 bar-spread created, and must not re-plan bars (that would
+  // re-move runs pass 1 deliberately left alone — the "nudge moved an
+  // edge for no reason" regression the unit tests pin).
+  const second = nudgePass(first.routes, obstacles, options, true, preExisting);
+  return { routes: second.routes, corridorDemand: first.corridorDemand };
+}
+
+/** Stable unordered key for an arm pair, keyed by edge id + rounded perp.
+ *  An arm's perp is its anchored coordinate and does not change between the
+ *  raw input and the pass-1 output, so the key is comparable across passes. */
+function armPairKey(a: string, pa: number, b: string, pb: number): string {
+  const ka = `${a}|${Math.round(pa)}`;
+  const kb = `${b}|${Math.round(pb)}`;
+  return ka < kb ? `${ka}::${kb}` : `${kb}::${ka}`;
+}
+
+/** Arm pairs (first/last segments) that already share a perp AND overlap
+ *  along-axis in the RAW route map. These pre-date any nudging, so pass 2
+ *  leaves them exactly where the router put them. */
+function computeRawArmOverlaps(
+  input: Record<string, { points: Pt[] }>,
+): Set<string> {
+  interface RawArm {
+    edgeId: string;
+    axis: "h" | "v";
+    perp: number;
+    e0: number;
+    e1: number;
+  }
+  const arms: RawArm[] = [];
+  for (const [edgeId, route] of Object.entries(input)) {
+    const pts = dedupeCollinear(route.points.map((p) => ({ ...p })));
+    if (pts.length < 3) continue;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      if (a === undefined || b === undefined) continue;
+      if (i !== 0 && i !== pts.length - 2) continue; // arms only
+      const dx = Math.abs(b.x - a.x);
+      const dy = Math.abs(b.y - a.y);
+      if (dx < 1e-6 && dy < 1e-6) continue;
+      if (dx > 1e-6 && dy > 1e-6) continue;
+      const axis: "h" | "v" = dx >= dy ? "h" : "v";
+      const along1 = axis === "h" ? a.x : a.y;
+      const along2 = axis === "h" ? b.x : b.y;
+      arms.push({
+        edgeId,
+        axis,
+        perp: axis === "h" ? a.y : a.x,
+        e0: Math.min(along1, along2),
+        e1: Math.max(along1, along2),
+      });
+    }
+  }
+  const set = new Set<string>();
+  for (let i = 0; i < arms.length; i++) {
+    for (let j = i + 1; j < arms.length; j++) {
+      const a = arms[i];
+      const b = arms[j];
+      if (a === undefined || b === undefined) continue;
+      if (a.axis !== b.axis) continue;
+      if (Math.abs(a.perp - b.perp) > 0.5) continue;
+      if (Math.min(a.e1, b.e1) - Math.max(a.e0, b.e0) > 1e-6)
+        set.add(armPairKey(a.edgeId, a.perp, b.edgeId, b.perp));
+    }
+  }
+  return set;
+}
+
+/** One separation pass: decompose → group → plan → atomic commit.
+ *  When `armsOnly`, bar (interior) segments are excluded from the movable
+ *  pool so only terminal arms are considered for separation. `preExisting`
+ *  (pass 2 only) names arm pairs that already overlapped before nudging;
+ *  their guard is kept so the pass never disturbs a pre-existing pattern. */
+function nudgePass(
+  input: Record<string, { points: Pt[] }>,
+  obstacles: readonly RouteBox[],
+  options: NudgingOptions | undefined,
+  armsOnly: boolean,
+  preExisting: Set<string> | null,
 ): NudgeResult {
   const trackGap = options?.trackGap ?? 8;
   const clearance = options?.clearance ?? 8;
@@ -155,7 +258,7 @@ export function nudgeRoutes(
           kind: "arm",
           anchoredIdx,
         });
-      } else {
+      } else if (!armsOnly) {
         segments.push({
           edgeId,
           segIndex: i,
@@ -467,6 +570,8 @@ export function nudgeRoutes(
       committed,
       obstacles,
       trackGap,
+      armsOnly,
+      preExisting,
     );
     if (attemptResult.ok) {
       for (const [edgeId, pts] of Object.entries(attemptResult.rewritten)) {
@@ -500,6 +605,8 @@ export function nudgeRoutes(
       committed,
       obstacles,
       trackGap,
+      armsOnly,
+      preExisting,
     );
     if (retry.ok) {
       for (const [edgeId, pts] of Object.entries(retry.rewritten)) {
@@ -605,6 +712,8 @@ function attemptGroupRewrite(
   base: Record<string, Pt[]>,
   obstacles: readonly RouteBox[],
   trackGap: number,
+  allowArmCollinearBypass: boolean,
+  preExisting: Set<string> | null,
 ): RewriteAttempt {
   const bySeg = new Map<string, SegEdit[]>();
   for (const pl of placements) {
@@ -633,27 +742,43 @@ function attemptGroupRewrite(
   // stay piled. Per owner ruling 2026-08-20, lane overlap is WORSE than crossing.
   // Bypass only for BAR groups where two members share the same perp coordinate:
   // bar-bar collinear stacking is the pathological case. ARM groups keep the
-  // guard — terminal arm jog-crossings are real regressions that SHOULD revert.
+  // guard in pass 1 — a terminal arm jog-crossing there is usually a real
+  // regression that SHOULD revert.
+  //
+  // The ARMS-ONLY second pass (owner ruling 2026-08-20b) is the exception:
+  // it runs on the committed pass-1 geometry precisely to fix the coincident
+  // arm overlaps that the pass-1 bar-spread created (the symmetric K(n,n)
+  // pairs wi_j / wj_i whose horizontal arms land on one shared y). Those
+  // arms read as a single stacked line, so `allowArmCollinearBypass` lets a
+  // GENUINE coincident arm group (two members within 0.5px on the perp axis)
+  // spread even at a higher crossing count. The box-check guard below still
+  // reverts any spread that pushes an arm through a node body. An arm pair
+  // that ALREADY overlapped in the raw input (`preExisting`) is a pattern the
+  // router chose, not a nudge artifact, so the bypass excludes it and its
+  // guard stays — that keeps the "only move what the nudge crowded" invariant.
   const isBarOnlyGroup = placements.every(
     (pl) => movable[pl.memberIdx]?.kind === "bar",
   );
   let hasGroupCollinearOverlap = false;
-  if (isBarOnlyGroup && placements.length >= 2) {
-    const perps = placements.map((pl) => movable[pl.memberIdx]?.perp ?? NaN);
-    outer: for (let pi = 0; pi < perps.length; pi++) {
-      for (let pj = pi + 1; pj < perps.length; pj++) {
-        const a = perps[pi];
-        const b = perps[pj];
+  if ((isBarOnlyGroup || allowArmCollinearBypass) && placements.length >= 2) {
+    outer: for (let pi = 0; pi < placements.length; pi++) {
+      for (let pj = pi + 1; pj < placements.length; pj++) {
+        const pa = placements[pi];
+        const pb = placements[pj];
+        if (pa === undefined || pb === undefined) continue;
+        const sa = movable[pa.memberIdx];
+        const sb = movable[pb.memberIdx];
+        if (sa === undefined || sb === undefined) continue;
+        if (isNaN(sa.perp) || isNaN(sb.perp)) continue;
+        if (Math.abs(sa.perp - sb.perp) >= 0.5) continue;
+        // Skip pairs that were already overlapping before nudging.
         if (
-          a !== undefined &&
-          b !== undefined &&
-          !isNaN(a) &&
-          !isNaN(b) &&
-          Math.abs(a - b) < 0.5
-        ) {
-          hasGroupCollinearOverlap = true;
-          break outer;
-        }
+          allowArmCollinearBypass &&
+          preExisting?.has(armPairKey(sa.edgeId, sa.perp, sb.edgeId, sb.perp))
+        )
+          continue;
+        hasGroupCollinearOverlap = true;
+        break outer;
       }
     }
   }
