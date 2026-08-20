@@ -157,14 +157,172 @@ docs/wiring-guide.md, and every wiring snippet runs in CI.
     obstacle-aware per-edge routing on ordinary (non-structural)
     scenes, pass the `routeEdges` prop to `CytoscapeCanvas`: it runs a
     post-layout A* pass at layoutstop and holds the camera/positions.
+    `routeEdges` is `boolean | { maxEdges?, clearance?, bendPenalty?,
+    minStub?, mode? }`. `mode` is the important knob and STRAIGHT IS THE
+    DEFAULT: `"direct"` (default) leaves every edge as a bezier and only
+    orthogonally detours the edges whose straight center-to-center line
+    ACTUALLY passes through a node body (an exact segment-vs-rectangle
+    test, not the segment's bounding box). `"orthogonal"` routes every
+    edge axis-aligned regardless of obstacles. Do not reach for
+    `"orthogonal"` to "clean up" a sparse scene: on sparse graphs the
+    default already keeps clear shots straight and Z-routes only real
+    crossings, which is what reads well. The routing pass fires ~0.4s
+    AFTER the layout animation settles (it is a post-settle pass), so a
+    brief straight-bezier flash before edges snap to their routes is
+    expected, not a bug; disable layout `animate` on that canvas if the
+    flash is unwanted.
 17. Raster export: `buildImageExport` (@g3t/react toolbar) wraps native
     `cy.png` for a PNG snapshot of the live canvas; the GraphToolbar
     export menu surfaces it alongside JSON/CSV/Turtle subgraph export.
+18. Live routing controls are counter-bump signals on `CytoscapeCanvas`,
+    not imperative calls: bump `routeRefreshSignal` (a number) to re-run
+    the routing pass over the CURRENT node positions WITHOUT moving any
+    node (the "Refresh routes" op); bump `relayoutSignal` to run the
+    crossing-aware placement optimizer, apply the new positions, then
+    re-route (an explicit user op, so the camera-hold rule does NOT
+    apply here, same class as fit/reheat). Both are per-instance: each
+    canvas responds only to its own prop bump, so there is no global
+    command store to fight in a multi-canvas page. Set
+    `edgeClickIsolate` to make an edge tap isolate that edge via the
+    emphasis layer instead of selecting it. A ready-made Routes-mode +
+    Refresh + Re-layout + Isolate toolbar wiring these props lives in
+    `src/demo/components/routing-controls.tsx` (`useRoutingControls` /
+    `RoutingControlStrip`); copy the pattern, but note it is DEMO code,
+    not a `@g3t/react` export, so do not import it from the package.
 
 When unsure of a signature, read the shipped declaration files
 (`packages/*/dist/*.d.ts` after `pnpm run verify`, or the typedoc at
 docs-out/api). Do not invent props or exports; the export maps in each
 package.json are the complete public surface.
+
+## Cytoscape internals (when you need the raw Core)
+
+`CytoscapeCanvas` hands you a `cytoscape.Core` via `onReady`. Most
+adopter code should never need it directly, but when it does, these
+rules apply. Each one was paid for by a visible bug in this codebase.
+
+**Style selectors — scoping is mandatory.**
+Any stylesheet rule that reads a data field via `data()` MUST live on a
+field-scoped selector (`node[_size]`, `edge[_confidence]`), never on a
+bare `node` or `edge` selector. Cytoscape emits one console warning per
+element per render frame for every element that lacks the mapped field.
+On a 100-node graph with layout animation running that's thousands of
+warnings per second — confirmed to stall the canvas (~1.7s per toggle).
+Use `node[label]` for the label rule, `edge[_confidence]` for opacity,
+etc. The DEFAULT_STYLESHEET in `CytoscapeCanvas.tsx` shows every correct
+scoping.
+
+**Stylesheet order: later rules win (within same specificity).** The
+toolkit's merge order is `DEFAULT → THEME → ENCODING → INSTANCE
+OVERRIDES → OVERLAYS`. Add custom rules at the end of the `stylesheet`
+prop array if you need them to win over theme colors.
+
+**`style().fromJson()` for restyle — never re-init for style changes.**
+When theme or spec changes arrive, apply them via
+`cy.style().fromJson(newStylesheet).update()`. This is a restyle-only
+op: positions hold, camera holds. Never re-create the `cy` instance or
+call the `cy(element, config)` constructor again just to change styles.
+
+**`cy.batch()` for bulk writes.** Group data stamps and class changes:
+```ts
+cy.batch(() => {
+  edge.data({ _segDist: ..., _segWeight: ... });
+  edge.addClass("g3t-canvas-edge-routed");
+});
+```
+`cy.batch()` defers redraws until the callback exits — one restyle, not
+one per element. Every routing write in this codebase uses this.
+
+**`curve-style: segments` contract.**
+`segment-distances` and `segment-weights` are the two required arrays.
+Weights are per-bend positions along the edge (0–1, normalized), distances
+are signed perpendicular offsets from the baseline chord.
+
+Critical: `edge-distances` defaults to `intersection` (the chord runs
+border-to-border). When your router places terminals at box CENTERS (as
+`routeSceneEdges` does), you must set `"edge-distances": "node-position"`
+or every bend lands offset from the routed geometry by the node
+half-extent. This was the bug that caused bends to land at (284.6, 23.1)
+instead of (100, 300) after the v1.0.6 fix of the sign error.
+
+The sign of a `segment-distances` entry: Cytoscape reconstructs a bend
+as `midpt(w) + vectorNormInverse * d` where `vectorNormInverse = (−dy/l,
+dx/l)` (the leftward perpendicular of the edge direction). To get a bend
+at `(bx, by)` given midpoint `(mx, my)` and direction `(dx, dy)` with
+length `l`, compute `d = (py*dx − px*dy)/len` where `(px,py) = (bx−mx,
+by−my)`. The opposite sign mirrors the detour across the chord — that
+was the v1.0.6 regression (the wrong sign shipped in `polylineToCytoscapeSegments`
+while `routeToSegments` in the structural path had it correct).
+
+**`boundingBox({ includeLabels: false, includeOverlays: false })`.**
+Always pass `includeLabels: false` when reading a node's bounding box
+for routing or geometry calculations. Node labels hang below the body;
+including them shifts the "center" off the actual body center and shears
+every routed bend point. `includeOverlays: false` keeps the measure
+stable across selection state.
+
+**Compound nodes (`isParent()`).**
+Compound parents have no drawn body of their own; their children's boxes
+cover the interior. Exclude compound parents from obstacle sets:
+`if (n.isParent()) return;` — otherwise edges route around empty geometry.
+
+**Reliable multi-background stacking.**
+When you need two background images on the same node (e.g., a custom icon
+at 60% + a pin badge at 16px), use per-element style BYPASSES with array
+values, not data() mappings:
+```ts
+n.style({
+  "background-image": [iconUri, badgeUri],
+  "background-position-x": ["50%", "100%"],
+  "background-width": ["60%", "16px"],
+  ...
+});
+```
+Data() mappings with array values are unreliable for multi-background
+composition in Cytoscape 3.x — they never rendered correctly in this
+codebase (two separate browser failures).
+
+**Negative `outline-offset` is rejected.**
+Cytoscape parses and silently discards `outline-offset` values less than
+zero, then emits one warning. An inset selection ring needs a positive
+`outline-offset` (gap between node border and ring) — the ring is drawn
+outside the node border, not inside it.
+
+**`layoutstop` event fires after animation.**
+Wire post-layout work (routing, camera capture) to `layoutstop`, not
+`layoutready`. `layoutready` fires before animation plays; `layoutstop`
+fires after the animation ends and all node positions are final.
+Routing on `layoutstop` is why there is a brief straight-bezier flash
+before edges snap to routes — this is by design.
+
+**`:visible` selector.**
+Use `cy.edges(":visible")` / `cy.nodes(":visible")` to restrict to
+non-hidden elements. The toolkit toggles element visibility via the
+`display: none` Cytoscape property (set with the `hidden` prop); `:visible`
+matches everything except `display: none` elements.
+
+**`cy.png({ output: 'blob' })`** returns a `Blob` directly. The default
+(no `output` option) returns a data-URI string. Use `blob` when you want
+to `URL.createObjectURL` + download without the URI overhead.
+
+**`fcose` must be registered at module level.**
+`cytoscape.use(fcose)` must run before any canvas instance is created.
+The layout name in the options object is `"fcose"`. The toolkit registers
+it in `CytoscapeCanvas.tsx` at the top of the file; adopters who
+instantiate Cytoscape directly must do the same.
+
+**Parallel edges, self-loops, and bidirectional pairs.**
+All three need `curve-style: bezier` to read correctly. Detect them in
+the element builder and stamp `_curveStyle = "bezier"` as node data;
+then a field-scoped rule `edge[_curveStyle = "bezier"] { curve-style:
+bezier }` handles them without touching every other edge.
+
+**`:active` overlay.**
+Cytoscape's default click-hold overlay is a large gray blob (radius ~10,
+opacity 0.25). Slim it in the stylesheet:
+```ts
+{ selector: ":active", style: { "overlay-opacity": 0.08, "overlay-padding": 4 } }
+```
 
 ## Authoring conventions (this repo)
 
