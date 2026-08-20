@@ -173,9 +173,14 @@ export function polylineToCytoscapeSegments(
     const py = p.y - src.y;
     // Weight: parametric projection onto source->target vector.
     const w = (px * dx + py * dy) / lenSq;
-    // Distance: perpendicular offset (positive = left of source->target
-    // in a Y-down coordinate system; cytoscape's sign convention).
-    const d = (px * dy - py * dx) / len;
+    // Distance: perpendicular offset along cytoscape's vectorNormInverse.
+    // Cytoscape renders segpt = midpt + vectorNormInverse * d, with
+    // vectorNormInverse = (-dy/l, dx/l) (edge-control-points.mjs). Solving
+    // segpt == p for d gives (py*dx - px*dy)/len. The prior (px*dy - py*dx)
+    // negated this, mirroring every bend across the source->target chord
+    // (~2*offset error) and throwing detours back through the node they
+    // routed around. routeToSegments (structural path) uses this sign.
+    const d = (py * dx - px * dy) / len;
     weights.push(w);
     distances.push(d);
   }

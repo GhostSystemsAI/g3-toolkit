@@ -547,6 +547,11 @@ export const DEFAULT_STYLESHEET: CyStylesheet[] = [
     selector: "edge.g3t-canvas-edge-routed",
     style: {
       "curve-style": "segments",
+      // Route terminals are box CENTERS (routeSceneEdges boxCenter), so the
+      // segment baseline must be center-to-center. Cytoscape defaults
+      // edge-distances to `intersection` (border-to-border), which shifts
+      // every bend off the routed geometry by the node half-extent.
+      "edge-distances": "node-position",
       "segment-distances": "data(_segDist)",
       "segment-weights": "data(_segWeight)",
     } as any,

@@ -259,9 +259,39 @@ describe("polylineToCytoscapeSegments", () => {
     expect(seg.weights).toHaveLength(1);
     expect(seg.distances).toHaveLength(1);
     expect(Math.abs(seg.weights[0]! - 0.5)).toBeLessThan(EPS);
-    // In a Y-down coordinate frame with source->target along +x, a
-    // point above the line (smaller y) sits on the geometric "left" of
-    // the direction, which is cytoscape's positive segment-distance.
-    expect(seg.distances[0]).toBeGreaterThan(0);
+    // Cytoscape offsets a segment point by vectorNormInverse = (-dy/l, dx/l).
+    // With source->target along +x, vectorNormInverse = (0, 1), so a positive
+    // distance moves the bend DOWN (+y). The bend at y=-30 is above the line,
+    // hence a negative segment-distance of exactly -30.
+    expect(seg.distances[0]).toBeCloseTo(-30, 6);
+  });
+
+  // Reconstruct bend points through cytoscape's ACTUAL segments formula
+  // (edge-control-points.mjs): vectorNormInverse = (-dy/l, dx/l) with
+  // edge-distances:node-position, segpt = midpt(w) + vectorNormInverse*d.
+  // The reconstructed segpts must equal the original interior bends. This
+  // locks the sign against a mirror regression that a same-formula audit
+  // (self-consistent with a buggy encoder) would miss.
+  it("round-trips interior bends through cytoscape's segpt formula", () => {
+    const src = { x: 100, y: 100 };
+    const tgt = { x: 400, y: 300 };
+    const bends = [
+      { x: 100, y: 300 },
+      { x: 260, y: 300 },
+    ];
+    const seg = polylineToCytoscapeSegments([src, ...bends, tgt]);
+    expect(seg).not.toBeNull();
+    if (!seg) return;
+    const dx = tgt.x - src.x;
+    const dy = tgt.y - src.y;
+    const l = Math.hypot(dx, dy);
+    const vni = { x: -dy / l, y: dx / l }; // cytoscape vectorNormInverse
+    seg.distances.forEach((d, i) => {
+      const w = seg.weights[i]!;
+      const midx = src.x * (1 - w) + tgt.x * w;
+      const midy = src.y * (1 - w) + tgt.y * w;
+      expect(midx + vni.x * d).toBeCloseTo(bends[i]!.x, 4);
+      expect(midy + vni.y * d).toBeCloseTo(bends[i]!.y, 4);
+    });
   });
 });
