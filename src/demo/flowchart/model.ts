@@ -11,22 +11,36 @@
  * duplicated; only the diagram data and a node -> sub-diagram drill map are
  * new here.
  *
- * Four diagrams, drillable top-down:
+ * Seven diagrams, drillable top-down:
  *   - Interaction Overview  (dg.act.interaction)   default view; how the two
  *       routers are SELECTED by scene type. Drills into each router.
  *   - Scene Router          (dg.act.scene)          the compact non-structural
  *       path (route-scene-edges.ts: direct-unless-crossing + grazeTolerance).
+ *       sr.ortho drills into the shared A* diagram.
  *   - Structural Router     (dg.act.structural)     the layered path
  *       (g3t-routing.ts: fan / anchor / snap / gap / escalate / nudge). Drills
- *       into its escalation-ladder internals.
+ *       into its escalation-ladder internals, fan, and nudge sub-diagrams.
  *   - Structural Internals  (dg.act.structural.detail)  the escalation ladder
  *       expanded into its individual obstacle attempts (g3t-routing.ts
- *       lines ~1173-1235).
+ *       lines ~1173-1235). Attempt nodes drill into the shared A* diagram.
+ *   - routeOrthogonal A*    (dg.act.ortho)          shared across Scene and
+ *       Structural: prune, inflate, stub ladder, A*, reconstruct, drop collinear.
+ *       Grounded in packages/core/src/route/orthogonal-router.ts:114.
+ *   - Nudging two-pass      (dg.act.nudge)          parallel-run separation:
+ *       normalize → arms/bars → union-find groups → crowded-run plan →
+ *       atomic commit. Second pass for arm overlaps created by pass 1.
+ *       Grounded in packages/core/src/layout/g3t-engine/g3t-nudging.ts.
+ *   - Fan / anchor          (dg.act.fan)            fanKey grouping, side
+ *       selection (largest border gap), sorted placement, overflow onto
+ *       perpendicular sides, anchorOf VR-7f slide.
+ *       Grounded in packages/core/src/layout/g3t-engine/g3t-routing.ts:341+.
  *
  * Faithful to the code at pipeline-stage granularity (the detail diagram at
  * per-attempt granularity):
  *   packages/core/src/route/route-scene-edges.ts
+ *   packages/core/src/route/orthogonal-router.ts
  *   packages/core/src/layout/g3t-engine/g3t-routing.ts
+ *   packages/core/src/layout/g3t-engine/g3t-nudging.ts
  */
 
 import type { StructuralGraphInput } from "@g3t/core";
@@ -405,6 +419,313 @@ const structuralDetailGraph: StructuralGraphInput = {
   ],
 };
 
+// ── routeOrthogonal A* (orthogonal-router.ts:114) ────────────────────────
+// Shared drill target from sr.ortho and from the structural-detail attempt
+// nodes. Steps grounded line by line in routeOrthogonal.
+const orthoRouterGraph: StructuralGraphInput = {
+  nodes: [
+    {
+      id: "or.start",
+      header: { name: "route request (src, tgt, obstacles)" },
+      shape: "initial",
+      width: 230,
+    },
+    {
+      id: "or.prune",
+      header: { name: "> 64 obstacles? prune to bounding region" },
+      shape: "diamond",
+      width: 250,
+      height: 100,
+    },
+    {
+      id: "or.pruneroute",
+      header: { name: "route against pruned set" },
+      shape: "ellipse",
+      width: 210,
+    },
+    {
+      id: "or.prunecheck",
+      header: { name: "pruned route clears full set?" },
+      shape: "diamond",
+      width: 230,
+      height: 90,
+    },
+    {
+      id: "or.inflate",
+      header: { name: "inflate obstacle boxes by clearance (default 12)" },
+      shape: "ellipse",
+      width: 280,
+    },
+    {
+      id: "or.stub",
+      header: {
+        name: "stub ladder per terminal [minStub, minStub/2, clearance, 0]",
+      },
+      shape: "ellipse",
+      width: 310,
+    },
+    {
+      id: "or.grid",
+      header: {
+        name: "build interesting-coordinate grid (inflated borders + stubs)",
+      },
+      shape: "ellipse",
+      width: 310,
+    },
+    {
+      id: "or.astar",
+      header: {
+        name: "A* over (grid node, incoming dir) — bendPenalty 30/bend",
+      },
+      shape: "ellipse",
+      width: 310,
+    },
+    {
+      id: "or.found",
+      header: { name: "goal reached?" },
+      shape: "diamond",
+      width: 150,
+      height: 80,
+    },
+    {
+      id: "or.reconstruct",
+      header: { name: "reconstruct stub-to-stub path; prepend/append anchors" },
+      shape: "ellipse",
+      width: 300,
+    },
+    {
+      id: "or.collinear",
+      header: { name: "drop collinear / duplicate points" },
+      shape: "ellipse",
+      width: 230,
+    },
+    { id: "or.emit", header: { name: "return { points }" }, shape: "final" },
+    {
+      id: "or.null",
+      header: { name: "return null (no clear path)" },
+      shape: "final",
+      width: 200,
+    },
+  ],
+  edges: [
+    { id: "or.e1", source: "or.start", target: "or.prune" },
+    { id: "or.e2", source: "or.prune", target: "or.pruneroute", label: "yes" },
+    { id: "or.e3", source: "or.prune", target: "or.inflate", label: "no" },
+    { id: "or.e4", source: "or.pruneroute", target: "or.prunecheck" },
+    {
+      id: "or.e5",
+      source: "or.prunecheck",
+      target: "or.emit",
+      label: "yes → fast path",
+    },
+    {
+      id: "or.e6",
+      source: "or.prunecheck",
+      target: "or.inflate",
+      label: "no → full set",
+    },
+    { id: "or.e7", source: "or.inflate", target: "or.stub" },
+    { id: "or.e8", source: "or.stub", target: "or.grid" },
+    { id: "or.e9", source: "or.grid", target: "or.astar" },
+    { id: "or.e10", source: "or.astar", target: "or.found" },
+    {
+      id: "or.e11",
+      source: "or.found",
+      target: "or.reconstruct",
+      label: "yes",
+    },
+    { id: "or.e12", source: "or.found", target: "or.null", label: "no" },
+    { id: "or.e13", source: "or.reconstruct", target: "or.collinear" },
+    { id: "or.e14", source: "or.collinear", target: "or.emit" },
+  ],
+};
+
+// ── Nudging two-pass (g3t-nudging.ts:105) ────────────────────────────────
+// nudgeRoutes runs the separation pass twice: pass 1 spreads bars, pass 2
+// fixes the arm overlaps that bar-spread creates.
+const nudgingGraph: StructuralGraphInput = {
+  nodes: [
+    {
+      id: "nu.start",
+      header: { name: "route map + obstacles" },
+      shape: "initial",
+    },
+    {
+      id: "nu.pre",
+      header: {
+        name: "capture pre-existing arm overlaps (computeRawArmOverlaps)",
+      },
+      shape: "ellipse",
+      width: 290,
+    },
+    {
+      id: "nu.p1norm",
+      header: { name: "pass 1 — normalize routes (dedupeCollinear)" },
+      shape: "ellipse",
+      width: 260,
+    },
+    {
+      id: "nu.p1decomp",
+      header: {
+        name: "decompose into arms + bars; exclude short arms (< 2×trackGap)",
+      },
+      shape: "ellipse",
+      width: 310,
+    },
+    {
+      id: "nu.p1group",
+      header: {
+        name: "union-find: group segments by axis, perp proximity, obstacle split",
+      },
+      shape: "ellipse",
+      width: 320,
+    },
+    {
+      id: "nu.p1crowd",
+      header: {
+        name: "crowdedRuns: cut where spacing ≥ trackGap (spacing < trackGap → crowded)",
+      },
+      shape: "ellipse",
+      width: 340,
+    },
+    {
+      id: "nu.p1plan",
+      header: {
+        name: "plan: measure corridor span, compute trackGap placements",
+      },
+      shape: "ellipse",
+      width: 290,
+    },
+    {
+      id: "nu.p1commit",
+      header: {
+        name: "atomic commit via attemptGroupRewrite; crossing guard reverts on failure",
+      },
+      shape: "ellipse",
+      width: 320,
+    },
+    {
+      id: "nu.p2",
+      header: {
+        name: "pass 2 (arms-only) — same pipeline; skip bars, skip pre-existing arm overlaps",
+      },
+      shape: "ellipse",
+      width: 340,
+    },
+    {
+      id: "nu.emit",
+      header: { name: "return { routes, corridorDemand }" },
+      shape: "final",
+      width: 230,
+    },
+  ],
+  edges: [
+    { id: "nu.e1", source: "nu.start", target: "nu.pre" },
+    { id: "nu.e2", source: "nu.pre", target: "nu.p1norm" },
+    { id: "nu.e3", source: "nu.p1norm", target: "nu.p1decomp" },
+    { id: "nu.e4", source: "nu.p1decomp", target: "nu.p1group" },
+    { id: "nu.e5", source: "nu.p1group", target: "nu.p1crowd" },
+    { id: "nu.e6", source: "nu.p1crowd", target: "nu.p1plan" },
+    { id: "nu.e7", source: "nu.p1plan", target: "nu.p1commit" },
+    {
+      id: "nu.e8",
+      source: "nu.p1commit",
+      target: "nu.p2",
+      label: "pass 1 done",
+    },
+    { id: "nu.e9", source: "nu.p2", target: "nu.emit" },
+  ],
+};
+
+// ── Fan / anchor distribution (g3t-routing.ts:341+) ──────────────────────
+// fanKey groups edges by (node#side). sidesFor picks the primary side by
+// largest border gap (VR-7f). Anchors are placed evenly or at pitch.
+// anchorOf (VR-7f) slides a covered spot to the nearest exposed cross.
+const fanAnchorGraph: StructuralGraphInput = {
+  nodes: [
+    {
+      id: "fa.start",
+      header: { name: "edge list + geometry boxes" },
+      shape: "initial",
+    },
+    {
+      id: "fa.key",
+      header: { name: "fanKey(node, side) — group edges by node#side" },
+      shape: "ellipse",
+      width: 260,
+    },
+    {
+      id: "fa.sides",
+      header: {
+        name: "sidesFor: rank sides by border gap; flow axis breaks ties (VR-7f)",
+      },
+      shape: "ellipse",
+      width: 310,
+    },
+    {
+      id: "fa.sort",
+      header: { name: "sort fan by other endpoint's tangent coordinate" },
+      shape: "ellipse",
+      width: 270,
+    },
+    {
+      id: "fa.pitch",
+      header: { name: "anchorPitch set?" },
+      shape: "diamond",
+      width: 160,
+      height: 80,
+    },
+    {
+      id: "fa.pitchplace",
+      header: {
+        name: "placeAtPitch: place at ≥ pitch spacing, centred on side span",
+      },
+      shape: "ellipse",
+      width: 290,
+    },
+    {
+      id: "fa.overflow",
+      header: {
+        name: "overflow excess edges onto perpendicular sides (nearest corner first)",
+      },
+      shape: "ellipse",
+      width: 310,
+    },
+    {
+      id: "fa.evenplace",
+      header: { name: "even fan: divide side into count+1 intervals" },
+      shape: "ellipse",
+      width: 260,
+    },
+    {
+      id: "fa.anchor",
+      header: {
+        name: "anchorOf: fanPreferred + VR-7f slide to nearest exposed cross",
+      },
+      shape: "ellipse",
+      width: 300,
+    },
+    {
+      id: "fa.emit",
+      header: { name: "fanOffset + fanSide written for every edge@node" },
+      shape: "final",
+      width: 260,
+    },
+  ],
+  edges: [
+    { id: "fa.e1", source: "fa.start", target: "fa.key" },
+    { id: "fa.e2", source: "fa.key", target: "fa.sides" },
+    { id: "fa.e3", source: "fa.sides", target: "fa.sort" },
+    { id: "fa.e4", source: "fa.sort", target: "fa.pitch" },
+    { id: "fa.e5", source: "fa.pitch", target: "fa.pitchplace", label: "yes" },
+    { id: "fa.e6", source: "fa.pitch", target: "fa.evenplace", label: "no" },
+    { id: "fa.e7", source: "fa.pitchplace", target: "fa.overflow" },
+    { id: "fa.e8", source: "fa.overflow", target: "fa.anchor" },
+    { id: "fa.e9", source: "fa.evenplace", target: "fa.anchor" },
+    { id: "fa.e10", source: "fa.anchor", target: "fa.emit" },
+  ],
+};
+
 const diagrams: Record<string, Diagram> = {
   "dg.act.interaction": {
     id: "dg.act.interaction",
@@ -434,6 +755,27 @@ const diagrams: Record<string, Diagram> = {
     context: "routingEngine",
     activityGraph: structuralDetailGraph,
   },
+  "dg.act.ortho": {
+    id: "dg.act.ortho",
+    name: "routeOrthogonal A*",
+    type: "act",
+    context: "routingEngine",
+    activityGraph: orthoRouterGraph,
+  },
+  "dg.act.nudge": {
+    id: "dg.act.nudge",
+    name: "Nudging Two-Pass",
+    type: "act",
+    context: "routingEngine",
+    activityGraph: nudgingGraph,
+  },
+  "dg.act.fan": {
+    id: "dg.act.fan",
+    name: "Fan / Anchor Distribution",
+    type: "act",
+    context: "routingEngine",
+    activityGraph: fanAnchorGraph,
+  },
 };
 
 const root: Package = {
@@ -454,6 +796,11 @@ const root: Package = {
       id: "pkg.internals",
       name: "Internals",
       diagrams: ["dg.act.structural.detail"],
+    },
+    {
+      id: "pkg.substages",
+      name: "Substages",
+      diagrams: ["dg.act.ortho", "dg.act.nudge", "dg.act.fan"],
     },
   ],
 };
@@ -487,7 +834,17 @@ export const DRILL_MAP: Record<string, Record<string, string>> = {
     "ix.scene": "dg.act.scene",
     "ix.struct": "dg.act.structural",
   },
+  "dg.act.scene": {
+    "sr.ortho": "dg.act.ortho",
+  },
   "dg.act.structural": {
     "st.escalate": "dg.act.structural.detail",
+    "st.fan": "dg.act.fan",
+    "st.nudge": "dg.act.nudge",
+  },
+  "dg.act.structural.detail": {
+    "sd.try1": "dg.act.ortho",
+    "sd.try2": "dg.act.ortho",
+    "sd.try3": "dg.act.ortho",
   },
 };

@@ -49,14 +49,31 @@ describe("routing flowchart model", () => {
       const from = projectDiagram(routingFlowchartModel, fromId);
       const nodeIds = new Set(from.nodes.map((n) => n.id));
       for (const [nodeId, targetId] of Object.entries(byNode)) {
-        expect(nodeIds.has(nodeId)).toBe(true);
-        expect(routingFlowchartModel.diagrams[targetId]).toBeDefined();
+        expect(nodeIds.has(nodeId), `node ${nodeId} not in ${fromId}`).toBe(
+          true,
+        );
+        expect(
+          routingFlowchartModel.diagrams[targetId],
+          `diagram ${targetId} not registered`,
+        ).toBeDefined();
       }
     }
-    // The A45 drill: the structural router's escalation node opens the
-    // internals diagram.
+    // Existing escalation drill.
     expect(DRILL_MAP["dg.act.structural"]?.["st.escalate"]).toBe(
       "dg.act.structural.detail",
+    );
+    // New drills: Scene → A*, Structural → fan/nudge, detail attempts → A*.
+    expect(DRILL_MAP["dg.act.scene"]?.["sr.ortho"]).toBe("dg.act.ortho");
+    expect(DRILL_MAP["dg.act.structural"]?.["st.fan"]).toBe("dg.act.fan");
+    expect(DRILL_MAP["dg.act.structural"]?.["st.nudge"]).toBe("dg.act.nudge");
+    expect(DRILL_MAP["dg.act.structural.detail"]?.["sd.try1"]).toBe(
+      "dg.act.ortho",
+    );
+    expect(DRILL_MAP["dg.act.structural.detail"]?.["sd.try2"]).toBe(
+      "dg.act.ortho",
+    );
+    expect(DRILL_MAP["dg.act.structural.detail"]?.["sd.try3"]).toBe(
+      "dg.act.ortho",
     );
   });
 
@@ -67,12 +84,43 @@ describe("routing flowchart model", () => {
     });
   });
 
+  it("routeOrthogonal A* diagram has prune decision, A* node, and both terminals", () => {
+    const d = projectDiagram(routingFlowchartModel, "dg.act.ortho");
+    expect(d.nodes.find((n) => n.id === "or.prune")?.shape).toBe("diamond");
+    expect(d.nodes.find((n) => n.id === "or.astar")?.shape).toBe("ellipse");
+    expect(d.nodes.find((n) => n.id === "or.emit")?.shape).toBe("final");
+    expect(d.nodes.find((n) => n.id === "or.null")?.shape).toBe("final");
+    // stub ladder node is present and readable.
+    expect(d.nodes.find((n) => n.id === "or.stub")).toBeTruthy();
+  });
+
+  it("nudging two-pass diagram has pass-1 and pass-2 nodes", () => {
+    const d = projectDiagram(routingFlowchartModel, "dg.act.nudge");
+    expect(d.nodes.find((n) => n.id === "nu.p1norm")?.shape).toBe("ellipse");
+    expect(d.nodes.find((n) => n.id === "nu.p1group")?.shape).toBe("ellipse");
+    expect(d.nodes.find((n) => n.id === "nu.p1commit")?.shape).toBe("ellipse");
+    expect(d.nodes.find((n) => n.id === "nu.p2")?.shape).toBe("ellipse");
+    expect(d.nodes.find((n) => n.id === "nu.emit")?.shape).toBe("final");
+  });
+
+  it("fan/anchor diagram has fanKey, sidesFor, pitch decision, and anchorOf nodes", () => {
+    const d = projectDiagram(routingFlowchartModel, "dg.act.fan");
+    expect(d.nodes.find((n) => n.id === "fa.key")?.shape).toBe("ellipse");
+    expect(d.nodes.find((n) => n.id === "fa.sides")?.shape).toBe("ellipse");
+    expect(d.nodes.find((n) => n.id === "fa.pitch")?.shape).toBe("diamond");
+    expect(d.nodes.find((n) => n.id === "fa.anchor")?.shape).toBe("ellipse");
+    expect(d.nodes.find((n) => n.id === "fa.emit")?.shape).toBe("final");
+  });
+
   // Every authored flowchart must be a valid layout input.
   for (const id of [
     "dg.act.interaction",
     "dg.act.scene",
     "dg.act.structural",
     "dg.act.structural.detail",
+    "dg.act.ortho",
+    "dg.act.nudge",
+    "dg.act.fan",
   ]) {
     it(`layout smoke: ${id} lays out DOWN and places every node`, async () => {
       const g = projectDiagram(routingFlowchartModel, id);
