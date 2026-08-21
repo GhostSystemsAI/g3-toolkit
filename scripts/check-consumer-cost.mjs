@@ -120,8 +120,14 @@ const SCENARIOS = [
     // decision). Measured 72.9 KB. All additions live inside
     // g3t-nudging and route-scene-edges, both reachable only from
     // G3tLayeredLayout. core-ugm held at 4.8 KB confirming no leak.
-    // Headroom 3.1 KB.
-    budget: 76 * 1024,
+    // RAISED 76 -> 78 KB, 2026-08-21 (RF-B smart attachment). Measured
+    // 76.8 KB, +3.9 KB. routeStructuralEdges + routeSceneEdges each gain
+    // an opt-in `smartAttach` refinement path (within-side reorder,
+    // per-edge side flip, countCrossings oracle). Both live inside the
+    // routing chain already pulled by G3tLayeredLayout, and default off
+    // means the additional code is dead when unused. core-ugm holds at
+    // 4.8 KB (no leak). Headroom 1.2 KB.
+    budget: 78 * 1024,
     code:
       `import { UGM, ForceLayout, G3tLayeredLayout } from "@g3t/core";\n` +
       `export const g = new UGM();\n` +

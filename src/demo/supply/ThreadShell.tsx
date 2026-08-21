@@ -282,7 +282,7 @@ export function SupplyThreadShell({ onBack }: { onBack: () => void }) {
     refreshRoutes,
     relayoutSignal,
     relayout,
-  } = useRoutingControls();
+  } = useRoutingControls({ smartAttach: true });
   // Renderer toggle (G3L Round 46, owner request): the SAME graph,
   // rendered through the headless SVG or Canvas adapters. The cy
   // instance stays mounted (hidden beneath) as the source of truth:

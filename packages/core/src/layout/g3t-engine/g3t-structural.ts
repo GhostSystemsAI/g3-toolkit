@@ -455,6 +455,8 @@ export function g3tLayoutStructural(
       // Opt-in; undefined leaves the fan exactly as it was.
       anchorPitch: options?.anchorPitch,
       bendHints,
+      // RF-B: opt-in crossing-aware attachment refinement.
+      smartAttach: options?.smartAttach,
     });
     if (options?.nudge) {
       const topBoxes = Object.entries(geometry.nodes).filter(

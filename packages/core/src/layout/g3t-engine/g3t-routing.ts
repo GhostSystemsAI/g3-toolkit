@@ -30,6 +30,7 @@ import {
   routeChannelOverflow,
   type ChannelPlan,
 } from "./g3t-channel-router";
+import { countCrossings } from "../../metrics/layout-metrics";
 
 /** VR-10 (owner Jake, 2026-08-14): the obstacle set a perimeter or
  *  detour route must be JUDGED against.
@@ -272,6 +273,15 @@ export function routeStructuralEdges(
      *  RESERVES widens to match; setting it only here spreads runs
      *  into space that was never allocated. */
     trackGap?: number;
+    /** RF-B (owner Jake, 2026-08-21): opt-in crossing-aware attachment
+     *  refinement. When on, after fan assignment and before the routing
+     *  pass runs, refine attachments by (a) within-side reorder of the
+     *  slot assignment for edges sharing a fanKey and (b) per-edge side
+     *  flip to the opposite face. Every candidate is measured via
+     *  `countCrossings` over the resulting polylines and accepted ONLY
+     *  on a strict improvement; each edge is flipped at most once to
+     *  prevent oscillation. Default false => byte-identical to today. */
+    smartAttach?: boolean;
   },
 ): Record<string, { points: Pt[]; intermediate?: Pt[] }> {
   // Direction-aware (WS-D D3a fix): under horizontal flow (RIGHT/
@@ -292,7 +302,7 @@ export function routeStructuralEdges(
   const useChannelRouter =
     (options?.useChannelRouter ?? false) && options?.channelPlan !== undefined;
   const channelPlan = useChannelRouter ? options?.channelPlan : undefined;
-  const out: Record<string, { points: Pt[]; intermediate?: Pt[] }> = {};
+  let out: Record<string, { points: Pt[]; intermediate?: Pt[] }> = {};
   // Perimeter-routed edges collected during the loop; a post-pass
   // staggers coincident tracks so two long lines sharing a band do
   // not overlap exactly. (Once 01-nudging lands, its group machinery
@@ -305,7 +315,7 @@ export function routeStructuralEdges(
     cross: number;
     build: (cross: number) => Pt[];
   }
-  const perimeterRoutes: PerimeterRec[] = [];
+  let perimeterRoutes: PerimeterRec[] = [];
   const topBoxes = Object.entries(geometry.nodes).filter(
     ([, g]) => g.kind !== "row",
   );
@@ -582,688 +592,853 @@ export function routeStructuralEdges(
     collect("target");
   }
 
-  const anchorOf = (
-    e: {
-      id: string;
-      source: string;
-      target: string;
-      sourcePort?: string;
-      targetPort?: string;
-    },
-    end: "s" | "t",
-  ): { point: Pt; side: RouteSide; port?: boolean } | null => {
-    const node = end === "s" ? e.source : e.target;
-    const portId = end === "s" ? e.sourcePort : e.targetPort;
-    if (portId !== undefined) {
-      const p = geometry.ports[portId];
-      if (p !== undefined) {
-        // LR-20: anchor at the port's OUTER face center so arrowed
-        // edges terminate at the port boundary, not behind it.
-        const cx =
-          p.side === "EAST"
-            ? p.x + p.width
-            : p.side === "WEST"
-              ? p.x
-              : p.x + p.width / 2;
-        const cy =
-          p.side === "SOUTH"
-            ? p.y + p.height
-            : p.side === "NORTH"
-              ? p.y
-              : p.y + p.height / 2;
-        return { point: { x: cx, y: cy }, side: p.side, port: true };
+  // RF-B (owner Jake, 2026-08-21): the entire routing pipeline is
+  // wrapped so smartAttach can call it multiple times with mutated
+  // fanOffset/fanSide (via closure). When smartAttach is off (default),
+  // it runs exactly once and the result is byte-identical to before.
+  const runRoutingPass = (): Record<
+    string,
+    { points: Pt[]; intermediate?: Pt[] }
+  > => {
+    out = {};
+    perimeterRoutes = [];
+
+    const anchorOf = (
+      e: {
+        id: string;
+        source: string;
+        target: string;
+        sourcePort?: string;
+        targetPort?: string;
+      },
+      end: "s" | "t",
+    ): { point: Pt; side: RouteSide; port?: boolean } | null => {
+      const node = end === "s" ? e.source : e.target;
+      const portId = end === "s" ? e.sourcePort : e.targetPort;
+      if (portId !== undefined) {
+        const p = geometry.ports[portId];
+        if (p !== undefined) {
+          // LR-20: anchor at the port's OUTER face center so arrowed
+          // edges terminate at the port boundary, not behind it.
+          const cx =
+            p.side === "EAST"
+              ? p.x + p.width
+              : p.side === "WEST"
+                ? p.x
+                : p.x + p.width / 2;
+          const cy =
+            p.side === "SOUTH"
+              ? p.y + p.height
+              : p.side === "NORTH"
+                ? p.y
+                : p.y + p.height / 2;
+          return { point: { x: cx, y: cy }, side: p.side, port: true };
+        }
       }
-    }
-    const g = boxOf.get(node);
-    if (g === undefined) return null;
-    const other = end === "s" ? e.target : e.source;
-    // VR-7f (owner re-verify 2026-07-28): when the counterpart box
-    // OVERLAPS this one, an anchor can land INSIDE the counterpart
-    // (the OBC-over-SmallSat drop routed straight through the
-    // host). Walk the gap-ordered sides; on each, slide the tangent
-    // to an EXPOSED stretch of the border (outside the counterpart
-    // plus clearance) when the natural spot is covered; fall to the
-    // next side when the whole border is covered.
-    const og = boxOf.get(other);
-    const CLEAR = 8;
-    const MARG = 6;
-    const buildAnchor = (
-      side: RouteSide,
-      preferred: number | undefined,
-    ): { point: Pt; side: RouteSide } | null => {
-      const ew = side === "EAST" || side === "WEST";
-      const border = ew
-        ? side === "EAST"
-          ? g.x + g.width
-          : g.x
-        : side === "SOUTH"
-          ? g.y + g.height
-          : g.y;
-      const lo = (ew ? g.y : g.x) + MARG;
-      const hi = (ew ? g.y + g.height : g.x + g.width) - MARG;
-      const want = preferred ?? (ew ? g.y + g.height / 2 : g.x + g.width / 2);
-      const mk = (cross: number): { point: Pt; side: RouteSide } => ({
-        point: ew ? { x: border, y: cross } : { x: cross, y: border },
-        side,
-      });
-      if (og === undefined) return mk(want);
-      const coveredAxis = ew
-        ? border > og.x - CLEAR && border < og.x + og.width + CLEAR
-        : border > og.y - CLEAR && border < og.y + og.height + CLEAR;
-      if (!coveredAxis) return mk(want);
-      const cLo = (ew ? og.y : og.x) - CLEAR;
-      const cHi = (ew ? og.y + og.height : og.x + og.width) + CLEAR;
-      if (want <= cLo || want >= cHi) return mk(want);
-      // Natural spot covered: nearest exposed cross on this border.
-      const candidates: number[] = [];
-      if (cLo >= lo) candidates.push(cLo);
-      if (cHi <= hi) candidates.push(cHi);
-      if (candidates.length === 0) return null; // fully covered side
-      candidates.sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
-      const chosen = candidates[0];
-      return chosen === undefined ? null : mk(chosen);
+      const g = boxOf.get(node);
+      if (g === undefined) return null;
+      const other = end === "s" ? e.target : e.source;
+      // VR-7f (owner re-verify 2026-07-28): when the counterpart box
+      // OVERLAPS this one, an anchor can land INSIDE the counterpart
+      // (the OBC-over-SmallSat drop routed straight through the
+      // host). Walk the gap-ordered sides; on each, slide the tangent
+      // to an EXPOSED stretch of the border (outside the counterpart
+      // plus clearance) when the natural spot is covered; fall to the
+      // next side when the whole border is covered.
+      const og = boxOf.get(other);
+      const CLEAR = 8;
+      const MARG = 6;
+      const buildAnchor = (
+        side: RouteSide,
+        preferred: number | undefined,
+      ): { point: Pt; side: RouteSide } | null => {
+        const ew = side === "EAST" || side === "WEST";
+        const border = ew
+          ? side === "EAST"
+            ? g.x + g.width
+            : g.x
+          : side === "SOUTH"
+            ? g.y + g.height
+            : g.y;
+        const lo = (ew ? g.y : g.x) + MARG;
+        const hi = (ew ? g.y + g.height : g.x + g.width) - MARG;
+        const want = preferred ?? (ew ? g.y + g.height / 2 : g.x + g.width / 2);
+        const mk = (cross: number): { point: Pt; side: RouteSide } => ({
+          point: ew ? { x: border, y: cross } : { x: cross, y: border },
+          side,
+        });
+        if (og === undefined) return mk(want);
+        const coveredAxis = ew
+          ? border > og.x - CLEAR && border < og.x + og.width + CLEAR
+          : border > og.y - CLEAR && border < og.y + og.height + CLEAR;
+        if (!coveredAxis) return mk(want);
+        const cLo = (ew ? og.y : og.x) - CLEAR;
+        const cHi = (ew ? og.y + og.height : og.x + og.width) + CLEAR;
+        if (want <= cLo || want >= cHi) return mk(want);
+        // Natural spot covered: nearest exposed cross on this border.
+        const candidates: number[] = [];
+        if (cLo >= lo) candidates.push(cLo);
+        if (cHi <= hi) candidates.push(cHi);
+        if (candidates.length === 0) return null; // fully covered side
+        candidates.sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
+        const chosen = candidates[0];
+        return chosen === undefined ? null : mk(chosen);
+      };
+      const fanPreferred = fanOffset.get(`${e.id}@${node}`);
+      // Anchor-pitch overflow assigned this edge to a specific side, so
+      // try that one FIRST rather than the gap-ordered primary. Empty
+      // unless options.anchorPitch is set, so the default walk below is
+      // reached unchanged. VR-7f still applies: if the assigned side is
+      // covered by the counterpart box we fall through to the normal
+      // ordering rather than anchoring into another box.
+      const assignedSide = fanSide.get(`${e.id}@${node}`);
+      if (assignedSide !== undefined) {
+        const a = buildAnchor(assignedSide, fanPreferred);
+        if (a !== null) return a;
+      }
+      const ordered = sidesFor(node, other);
+      for (let i = 0; i < ordered.length; i++) {
+        const side = ordered[i];
+        if (side === undefined) continue;
+        if (side === assignedSide) continue; // already tried, and failed
+        // `fanPreferred` is a coordinate in its OWN side's tangent axis.
+        // On the default path that side is ordered[0], so passing it
+        // there is correct. When overflow assigned a different side and
+        // that side was rejected, the coordinate means nothing here (a
+        // y from an EAST fan read as an x on NORTH), so drop it and take
+        // the side's natural midpoint.
+        const preferred =
+          i === 0 && assignedSide === undefined ? fanPreferred : undefined;
+        const a = buildAnchor(side, preferred);
+        if (a !== null) return a;
+      }
+      // Everything covered (extreme containment): the primary side's
+      // natural anchor, honestly.
+      const primary = ordered[0] ?? "EAST";
+      const ewP = primary === "EAST" || primary === "WEST";
+      const cross =
+        fanPreferred ?? (ewP ? g.y + g.height / 2 : g.x + g.width / 2);
+      return ewP
+        ? {
+            point: { x: primary === "EAST" ? g.x + g.width : g.x, y: cross },
+            side: primary,
+          }
+        : {
+            point: { x: cross, y: primary === "SOUTH" ? g.y + g.height : g.y },
+            side: primary,
+          };
     };
-    const fanPreferred = fanOffset.get(`${e.id}@${node}`);
-    // Anchor-pitch overflow assigned this edge to a specific side, so
-    // try that one FIRST rather than the gap-ordered primary. Empty
-    // unless options.anchorPitch is set, so the default walk below is
-    // reached unchanged. VR-7f still applies: if the assigned side is
-    // covered by the counterpart box we fall through to the normal
-    // ordering rather than anchoring into another box.
-    const assignedSide = fanSide.get(`${e.id}@${node}`);
-    if (assignedSide !== undefined) {
-      const a = buildAnchor(assignedSide, fanPreferred);
-      if (a !== null) return a;
-    }
-    const ordered = sidesFor(node, other);
-    for (let i = 0; i < ordered.length; i++) {
-      const side = ordered[i];
-      if (side === undefined) continue;
-      if (side === assignedSide) continue; // already tried, and failed
-      // `fanPreferred` is a coordinate in its OWN side's tangent axis.
-      // On the default path that side is ordered[0], so passing it
-      // there is correct. When overflow assigned a different side and
-      // that side was rejected, the coordinate means nothing here (a
-      // y from an EAST fan read as an x on NORTH), so drop it and take
-      // the side's natural midpoint.
-      const preferred =
-        i === 0 && assignedSide === undefined ? fanPreferred : undefined;
-      const a = buildAnchor(side, preferred);
-      if (a !== null) return a;
-    }
-    // Everything covered (extreme containment): the primary side's
-    // natural anchor, honestly.
-    const primary = ordered[0] ?? "EAST";
-    const ewP = primary === "EAST" || primary === "WEST";
-    const cross =
-      fanPreferred ?? (ewP ? g.y + g.height / 2 : g.x + g.width / 2);
-    return ewP
-      ? {
-          point: { x: primary === "EAST" ? g.x + g.width : g.x, y: cross },
-          side: primary,
-        }
-      : {
-          point: { x: cross, y: primary === "SOUTH" ? g.y + g.height : g.y },
-          side: primary,
-        };
-  };
 
-  // PRF-003 brief 05a: pre-compute channel/track assignment before the
-  // per-edge loop. Entry/exit cross-coord for the divergence sort uses
-  // node centers (deterministic, geometry-only); the emitter reads this
-  // per edge inside the loop. When `useChannelRouter` is off (default)
-  // this whole block is dead code (channelPlan === undefined).
-  const channelAssignment = channelPlan
-    ? assignTracks(
-        edges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          entryCross:
-            channelPlan.direction === "RIGHT" ||
-            channelPlan.direction === "LEFT"
-              ? centerY(e.source)
-              : centerX(e.source),
-          exitCross:
-            channelPlan.direction === "RIGHT" ||
-            channelPlan.direction === "LEFT"
-              ? centerY(e.target)
-              : centerX(e.target),
-        })),
-        channelPlan,
-      )
-    : null;
-
-  const t0 = Date.now();
-  for (const e of edges) {
-    const s = anchorOf(e, "s");
-    const t = anchorOf(e, "t");
-    if (s === null || t === null) continue;
-    // LR-21 (owner review 2026-07-22): NEAR-aligned anchor pairs got
-    // a full Z jog for a few pixels of cross-axis delta (boxes of
-    // different widths stack left-aligned, so their CENTERS differ
-    // even when a direct line is the obviously right route). When
-    // both ends are box anchors (ports stay where declared), the
-    // cross delta is small, and the shared coordinate stays inside
-    // BOTH boxes' side spans with margin, slide the two anchors to
-    // the shared coordinate: the simple route then collapses to a
-    // straight line.
-    if (e.sourcePort === undefined && e.targetPort === undefined) {
-      const SNAP = 12;
-      const MARGIN = 6;
-      const sg = boxOf.get(e.source);
-      const tg = boxOf.get(e.target);
-      // VR-7e (owner re-verify 2026-07-28): the snap follows the
-      // SIDE PAIR, not the flow axis (the round-62 dominant-axis
-      // change made E/W pairs reachable under vertical flow, and
-      // this pass kept snapping the flow's cross coordinate:
-      // vertical alignment never locked in the BDD). An E/W pair
-      // snaps the shared Y; an N/S pair the shared X; mixed pairs
-      // have no straight line to snap to.
-      const ewPair =
-        (s.side === "EAST" || s.side === "WEST") &&
-        (t.side === "EAST" || t.side === "WEST");
-      const nsPair =
-        (s.side === "NORTH" || s.side === "SOUTH") &&
-        (t.side === "NORTH" || t.side === "SOUTH");
-      if (sg !== undefined && tg !== undefined && (ewPair || nsPair)) {
-        const crossS = ewPair ? s.point.y : s.point.x;
-        const crossT = ewPair ? t.point.y : t.point.x;
-        const delta = Math.abs(crossS - crossT);
-        if (delta > 0 && delta <= SNAP) {
-          const shared = (crossS + crossT) / 2;
-          const lo = (g: {
-            x: number;
-            y: number;
-            width: number;
-            height: number;
-          }) => (ewPair ? g.y : g.x) + MARGIN;
-          const hi = (g: {
-            x: number;
-            y: number;
-            width: number;
-            height: number;
-          }) => (ewPair ? g.y + g.height : g.x + g.width) - MARGIN;
-          if (
-            shared >= lo(sg) &&
-            shared <= hi(sg) &&
-            shared >= lo(tg) &&
-            shared <= hi(tg)
-          ) {
-            if (ewPair) {
-              s.point.y = shared;
-              t.point.y = shared;
-            } else {
-              s.point.x = shared;
-              t.point.x = shared;
-            }
-          }
-        }
-      }
-    }
-    // Owner 2026-07-28: PURE PORT pairs also straighten when the
-    // shared line stays WITHIN BOTH PORTS' OWN BODIES: the anchor
-    // remains on the port (its 12px body edge), just off-center,
-    // which SysML tools accept visually. Ports never leave their
-    // declared bodies (the LR-21 principle holds).
-    else if (e.sourcePort !== undefined && e.targetPort !== undefined) {
-      const sp = geometry.ports[e.sourcePort];
-      const tp = geometry.ports[e.targetPort];
-      const ewPair =
-        (s.side === "EAST" || s.side === "WEST") &&
-        (t.side === "EAST" || t.side === "WEST");
-      const nsPair =
-        (s.side === "NORTH" || s.side === "SOUTH") &&
-        (t.side === "NORTH" || t.side === "SOUTH");
-      if (sp !== undefined && tp !== undefined && (ewPair || nsPair)) {
-        const crossS = ewPair ? s.point.y : s.point.x;
-        const crossT = ewPair ? t.point.y : t.point.x;
-        const delta = Math.abs(crossS - crossT);
-        if (delta > 0) {
-          const shared = (crossS + crossT) / 2;
-          const PAD = 1;
-          const within = (g: {
-            x: number;
-            y: number;
-            width: number;
-            height: number;
-          }): boolean =>
-            ewPair
-              ? shared >= g.y + PAD && shared <= g.y + g.height - PAD
-              : shared >= g.x + PAD && shared <= g.x + g.width - PAD;
-          if (within(sp) && within(tp)) {
-            if (ewPair) {
-              s.point.y = shared;
-              t.point.y = shared;
-            } else {
-              s.point.x = shared;
-              t.point.x = shared;
-            }
-          }
-        }
-      }
-    }
-    // VR-8 (owner verification 2026-07-26): MIXED pairs (one port,
-    // one box: the parametric bindings) also straighten: the PORT
-    // stays where declared (LR-21 principle) and the BOX anchor
-    // slides to the port's tangent when facing sides align within
-    // the snap and the coordinate stays inside the box's span.
-    else if ((e.sourcePort === undefined) !== (e.targetPort === undefined)) {
-      const boxEnd = e.sourcePort === undefined ? s : t;
-      const portEnd = e.sourcePort === undefined ? t : s;
-      const boxId = e.sourcePort === undefined ? e.source : e.target;
-      const bg = boxOf.get(boxId);
-      const SNAP = 12;
-      const MARGIN = 6;
-      const ewPair =
-        (boxEnd.side === "EAST" || boxEnd.side === "WEST") &&
-        (portEnd.side === "EAST" || portEnd.side === "WEST");
-      const nsPair =
-        (boxEnd.side === "NORTH" || boxEnd.side === "SOUTH") &&
-        (portEnd.side === "NORTH" || portEnd.side === "SOUTH");
-      if (bg !== undefined && (ewPair || nsPair)) {
-        const portCross = ewPair ? portEnd.point.y : portEnd.point.x;
-        const boxCross = ewPair ? boxEnd.point.y : boxEnd.point.x;
-        const delta = Math.abs(portCross - boxCross);
-        const lo = (ewPair ? bg.y : bg.x) + MARGIN;
-        const hi = (ewPair ? bg.y + bg.height : bg.x + bg.width) - MARGIN;
-        if (delta > 0 && delta <= SNAP && portCross >= lo && portCross <= hi) {
-          if (ewPair) boxEnd.point.y = portCross;
-          else boxEnd.point.x = portCross;
-        }
-      }
-    }
-    // LR-17 + VR-7a: EVERY anchored end gets a STUB along its side
-    // normal (ports AND boxes), computed AFTER the snap pass so
-    // snapped anchors keep matching tips. With stubs placing route
-    // endpoints outside the blocks, endpoint boxes stay in the
-    // obstacle set, so a route can no longer legally cross its own
-    // source or target block (the BDD through-the-block screenshots).
-    // Must EXCEED the escalated router's obstacle inflation
-    // (clearance 12), or the stub tip sits inside the inflated
-    // endpoint box and the router reports unreachable, falling back
-    // to the crossing simple route.
-    const STUB = 14;
-    const outward = (a: { point: Pt; side: RouteSide }): Pt =>
-      a.side === "EAST"
-        ? { x: a.point.x + STUB, y: a.point.y }
-        : a.side === "WEST"
-          ? { x: a.point.x - STUB, y: a.point.y }
-          : a.side === "SOUTH"
-            ? { x: a.point.x, y: a.point.y + STUB }
-            : { x: a.point.x, y: a.point.y - STUB };
-    const sTip = outward(s);
-    const tTip = outward(t);
-    // PRF-003 brief 05a: channel router branch. When the flag is on
-    // AND a plan is supplied, route via the channel model; overflow
-    // (edges beyond a channel's demand) delegates to routeOrthogonal.
-    // If both fail, fall through to `simple` so no edge disappears.
-    if (channelPlan !== undefined && channelAssignment !== null) {
-      const isOverflow = channelAssignment.overflow.has(e.id);
-      if (!isOverflow) {
-        const points = emitChannelRoute(
-          {
+    // PRF-003 brief 05a: pre-compute channel/track assignment before the
+    // per-edge loop. Entry/exit cross-coord for the divergence sort uses
+    // node centers (deterministic, geometry-only); the emitter reads this
+    // per edge inside the loop. When `useChannelRouter` is off (default)
+    // this whole block is dead code (channelPlan === undefined).
+    const channelAssignment = channelPlan
+      ? assignTracks(
+          edges.map((e) => ({
             id: e.id,
             source: e.source,
             target: e.target,
-          },
+            entryCross:
+              channelPlan.direction === "RIGHT" ||
+              channelPlan.direction === "LEFT"
+                ? centerY(e.source)
+                : centerX(e.source),
+            exitCross:
+              channelPlan.direction === "RIGHT" ||
+              channelPlan.direction === "LEFT"
+                ? centerY(e.target)
+                : centerX(e.target),
+          })),
+          channelPlan,
+        )
+      : null;
+
+    const t0 = Date.now();
+    for (const e of edges) {
+      const s = anchorOf(e, "s");
+      const t = anchorOf(e, "t");
+      if (s === null || t === null) continue;
+      // LR-21 (owner review 2026-07-22): NEAR-aligned anchor pairs got
+      // a full Z jog for a few pixels of cross-axis delta (boxes of
+      // different widths stack left-aligned, so their CENTERS differ
+      // even when a direct line is the obviously right route). When
+      // both ends are box anchors (ports stay where declared), the
+      // cross delta is small, and the shared coordinate stays inside
+      // BOTH boxes' side spans with margin, slide the two anchors to
+      // the shared coordinate: the simple route then collapses to a
+      // straight line.
+      if (e.sourcePort === undefined && e.targetPort === undefined) {
+        const SNAP = 12;
+        const MARGIN = 6;
+        const sg = boxOf.get(e.source);
+        const tg = boxOf.get(e.target);
+        // VR-7e (owner re-verify 2026-07-28): the snap follows the
+        // SIDE PAIR, not the flow axis (the round-62 dominant-axis
+        // change made E/W pairs reachable under vertical flow, and
+        // this pass kept snapping the flow's cross coordinate:
+        // vertical alignment never locked in the BDD). An E/W pair
+        // snaps the shared Y; an N/S pair the shared X; mixed pairs
+        // have no straight line to snap to.
+        const ewPair =
+          (s.side === "EAST" || s.side === "WEST") &&
+          (t.side === "EAST" || t.side === "WEST");
+        const nsPair =
+          (s.side === "NORTH" || s.side === "SOUTH") &&
+          (t.side === "NORTH" || t.side === "SOUTH");
+        if (sg !== undefined && tg !== undefined && (ewPair || nsPair)) {
+          const crossS = ewPair ? s.point.y : s.point.x;
+          const crossT = ewPair ? t.point.y : t.point.x;
+          const delta = Math.abs(crossS - crossT);
+          if (delta > 0 && delta <= SNAP) {
+            const shared = (crossS + crossT) / 2;
+            const lo = (g: {
+              x: number;
+              y: number;
+              width: number;
+              height: number;
+            }) => (ewPair ? g.y : g.x) + MARGIN;
+            const hi = (g: {
+              x: number;
+              y: number;
+              width: number;
+              height: number;
+            }) => (ewPair ? g.y + g.height : g.x + g.width) - MARGIN;
+            if (
+              shared >= lo(sg) &&
+              shared <= hi(sg) &&
+              shared >= lo(tg) &&
+              shared <= hi(tg)
+            ) {
+              if (ewPair) {
+                s.point.y = shared;
+                t.point.y = shared;
+              } else {
+                s.point.x = shared;
+                t.point.x = shared;
+              }
+            }
+          }
+        }
+      }
+      // Owner 2026-07-28: PURE PORT pairs also straighten when the
+      // shared line stays WITHIN BOTH PORTS' OWN BODIES: the anchor
+      // remains on the port (its 12px body edge), just off-center,
+      // which SysML tools accept visually. Ports never leave their
+      // declared bodies (the LR-21 principle holds).
+      else if (e.sourcePort !== undefined && e.targetPort !== undefined) {
+        const sp = geometry.ports[e.sourcePort];
+        const tp = geometry.ports[e.targetPort];
+        const ewPair =
+          (s.side === "EAST" || s.side === "WEST") &&
+          (t.side === "EAST" || t.side === "WEST");
+        const nsPair =
+          (s.side === "NORTH" || s.side === "SOUTH") &&
+          (t.side === "NORTH" || t.side === "SOUTH");
+        if (sp !== undefined && tp !== undefined && (ewPair || nsPair)) {
+          const crossS = ewPair ? s.point.y : s.point.x;
+          const crossT = ewPair ? t.point.y : t.point.x;
+          const delta = Math.abs(crossS - crossT);
+          if (delta > 0) {
+            const shared = (crossS + crossT) / 2;
+            const PAD = 1;
+            const within = (g: {
+              x: number;
+              y: number;
+              width: number;
+              height: number;
+            }): boolean =>
+              ewPair
+                ? shared >= g.y + PAD && shared <= g.y + g.height - PAD
+                : shared >= g.x + PAD && shared <= g.x + g.width - PAD;
+            if (within(sp) && within(tp)) {
+              if (ewPair) {
+                s.point.y = shared;
+                t.point.y = shared;
+              } else {
+                s.point.x = shared;
+                t.point.x = shared;
+              }
+            }
+          }
+        }
+      }
+      // VR-8 (owner verification 2026-07-26): MIXED pairs (one port,
+      // one box: the parametric bindings) also straighten: the PORT
+      // stays where declared (LR-21 principle) and the BOX anchor
+      // slides to the port's tangent when facing sides align within
+      // the snap and the coordinate stays inside the box's span.
+      else if ((e.sourcePort === undefined) !== (e.targetPort === undefined)) {
+        const boxEnd = e.sourcePort === undefined ? s : t;
+        const portEnd = e.sourcePort === undefined ? t : s;
+        const boxId = e.sourcePort === undefined ? e.source : e.target;
+        const bg = boxOf.get(boxId);
+        const SNAP = 12;
+        const MARGIN = 6;
+        const ewPair =
+          (boxEnd.side === "EAST" || boxEnd.side === "WEST") &&
+          (portEnd.side === "EAST" || portEnd.side === "WEST");
+        const nsPair =
+          (boxEnd.side === "NORTH" || boxEnd.side === "SOUTH") &&
+          (portEnd.side === "NORTH" || portEnd.side === "SOUTH");
+        if (bg !== undefined && (ewPair || nsPair)) {
+          const portCross = ewPair ? portEnd.point.y : portEnd.point.x;
+          const boxCross = ewPair ? boxEnd.point.y : boxEnd.point.x;
+          const delta = Math.abs(portCross - boxCross);
+          const lo = (ewPair ? bg.y : bg.x) + MARGIN;
+          const hi = (ewPair ? bg.y + bg.height : bg.x + bg.width) - MARGIN;
+          if (
+            delta > 0 &&
+            delta <= SNAP &&
+            portCross >= lo &&
+            portCross <= hi
+          ) {
+            if (ewPair) boxEnd.point.y = portCross;
+            else boxEnd.point.x = portCross;
+          }
+        }
+      }
+      // LR-17 + VR-7a: EVERY anchored end gets a STUB along its side
+      // normal (ports AND boxes), computed AFTER the snap pass so
+      // snapped anchors keep matching tips. With stubs placing route
+      // endpoints outside the blocks, endpoint boxes stay in the
+      // obstacle set, so a route can no longer legally cross its own
+      // source or target block (the BDD through-the-block screenshots).
+      // Must EXCEED the escalated router's obstacle inflation
+      // (clearance 12), or the stub tip sits inside the inflated
+      // endpoint box and the router reports unreachable, falling back
+      // to the crossing simple route.
+      const STUB = 14;
+      const outward = (a: { point: Pt; side: RouteSide }): Pt =>
+        a.side === "EAST"
+          ? { x: a.point.x + STUB, y: a.point.y }
+          : a.side === "WEST"
+            ? { x: a.point.x - STUB, y: a.point.y }
+            : a.side === "SOUTH"
+              ? { x: a.point.x, y: a.point.y + STUB }
+              : { x: a.point.x, y: a.point.y - STUB };
+      const sTip = outward(s);
+      const tTip = outward(t);
+      // PRF-003 brief 05a: channel router branch. When the flag is on
+      // AND a plan is supplied, route via the channel model; overflow
+      // (edges beyond a channel's demand) delegates to routeOrthogonal.
+      // If both fail, fall through to `simple` so no edge disappears.
+      if (channelPlan !== undefined && channelAssignment !== null) {
+        const isOverflow = channelAssignment.overflow.has(e.id);
+        if (!isOverflow) {
+          const points = emitChannelRoute(
+            {
+              id: e.id,
+              source: e.source,
+              target: e.target,
+            },
+            {
+              source: s,
+              sourceTip: sTip,
+              target: t,
+              targetTip: tTip,
+            },
+            channelPlan,
+            channelAssignment,
+          );
+          out[e.id] = { points };
+          continue;
+        }
+        const overflowRoute = routeChannelOverflow(
           {
             source: s,
             sourceTip: sTip,
             target: t,
             targetTip: tTip,
           },
-          channelPlan,
-          channelAssignment,
+          obstacles,
         );
-        out[e.id] = { points };
-        continue;
-      }
-      const overflowRoute = routeChannelOverflow(
-        {
-          source: s,
-          sourceTip: sTip,
-          target: t,
-          targetTip: tTip,
-        },
-        obstacles,
-      );
-      if (overflowRoute !== null) {
-        out[e.id] = { points: overflowRoute };
-        continue;
-      }
-      // Overflow router refused: emit an honest simple template. The
-      // channel-router path does NOT fall back to the escalation ladder
-      // (05b deletes the ladder outright); dropping here mirrors the
-      // ladder's end state and keeps the edge in the output.
-      const sEwOF = s.side === "EAST" || s.side === "WEST";
-      const tEwOF = t.side === "EAST" || t.side === "WEST";
-      const simpleOF =
-        sEwOF && tEwOF
-          ? dedupeCollinear([
-              s.point,
-              sTip,
-              { x: (sTip.x + tTip.x) / 2, y: sTip.y },
-              { x: (sTip.x + tTip.x) / 2, y: tTip.y },
-              tTip,
-              t.point,
-            ])
-          : !sEwOF && !tEwOF
+        if (overflowRoute !== null) {
+          out[e.id] = { points: overflowRoute };
+          continue;
+        }
+        // Overflow router refused: emit an honest simple template. The
+        // channel-router path does NOT fall back to the escalation ladder
+        // (05b deletes the ladder outright); dropping here mirrors the
+        // ladder's end state and keeps the edge in the output.
+        const sEwOF = s.side === "EAST" || s.side === "WEST";
+        const tEwOF = t.side === "EAST" || t.side === "WEST";
+        const simpleOF =
+          sEwOF && tEwOF
             ? dedupeCollinear([
                 s.point,
                 sTip,
-                { x: sTip.x, y: (sTip.y + tTip.y) / 2 },
-                { x: tTip.x, y: (sTip.y + tTip.y) / 2 },
+                { x: (sTip.x + tTip.x) / 2, y: sTip.y },
+                { x: (sTip.x + tTip.x) / 2, y: tTip.y },
                 tTip,
                 t.point,
               ])
-            : dedupeCollinear([
-                s.point,
-                sTip,
-                sEwOF ? { x: tTip.x, y: sTip.y } : { x: sTip.x, y: tTip.y },
-                tTip,
-                t.point,
-              ]);
-      out[e.id] = { points: simpleOF };
-      continue;
-    }
-    // Gap route: jog once at the midline between the two anchor
-    // borders, along the flow axis: a vertical jog in the gap under
-    // horizontal flow, a horizontal jog under vertical flow.
-    // VR-7d (owner re-verify 2026-07-28): the template follows the
-    // SIDE GEOMETRY, not the flow axis. The old flow-based Z gave
-    // an E/W pair under vertical flow a four-bend vertical jog by
-    // construction (the owner's "defaulting to FOUR bends"). An
-    // E/W pair takes the horizontal Z (0 bends when snapped, 2
-    // otherwise); an N/S pair the vertical Z; a mixed pair a
-    // single-corner L.
-    const sEw = s.side === "EAST" || s.side === "WEST";
-    const tEw = t.side === "EAST" || t.side === "WEST";
-    const simple =
-      sEw && tEw
-        ? ((): Pt[] => {
-            const midX = (sTip.x + tTip.x) / 2;
-            return dedupeCollinear([
-              s.point,
-              sTip,
-              { x: midX, y: sTip.y },
-              { x: midX, y: tTip.y },
-              tTip,
-              t.point,
-            ]);
-          })()
-        : !sEw && !tEw
+            : !sEwOF && !tEwOF
+              ? dedupeCollinear([
+                  s.point,
+                  sTip,
+                  { x: sTip.x, y: (sTip.y + tTip.y) / 2 },
+                  { x: tTip.x, y: (sTip.y + tTip.y) / 2 },
+                  tTip,
+                  t.point,
+                ])
+              : dedupeCollinear([
+                  s.point,
+                  sTip,
+                  sEwOF ? { x: tTip.x, y: sTip.y } : { x: sTip.x, y: tTip.y },
+                  tTip,
+                  t.point,
+                ]);
+        out[e.id] = { points: simpleOF };
+        continue;
+      }
+      // Gap route: jog once at the midline between the two anchor
+      // borders, along the flow axis: a vertical jog in the gap under
+      // horizontal flow, a horizontal jog under vertical flow.
+      // VR-7d (owner re-verify 2026-07-28): the template follows the
+      // SIDE GEOMETRY, not the flow axis. The old flow-based Z gave
+      // an E/W pair under vertical flow a four-bend vertical jog by
+      // construction (the owner's "defaulting to FOUR bends"). An
+      // E/W pair takes the horizontal Z (0 bends when snapped, 2
+      // otherwise); an N/S pair the vertical Z; a mixed pair a
+      // single-corner L.
+      const sEw = s.side === "EAST" || s.side === "WEST";
+      const tEw = t.side === "EAST" || t.side === "WEST";
+      const simple =
+        sEw && tEw
           ? ((): Pt[] => {
-              const midY = (sTip.y + tTip.y) / 2;
+              const midX = (sTip.x + tTip.x) / 2;
               return dedupeCollinear([
                 s.point,
                 sTip,
-                { x: sTip.x, y: midY },
-                { x: tTip.x, y: midY },
+                { x: midX, y: sTip.y },
+                { x: midX, y: tTip.y },
                 tTip,
                 t.point,
               ]);
             })()
-          : // Mixed pair: one corner where the E/W tip's row meets
-            // the N/S tip's column.
-            dedupeCollinear([
-              s.point,
-              sTip,
-              sEw ? { x: tTip.x, y: sTip.y } : { x: sTip.x, y: tTip.y },
-              tTip,
-              t.point,
-            ]);
-    // Verify against the boxes the route must clear (not its own
-    // endpoints'). PRF: a bounding-box prefilter first: gap routes
-    // are narrow corridors, so testing only obstacles that overlap
-    // the route's bbox removes the O(edges x boxes) scan that
-    // dominated scene routing at R1 scale.
-    let bx1 = Infinity;
-    let by1 = Infinity;
-    let bx2 = -Infinity;
-    let by2 = -Infinity;
-    for (const pnt of simple) {
-      bx1 = Math.min(bx1, pnt.x);
-      by1 = Math.min(by1, pnt.y);
-      bx2 = Math.max(bx2, pnt.x);
-      by2 = Math.max(by2, pnt.y);
-    }
-    const near = obstacles.filter(
-      (b) =>
-        b.x < bx2 && b.x + b.width > bx1 && b.y < by2 && b.y + b.height > by1,
-    );
-    // Long-edge perimeter policy (owner ruling 2026-08-14): before
-    // accepting a clean simple route through a dense field, prefer a
-    // perimeter detour so the line reads outside the wall rather than
-    // threading its interior corridors. Eligibility uses the same
-    // near-set the accept check already computed. Null-safe: if no
-    // detour clears, we fall through to the existing accept and the
-    // simple route stands (the policy never converts a legal route
-    // into a violation).
-    if (near.length >= longEdgeNear) {
-      const CLEAR = 16;
-      const horizontalTravel =
-        Math.abs(tTip.x - sTip.x) >= Math.abs(tTip.y - sTip.y);
-      // VR-10 (owner Jake, 2026-08-14): eligibility is still judged on
-      // the simple route's near-set (unchanged, so ineligible edges
-      // stay byte-identical), but the perimeter rail is VERIFIED
-      // against the travel band from the FULL obstacle set. `near`
-      // omits everything outside the simple route's bbox, and a
-      // perimeter rail leaves that bbox by definition -- that gap put
-      // pskip.0 through 19 boxes of row p0 while passing its own
-      // check. Both bound sets stay on offer (near ⊆ band, so the
-      // near-derived rail is the tighter of the two when it verifies).
-      const band = travelBand(
-        [s.point, sTip, tTip, t.point],
-        horizontalTravel,
-        obstacles,
+          : !sEw && !tEw
+            ? ((): Pt[] => {
+                const midY = (sTip.y + tTip.y) / 2;
+                return dedupeCollinear([
+                  s.point,
+                  sTip,
+                  { x: sTip.x, y: midY },
+                  { x: tTip.x, y: midY },
+                  tTip,
+                  t.point,
+                ]);
+              })()
+            : // Mixed pair: one corner where the E/W tip's row meets
+              // the N/S tip's column.
+              dedupeCollinear([
+                s.point,
+                sTip,
+                sEw ? { x: tTip.x, y: sTip.y } : { x: sTip.x, y: tTip.y },
+                tTip,
+                t.point,
+              ]);
+      // Verify against the boxes the route must clear (not its own
+      // endpoints'). PRF: a bounding-box prefilter first: gap routes
+      // are narrow corridors, so testing only obstacles that overlap
+      // the route's bbox removes the O(edges x boxes) scan that
+      // dominated scene routing at R1 scale.
+      let bx1 = Infinity;
+      let by1 = Infinity;
+      let bx2 = -Infinity;
+      let by2 = -Infinity;
+      for (const pnt of simple) {
+        bx1 = Math.min(bx1, pnt.x);
+        by1 = Math.min(by1, pnt.y);
+        bx2 = Math.max(bx2, pnt.x);
+        by2 = Math.max(by2, pnt.y);
+      }
+      const near = obstacles.filter(
+        (b) =>
+          b.x < bx2 && b.x + b.width > bx1 && b.y < by2 && b.y + b.height > by1,
       );
-      const build = (cross: number): Pt[] =>
-        dedupeCollinear(
-          horizontalTravel
-            ? [
-                s.point,
-                sTip,
-                { x: sTip.x, y: cross },
-                { x: tTip.x, y: cross },
-                tTip,
-                t.point,
-              ]
-            : [
-                s.point,
-                sTip,
-                { x: cross, y: sTip.y },
-                { x: cross, y: tTip.y },
-                tTip,
-                t.point,
-              ],
+      // Long-edge perimeter policy (owner ruling 2026-08-14): before
+      // accepting a clean simple route through a dense field, prefer a
+      // perimeter detour so the line reads outside the wall rather than
+      // threading its interior corridors. Eligibility uses the same
+      // near-set the accept check already computed. Null-safe: if no
+      // detour clears, we fall through to the existing accept and the
+      // simple route stands (the policy never converts a legal route
+      // into a violation).
+      if (near.length >= longEdgeNear) {
+        const CLEAR = 16;
+        const horizontalTravel =
+          Math.abs(tTip.x - sTip.x) >= Math.abs(tTip.y - sTip.y);
+        // VR-10 (owner Jake, 2026-08-14): eligibility is still judged on
+        // the simple route's near-set (unchanged, so ineligible edges
+        // stay byte-identical), but the perimeter rail is VERIFIED
+        // against the travel band from the FULL obstacle set. `near`
+        // omits everything outside the simple route's bbox, and a
+        // perimeter rail leaves that bbox by definition -- that gap put
+        // pskip.0 through 19 boxes of row p0 while passing its own
+        // check. Both bound sets stay on offer (near ⊆ band, so the
+        // near-derived rail is the tighter of the two when it verifies).
+        const band = travelBand(
+          [s.point, sTip, tTip, t.point],
+          horizontalTravel,
+          obstacles,
         );
-      const mid = horizontalTravel
-        ? (sTip.y + tTip.y) / 2
-        : (sTip.x + tTip.x) / 2;
-      const cands: Array<{ side: "lo" | "hi"; cross: number; pts: Pt[] }> = [];
-      const seenCross = new Set<number>();
-      for (const bounds of [
-        crossBounds(near, horizontalTravel, CLEAR),
-        crossBounds(band, horizontalTravel, CLEAR),
-      ]) {
-        if (bounds === null) continue;
-        for (const side of ["lo", "hi"] as const) {
-          const cross = side === "lo" ? bounds.lo : bounds.hi;
-          if (seenCross.has(cross)) continue;
-          seenCross.add(cross);
-          const pts = build(cross);
-          if (band.length > 0 && polylineIntersectsBoxes(pts, band)) continue;
-          cands.push({ side, cross, pts });
+        const build = (cross: number): Pt[] =>
+          dedupeCollinear(
+            horizontalTravel
+              ? [
+                  s.point,
+                  sTip,
+                  { x: sTip.x, y: cross },
+                  { x: tTip.x, y: cross },
+                  tTip,
+                  t.point,
+                ]
+              : [
+                  s.point,
+                  sTip,
+                  { x: cross, y: sTip.y },
+                  { x: cross, y: tTip.y },
+                  tTip,
+                  t.point,
+                ],
+          );
+        const mid = horizontalTravel
+          ? (sTip.y + tTip.y) / 2
+          : (sTip.x + tTip.x) / 2;
+        const cands: Array<{ side: "lo" | "hi"; cross: number; pts: Pt[] }> =
+          [];
+        const seenCross = new Set<number>();
+        for (const bounds of [
+          crossBounds(near, horizontalTravel, CLEAR),
+          crossBounds(band, horizontalTravel, CLEAR),
+        ]) {
+          if (bounds === null) continue;
+          for (const side of ["lo", "hi"] as const) {
+            const cross = side === "lo" ? bounds.lo : bounds.hi;
+            if (seenCross.has(cross)) continue;
+            seenCross.add(cross);
+            const pts = build(cross);
+            if (band.length > 0 && polylineIntersectsBoxes(pts, band)) continue;
+            cands.push({ side, cross, pts });
+          }
+        }
+        const chosen =
+          cands.length === 0
+            ? null
+            : cands.sort(
+                (a, b) => Math.abs(a.cross - mid) - Math.abs(b.cross - mid),
+              )[0];
+        if (chosen !== null && chosen !== undefined) {
+          out[e.id] = { points: chosen.pts };
+          perimeterRoutes.push({
+            edgeId: e.id,
+            horizontal: horizontalTravel,
+            side: chosen.side,
+            cross: chosen.cross,
+            build,
+          });
+          continue;
         }
       }
-      const chosen =
-        cands.length === 0
-          ? null
-          : cands.sort(
-              (a, b) => Math.abs(a.cross - mid) - Math.abs(b.cross - mid),
-            )[0];
-      if (chosen !== null && chosen !== undefined) {
-        out[e.id] = { points: chosen.pts };
-        perimeterRoutes.push({
-          edgeId: e.id,
-          horizontal: horizontalTravel,
-          side: chosen.side,
-          cross: chosen.cross,
-          build,
+      // LAY-005: bend-hint seeding for non-perimeter-eligible edges.
+      // The hints came from dummy-chain placement, so they express the
+      // ordering's preferred column at each intermediate layer; a
+      // hint-seeded polyline threads through those bends and gives the
+      // rest of the pipeline (routing verification, nudging, canvas
+      // rendering) a route that already respects layered structure.
+      // Perimeter-eligible edges skip seeding by policy (the perimeter
+      // detour is the right shape for a long line through a dense
+      // field). Hints ride out as `intermediate` on the emitted
+      // geometry so downstream tooling can distinguish structural bends
+      // from routing corrections.
+      const hintsForEdge =
+        bendHints !== undefined && near.length < longEdgeNear
+          ? bendHints.get(e.id)
+          : undefined;
+      if (hintsForEdge !== undefined && hintsForEdge.length > 0) {
+        const horizontalTravel =
+          Math.abs(tTip.x - sTip.x) >= Math.abs(tTip.y - sTip.y);
+        const seeded: Pt[] = [s.point, sTip];
+        let prev: Pt = sTip;
+        for (const h of hintsForEdge) {
+          if (horizontalTravel) {
+            seeded.push({ x: h.x, y: prev.y });
+            seeded.push({ x: h.x, y: h.y });
+          } else {
+            seeded.push({ x: prev.x, y: h.y });
+            seeded.push({ x: h.x, y: h.y });
+          }
+          prev = { x: h.x, y: h.y };
+        }
+        if (horizontalTravel) seeded.push({ x: tTip.x, y: prev.y });
+        else seeded.push({ x: prev.x, y: tTip.y });
+        seeded.push(tTip);
+        seeded.push(t.point);
+        const seededPts = dedupeCollinear(seeded);
+        const seededNear = obstacles.filter((b) => {
+          let sx1 = Infinity;
+          let sy1 = Infinity;
+          let sx2 = -Infinity;
+          let sy2 = -Infinity;
+          for (const pnt of seededPts) {
+            sx1 = Math.min(sx1, pnt.x);
+            sy1 = Math.min(sy1, pnt.y);
+            sx2 = Math.max(sx2, pnt.x);
+            sy2 = Math.max(sy2, pnt.y);
+          }
+          return (
+            b.x < sx2 &&
+            b.x + b.width > sx1 &&
+            b.y < sy2 &&
+            b.y + b.height > sy1
+          );
         });
+        if (!polylineIntersectsBoxes(seededPts, seededNear)) {
+          out[e.id] = { points: seededPts, intermediate: [...hintsForEdge] };
+          continue;
+        }
+      }
+      if (!polylineIntersectsBoxes(simple, near)) {
+        out[e.id] = hintsForEdge
+          ? { points: simple, intermediate: [...hintsForEdge] }
+          : { points: simple };
         continue;
       }
-    }
-    // LAY-005: bend-hint seeding for non-perimeter-eligible edges.
-    // The hints came from dummy-chain placement, so they express the
-    // ordering's preferred column at each intermediate layer; a
-    // hint-seeded polyline threads through those bends and gives the
-    // rest of the pipeline (routing verification, nudging, canvas
-    // rendering) a route that already respects layered structure.
-    // Perimeter-eligible edges skip seeding by policy (the perimeter
-    // detour is the right shape for a long line through a dense
-    // field). Hints ride out as `intermediate` on the emitted
-    // geometry so downstream tooling can distinguish structural bends
-    // from routing corrections.
-    const hintsForEdge =
-      bendHints !== undefined && near.length < longEdgeNear
-        ? bendHints.get(e.id)
-        : undefined;
-    if (hintsForEdge !== undefined && hintsForEdge.length > 0) {
-      const horizontalTravel =
-        Math.abs(tTip.x - sTip.x) >= Math.abs(tTip.y - sTip.y);
-      const seeded: Pt[] = [s.point, sTip];
-      let prev: Pt = sTip;
-      for (const h of hintsForEdge) {
-        if (horizontalTravel) {
-          seeded.push({ x: h.x, y: prev.y });
-          seeded.push({ x: h.x, y: h.y });
-        } else {
-          seeded.push({ x: prev.x, y: h.y });
-          seeded.push({ x: h.x, y: h.y });
+      const clear = [...obstacles]; // VR-7a: endpoint boxes included
+      // Escalate under budget, and ONLY below the grid router's own
+      // documented obstacle threshold (64): above it each escalation
+      // costs 100+ ms in the full-grid fallback, which is exactly the
+      // recorded PRF-002 finding that from-scratch scene routing at
+      // scale belongs to the channel router (D3b). Long-span edges in
+      // large scenes keep their simple routes, honestly: they may
+      // cross boxes until LAY-005 dummies or the channel router land.
+      if (obstacles.length <= 64 && Date.now() - t0 < budgetMs) {
+        // VR-7a retry ladder: (1) every box as an obstacle at default
+        // clearance; (2) tight clearance for dense post-drag packings
+        // where a stub tip lands inside a NEIGHBOR's inflation;
+        // (3) the pre-VR-7 endpoint exclusion as a last resort, which
+        // can cross its own blocks but never regresses below the old
+        // baseline. Only then the honest simple fallback.
+        const attempts: Array<{
+          obstacles: typeof clear;
+          clearance?: number;
+        }> = [
+          { obstacles: clear },
+          { obstacles: clear, clearance: 4 },
+          {
+            obstacles: clear.filter(
+              (b) => b.id !== e.source && b.id !== e.target,
+            ),
+          },
+        ];
+        let done = false;
+        for (const attempt of attempts) {
+          const routed = routeOrthogonal({
+            source: { point: sTip, side: s.side },
+            target: { point: tTip, side: t.side },
+            obstacles: attempt.obstacles,
+            ...(attempt.clearance !== undefined
+              ? { clearance: attempt.clearance, minStub: attempt.clearance }
+              : {}),
+          });
+          if (routed !== null) {
+            out[e.id] = {
+              points: dedupeCollinear([s.point, ...routed.points, t.point]),
+              ...(hintsForEdge ? { intermediate: [...hintsForEdge] } : {}),
+            };
+            done = true;
+            break;
+          }
+          if (Date.now() - t0 >= budgetMs) break;
         }
-        prev = { x: h.x, y: h.y };
+        if (done) continue;
       }
-      if (horizontalTravel) seeded.push({ x: tTip.x, y: prev.y });
-      else seeded.push({ x: prev.x, y: tTip.y });
-      seeded.push(tTip);
-      seeded.push(t.point);
-      const seededPts = dedupeCollinear(seeded);
-      const seededNear = obstacles.filter((b) => {
-        let sx1 = Infinity;
-        let sy1 = Infinity;
-        let sx2 = -Infinity;
-        let sy2 = -Infinity;
-        for (const pnt of seededPts) {
-          sx1 = Math.min(sx1, pnt.x);
-          sy1 = Math.min(sy1, pnt.y);
-          sx2 = Math.max(sx2, pnt.x);
-          sy2 = Math.max(sy2, pnt.y);
-        }
-        return (
-          b.x < sx2 && b.x + b.width > sx1 && b.y < sy2 && b.y + b.height > sy1
-        );
+      // VR-9: the router failed everywhere; detour around the band
+      // rather than drawing through it. Straight-simple only when
+      // even the detour cannot clear (extreme containment).
+      const detour = detourAround(
+        s.point,
+        sTip,
+        t.point,
+        tTip,
+        obstacles,
+        near,
+      );
+      out[e.id] = {
+        points: detour ?? simple,
+        ...(hintsForEdge ? { intermediate: [...hintsForEdge] } : {}),
+      };
+    }
+    // Deterministic perimeter stagger: coincident perimeter tracks on
+    // the same side of a band derive an identical cross coordinate; walk
+    // edge-id groups and offset each track beyond the first by index*8
+    // OUTWARD (away from the field). This is input hygiene, not a
+    // substitute for nudging; 01-nudging (when it lands) will subsume
+    // the ordering, but keeping this pre-pass keeps snapshots stable.
+    if (perimeterRoutes.length > 1) {
+      const STAGGER = 8;
+      const groups = new Map<string, PerimeterRec[]>();
+      for (const rec of perimeterRoutes) {
+        const key = `${rec.horizontal ? "H" : "V"}#${rec.side}#${Math.round(rec.cross)}`;
+        const list = groups.get(key) ?? [];
+        list.push(rec);
+        groups.set(key, list);
+      }
+      for (const list of groups.values()) {
+        if (list.length < 2) continue;
+        list.sort((a, b) => (a.edgeId < b.edgeId ? -1 : 1));
+        list.forEach((rec, i) => {
+          if (i === 0) return;
+          const delta = (rec.side === "lo" ? -1 : 1) * i * STAGGER;
+          out[rec.edgeId] = { points: rec.build(rec.cross + delta) };
+        });
+      }
+    }
+    if (options?.nudge) {
+      const { routes } = nudgeRoutes(out, obstacles, {
+        trackGap: options?.trackGap,
       });
-      if (!polylineIntersectsBoxes(seededPts, seededNear)) {
-        out[e.id] = { points: seededPts, intermediate: [...hintsForEdge] };
-        continue;
+      return routes;
+    }
+    return out;
+  };
+
+  let finalRoutes = runRoutingPass();
+  if (options?.smartAttach) {
+    finalRoutes = refineSmartAttach(finalRoutes);
+  }
+  return finalRoutes;
+
+  // RF-B: refine attachment by (a) within-side reorder of fanOffset
+  // slot assignments among edges sharing a fanKey, and (b) per-edge
+  // side flip to the opposite face. Every candidate is measured via
+  // countCrossings over the resulting polylines; a swap or flip is
+  // accepted ONLY on a strict improvement. Each edge is flipped at most
+  // once to prevent oscillation. Group size and total-edge budgets keep
+  // worst-case bounded.
+  function refineSmartAttach(
+    baseRoutes: Record<string, { points: Pt[]; intermediate?: Pt[] }>,
+  ): Record<string, { points: Pt[]; intermediate?: Pt[] }> {
+    const measure = (
+      rs: Record<string, { points: Pt[]; intermediate?: Pt[] }>,
+    ): number =>
+      countCrossings(
+        Object.entries(rs).map(([id, r]) => ({ id, points: r.points })),
+      );
+    let best = baseRoutes;
+    let bestCross = measure(best);
+
+    // (a) Within-side reorder: for each fanKey group with 2..MAX_GROUP
+    // members, try each pairwise swap of fanOffset values. Larger groups
+    // are skipped (bounded refinement, not exhaustive search).
+    const MAX_GROUP = 6;
+    const groups = new Map<string, string[]>(); // fanKey -> [edge ids]
+    for (const [key, side] of fanSide) {
+      // key is `${edge}@${node}`; group by `${node}#${side}`.
+      const atIdx = key.lastIndexOf("@");
+      if (atIdx < 0) continue;
+      const edge = key.slice(0, atIdx);
+      const node = key.slice(atIdx + 1);
+      const gk = `${node}#${side}`;
+      const list = groups.get(gk) ?? [];
+      list.push(edge);
+      groups.set(gk, list);
+    }
+    const groupKeys = [...groups.keys()].sort();
+    for (const gk of groupKeys) {
+      const members = groups.get(gk) ?? [];
+      if (members.length < 2 || members.length > MAX_GROUP) continue;
+      const hashIdx = gk.indexOf("#");
+      const node = gk.slice(0, hashIdx);
+      const sorted = [...members].sort();
+      let improved = true;
+      let iter = 0;
+      const maxIter = sorted.length * sorted.length;
+      while (improved && iter < maxIter) {
+        improved = false;
+        iter++;
+        for (let i = 0; i < sorted.length; i++) {
+          for (let j = i + 1; j < sorted.length; j++) {
+            const eiKey = `${sorted[i]}@${node}`;
+            const ejKey = `${sorted[j]}@${node}`;
+            const oi = fanOffset.get(eiKey);
+            const oj = fanOffset.get(ejKey);
+            if (oi === undefined || oj === undefined) continue;
+            fanOffset.set(eiKey, oj);
+            fanOffset.set(ejKey, oi);
+            const candidate = runRoutingPass();
+            const cCross = measure(candidate);
+            if (cCross < bestCross) {
+              best = candidate;
+              bestCross = cCross;
+              improved = true;
+            } else {
+              fanOffset.set(eiKey, oi);
+              fanOffset.set(ejKey, oj);
+            }
+          }
+        }
       }
     }
-    if (!polylineIntersectsBoxes(simple, near)) {
-      out[e.id] = hintsForEdge
-        ? { points: simple, intermediate: [...hintsForEdge] }
-        : { points: simple };
-      continue;
-    }
-    const clear = [...obstacles]; // VR-7a: endpoint boxes included
-    // Escalate under budget, and ONLY below the grid router's own
-    // documented obstacle threshold (64): above it each escalation
-    // costs 100+ ms in the full-grid fallback, which is exactly the
-    // recorded PRF-002 finding that from-scratch scene routing at
-    // scale belongs to the channel router (D3b). Long-span edges in
-    // large scenes keep their simple routes, honestly: they may
-    // cross boxes until LAY-005 dummies or the channel router land.
-    if (obstacles.length <= 64 && Date.now() - t0 < budgetMs) {
-      // VR-7a retry ladder: (1) every box as an obstacle at default
-      // clearance; (2) tight clearance for dense post-drag packings
-      // where a stub tip lands inside a NEIGHBOR's inflation;
-      // (3) the pre-VR-7 endpoint exclusion as a last resort, which
-      // can cross its own blocks but never regresses below the old
-      // baseline. Only then the honest simple fallback.
-      const attempts: Array<{
-        obstacles: typeof clear;
-        clearance?: number;
-      }> = [
-        { obstacles: clear },
-        { obstacles: clear, clearance: 4 },
-        {
-          obstacles: clear.filter(
-            (b) => b.id !== e.source && b.id !== e.target,
-          ),
-        },
-      ];
-      let done = false;
-      for (const attempt of attempts) {
-        const routed = routeOrthogonal({
-          source: { point: sTip, side: s.side },
-          target: { point: tTip, side: t.side },
-          obstacles: attempt.obstacles,
-          ...(attempt.clearance !== undefined
-            ? { clearance: attempt.clearance, minStub: attempt.clearance }
-            : {}),
-        });
-        if (routed !== null) {
-          out[e.id] = {
-            points: dedupeCollinear([s.point, ...routed.points, t.point]),
-            ...(hintsForEdge ? { intermediate: [...hintsForEdge] } : {}),
-          };
-          done = true;
+
+    // (b) Side flip: try flipping each edge's attachment side at ONE
+    // end (source, then target if source did not fire). Only strict
+    // improvements accepted; each edge is flipped at most once total.
+    const perpSidesFor = (side: RouteSide): [RouteSide, RouteSide] =>
+      side === "EAST" || side === "WEST"
+        ? ["NORTH", "SOUTH"]
+        : ["WEST", "EAST"];
+    const flipped = new Set<string>();
+    const edgeIds = edges.map((e) => e.id).sort();
+    for (const eid of edgeIds) {
+      if (flipped.has(eid)) continue;
+      const eObj = edges.find((x) => x.id === eid);
+      if (!eObj) continue;
+      for (const end of ["s", "t"] as const) {
+        const node = end === "s" ? eObj.source : eObj.target;
+        const portSet = end === "s" ? eObj.sourcePort : eObj.targetPort;
+        if (portSet) continue;
+        const key = `${eid}@${node}`;
+        const curSide = fanSide.get(key);
+        const effectiveSide: RouteSide =
+          curSide ??
+          (() => {
+            const other = end === "s" ? eObj.target : eObj.source;
+            return sideFor(node, other);
+          })();
+        const g = boxOf.get(node);
+        if (g === undefined) continue;
+        const savedOffset = fanOffset.get(key);
+        const savedSide = curSide;
+        let accepted = false;
+        for (const altSide of perpSidesFor(effectiveSide)) {
+          const ewAlt = altSide === "EAST" || altSide === "WEST";
+          const altCenter = ewAlt ? g.y + g.height / 2 : g.x + g.width / 2;
+          fanOffset.set(key, altCenter);
+          fanSide.set(key, altSide);
+          const candidate = runRoutingPass();
+          const cCross = measure(candidate);
+          if (cCross < bestCross) {
+            best = candidate;
+            bestCross = cCross;
+            flipped.add(eid);
+            accepted = true;
+            break;
+          }
+        }
+        if (!accepted) {
+          if (savedOffset === undefined) fanOffset.delete(key);
+          else fanOffset.set(key, savedOffset);
+          if (savedSide === undefined) fanSide.delete(key);
+          else fanSide.set(key, savedSide);
+        } else {
           break;
         }
-        if (Date.now() - t0 >= budgetMs) break;
       }
-      if (done) continue;
     }
-    // VR-9: the router failed everywhere; detour around the band
-    // rather than drawing through it. Straight-simple only when
-    // even the detour cannot clear (extreme containment).
-    const detour = detourAround(s.point, sTip, t.point, tTip, obstacles, near);
-    out[e.id] = {
-      points: detour ?? simple,
-      ...(hintsForEdge ? { intermediate: [...hintsForEdge] } : {}),
-    };
+
+    return best;
   }
-  // Deterministic perimeter stagger: coincident perimeter tracks on
-  // the same side of a band derive an identical cross coordinate; walk
-  // edge-id groups and offset each track beyond the first by index*8
-  // OUTWARD (away from the field). This is input hygiene, not a
-  // substitute for nudging; 01-nudging (when it lands) will subsume
-  // the ordering, but keeping this pre-pass keeps snapshots stable.
-  if (perimeterRoutes.length > 1) {
-    const STAGGER = 8;
-    const groups = new Map<string, PerimeterRec[]>();
-    for (const rec of perimeterRoutes) {
-      const key = `${rec.horizontal ? "H" : "V"}#${rec.side}#${Math.round(rec.cross)}`;
-      const list = groups.get(key) ?? [];
-      list.push(rec);
-      groups.set(key, list);
-    }
-    for (const list of groups.values()) {
-      if (list.length < 2) continue;
-      list.sort((a, b) => (a.edgeId < b.edgeId ? -1 : 1));
-      list.forEach((rec, i) => {
-        if (i === 0) return;
-        const delta = (rec.side === "lo" ? -1 : 1) * i * STAGGER;
-        out[rec.edgeId] = { points: rec.build(rec.cross + delta) };
-      });
-    }
-  }
-  if (options?.nudge) {
-    const { routes } = nudgeRoutes(out, obstacles, {
-      trackGap: options?.trackGap,
-    });
-    return routes;
-  }
-  return out;
 }

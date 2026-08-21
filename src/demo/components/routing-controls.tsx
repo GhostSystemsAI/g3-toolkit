@@ -14,7 +14,9 @@ export type RouteMode = "direct" | "orthogonal" | "off";
 export interface RoutingControlsState {
   routeMode: RouteMode;
   setRouteMode: (m: RouteMode) => void;
-  routeEdgesConfig: false | { mode: "direct" | "orthogonal" };
+  routeEdgesConfig:
+    | false
+    | { mode: "direct" | "orthogonal"; smartAttach?: boolean };
   routeRefreshSignal: number;
   refreshRoutes: () => void;
   relayoutSignal: number;
@@ -23,6 +25,10 @@ export interface RoutingControlsState {
 
 export function useRoutingControls(defaults?: {
   mode?: RouteMode;
+  /** RF-B (2026-08-21): opt-in crossing-aware terminal-side refinement.
+   *  When true, the emitted routeEdgesConfig carries smartAttach:true so
+   *  the canvas forwards it to routeSceneEdges. Default false = today. */
+  smartAttach?: boolean;
 }): RoutingControlsState {
   const [routeMode, setRouteMode] = useState<RouteMode>(
     defaults?.mode ?? "direct",
@@ -30,10 +36,17 @@ export function useRoutingControls(defaults?: {
   const [routeRefreshSignal, setRouteRefreshSignal] = useState(0);
   const [relayoutSignal, setRelayoutSignal] = useState(0);
 
-  const routeEdgesConfig: false | { mode: "direct" | "orthogonal" } =
+  const routeEdgesConfig:
+    | false
+    | { mode: "direct" | "orthogonal"; smartAttach?: boolean } =
     routeMode === "off"
       ? false
-      : { mode: routeMode as "direct" | "orthogonal" };
+      : defaults?.smartAttach
+        ? {
+            mode: routeMode as "direct" | "orthogonal",
+            smartAttach: true,
+          }
+        : { mode: routeMode as "direct" | "orthogonal" };
 
   return {
     routeMode,

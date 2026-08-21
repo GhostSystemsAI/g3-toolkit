@@ -20,6 +20,7 @@ import {
   type RouteBox,
   type RouteSide,
 } from "./orthogonal-router";
+import { countCrossings } from "../metrics/layout-metrics";
 
 export interface SceneNodeBox {
   id: string;
@@ -66,6 +67,16 @@ export interface RouteSceneOptions {
    * - "always": route every edge orthogonally regardless of obstacles.
    */
   mode?: "direct-unless-crossing" | "always";
+  /**
+   * RF-B (owner Jake, 2026-08-21): opt-in crossing-aware terminal-side
+   * refinement. When on, after the baseline routing pass runs, each
+   * edge's inferred `sourceSide` / `targetSide` is tried flipped to the
+   * opposite face; the flip is accepted ONLY when it strictly lowers
+   * total crossings (`countCrossings` oracle over the resulting
+   * polylines). Each edge is flipped at most once to prevent
+   * oscillation. Default false; unset is byte-identical to today.
+   */
+  smartAttach?: boolean;
 }
 
 export interface SceneRoutedEdge {
@@ -222,6 +233,70 @@ export function routeSceneEdges(
     });
     if (res && res.points.length >= 2) {
       routed.set(e.id, res.points);
+    }
+  }
+
+  if (opts.smartAttach) {
+    // RF-B (owner Jake, 2026-08-21): try flipping each routed edge's
+    // terminal-side pair to the opposite axis; accept only strict
+    // improvements measured over the full route set. Each edge is
+    // flipped at most once (single trial per edge; iteration is
+    // bounded to the edge count).
+    const perpPair = (
+      s: RouteSide,
+      t: RouteSide,
+    ): { sourceSide: RouteSide; targetSide: RouteSide } | null => {
+      if (s === "EAST" && t === "WEST")
+        return { sourceSide: "SOUTH", targetSide: "NORTH" };
+      if (s === "WEST" && t === "EAST")
+        return { sourceSide: "NORTH", targetSide: "SOUTH" };
+      if (s === "SOUTH" && t === "NORTH")
+        return { sourceSide: "EAST", targetSide: "WEST" };
+      if (s === "NORTH" && t === "SOUTH")
+        return { sourceSide: "WEST", targetSide: "EAST" };
+      return null;
+    };
+    const measure = (): number =>
+      countCrossings(
+        [...routed.entries()].map(([id, points]) => ({ id, points })),
+      );
+    let bestCross = measure();
+    const orderedIds = [...routed.keys()].sort();
+    for (const eid of orderedIds) {
+      const e = edges.find((x) => x.id === eid);
+      if (!e) continue;
+      const s = byId.get(e.source);
+      const t = byId.get(e.target);
+      if (!s || !t) continue;
+      const sc = boxCenter(s);
+      const tc = boxCenter(t);
+      const cur = inferTerminalSides(sc, tc);
+      const flip = perpPair(cur.sourceSide, cur.targetSide);
+      if (flip === null) continue;
+      const obstacles: RouteBox[] = [];
+      for (const n of nodes) {
+        if (n.id === s.id || n.id === t.id) continue;
+        obstacles.push({ x: n.x, y: n.y, width: n.width, height: n.height });
+      }
+      const alt = routeOrthogonal({
+        source: { point: sc, side: flip.sourceSide },
+        target: { point: tc, side: flip.targetSide },
+        obstacles,
+        clearance: opts.clearance,
+        bendPenalty: opts.bendPenalty,
+        minStub: opts.minStub,
+      });
+      if (!alt || alt.points.length < 2) continue;
+      const prev = routed.get(eid);
+      routed.set(eid, alt.points);
+      const cCross = measure();
+      if (cCross < bestCross) {
+        bestCross = cCross;
+      } else if (prev) {
+        routed.set(eid, prev);
+      } else {
+        routed.delete(eid);
+      }
     }
   }
 

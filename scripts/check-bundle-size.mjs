@@ -91,7 +91,17 @@ const BUDGETS = {
   // disturbing arms the router already stacked, so it is load-bearing,
   // not removable padding. Headroom 0.8 KB, held tight; ARC-009 (extract
   // @g3t/layout) remains the standing way back under the envelope.
-  core: 218 * 1024,
+  // 218 -> 223 KB, 2026-08-21 (RF-B smart attachment): measured 222.2 KB,
+  // +5.0 KB. routeStructuralEdges now wraps its per-edge routing loop in
+  // a nested runRoutingPass() and exposes an opt-in `smartAttach` that
+  // refines attachment by within-side reorder + per-edge side flip. Every
+  // candidate is measured via countCrossings and accepted only on a
+  // strict improvement; each edge is flipped at most once. The refinement
+  // path itself + the closure hoist (out/perimeterRoutes as let, per-pass
+  // reset) account for the +5.0 KB. Default false is byte-identical to
+  // today (verified by g3t-smart-attach.test.ts determinism assertion +
+  // the existing snapshot corpus). Headroom 0.8 KB.
+  core: 223 * 1024,
   // Core ledger:
   // - 169.0 -> 209 KB, 2026-08-17 (MERGE of ai-agent-guide into
   //   fable-updates). Measured 206.3 KB.

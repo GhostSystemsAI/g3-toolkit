@@ -913,6 +913,13 @@ export interface CytoscapeCanvasProps {
          * clear edges as bezier and only detours around actual crossings.
          */
         mode?: "direct" | "orthogonal";
+        /**
+         * RF-B (owner Jake, 2026-08-21): opt-in crossing-aware terminal-side
+         * refinement, forwarded to `routeSceneEdges`. Each routed edge's
+         * inferred side pair is tried flipped; accepted only on a strict
+         * `countCrossings` improvement. Default false = today's behavior.
+         */
+        smartAttach?: boolean;
       };
   /**
    * Refresh-routes signal (brief 23, A54). Bump this counter to re-run the
@@ -956,6 +963,7 @@ function resolveRouteCfg(
   minStub?: number;
   grazeTolerance?: number;
   mode: "direct-unless-crossing" | "always";
+  smartAttach?: boolean;
 } {
   return routeConfig === true
     ? { maxEdges: 600, grazeTolerance: 8, mode: "direct-unless-crossing" }
@@ -969,6 +977,7 @@ function resolveRouteCfg(
           routeConfig.mode === "orthogonal"
             ? "always"
             : "direct-unless-crossing",
+        smartAttach: routeConfig.smartAttach,
       };
 }
 
@@ -994,6 +1003,7 @@ export function runCanvasEdgeRouting(
     minStub?: number;
     grazeTolerance?: number;
     mode?: "direct-unless-crossing" | "always";
+    smartAttach?: boolean;
   },
   incidentTo?: string,
 ): { skipped: boolean; routedCount: number } {
@@ -1045,6 +1055,7 @@ export function runCanvasEdgeRouting(
     minStub: opts.minStub,
     grazeTolerance: opts.grazeTolerance,
     mode: opts.mode,
+    smartAttach: opts.smartAttach,
   });
   let routedCount = 0;
   cy.batch(() => {

@@ -242,6 +242,11 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   // though the library default is still false: the bench exists to
   // evaluate separation, so the post-pass must be visible by default.
   const [nudge, setNudge] = useState(true);
+  // RF-B (owner Jake, 2026-08-21): crossing-aware attachment refinement
+  // (within-side reorder + side flip). Library default is false; the
+  // lab exposes it default ON so reviewers see the refined attachment
+  // without a knob hunt.
+  const [smartAttach, setSmartAttach] = useState(true);
   const [longEdge, setLongEdge] = useState<LongEdge>("default");
   const [anchor, setAnchor] = useState<"source" | "target">("source");
   // Minimum separation between anchors on one side, with overflow
@@ -301,6 +306,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
       layerSpacing: LAYER_GAPS[layerGap],
       routeEdges,
       nudge,
+      smartAttach,
       longEdgeNear: LONG_EDGE[longEdge],
       anchor,
       // undefined for "off", which is exactly the library default.
@@ -321,6 +327,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
       layerGap,
       routeMode,
       nudge,
+      smartAttach,
       longEdge,
       anchor,
       pitch,
@@ -528,6 +535,16 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
                 data-testid="rlab-nudge-toggle"
                 checked={nudge}
                 onChange={(e) => setNudge(e.target.checked)}
+              />
+            </span>
+            <span title="RF-B: crossing-aware attachment refinement. Within-side reorder + per-edge side flip, accepted only on a strict crossing reduction (countCrossings oracle). Library default off; the lab exposes it default on so the refined attachment is visible.">
+              <label htmlFor="rlab-smart-attach">Smart attach</label>
+              <input
+                id="rlab-smart-attach"
+                type="checkbox"
+                data-testid="rlab-smart-attach-toggle"
+                checked={smartAttach}
+                onChange={(e) => setSmartAttach(e.target.checked)}
               />
             </span>
             <span title="Track gap the nudge post-pass spreads parallel runs to, paired with the ceiling on how wide a corridor may grow to hold them. They move together on purpose: the corridor gap is min(factor * layerSpacing, demand * trackGap + 2 * clearance), so past roughly 28 edges per corridor the cap binds and a wider track gap alone changes nothing. Effective gap on a 40-edge corridor: Default 6px, Roomy 8px, Wide 10px.">

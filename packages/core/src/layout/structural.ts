@@ -255,6 +255,15 @@ export interface StructuralLayoutOptions extends G3tEngineTuning {
    */
   nudge?: boolean;
   /**
+   * RF-B (owner Jake, 2026-08-21): opt-in crossing-aware attachment
+   * refinement passed through to `routeStructuralEdges`. When on,
+   * after fan assignment the router refines attachments by within-side
+   * reorder and per-edge side flip, accepting each candidate only on
+   * a strict crossing improvement (`countCrossings` oracle). Default
+   * false; unset is byte-identical to today.
+   */
+  smartAttach?: boolean;
+  /**
    * Prior TOP-LEVEL positions: a layout sketch (G3L:LAY-017; the
    * ruled 12.20 experiment graduated). When present and non-empty,
    * the run switches ELK layered's cycle-breaking, layering, and
@@ -774,6 +783,7 @@ function layoutOptionsKey(options?: StructuralLayoutOptions): string {
     layerSpacing: options?.layerSpacing ?? (options?.spacing ?? 60) + 20,
     routeEdges: options?.routeEdges ?? true,
     nudge: options?.nudge ?? false,
+    smartAttach: options?.smartAttach ?? false,
     g3t: {
       layering: options?.layering ?? "network-simplex",
       layerWidth: options?.layerWidth ?? 8,
