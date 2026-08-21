@@ -85,6 +85,7 @@ const NOTATION = {
 
 export function FlowchartShell({ onBack }: { onBack: () => void }) {
   const [diagramId, setDiagramId] = useState(DEFAULT_DIAGRAM);
+  const [history, setHistory] = useState<string[]>([]);
   const diagram = routingFlowchartModel.diagrams[diagramId];
 
   const input: StructuralGraphInput = useMemo(
@@ -120,10 +121,26 @@ export function FlowchartShell({ onBack }: { onBack: () => void }) {
     (info) => {
       if (info.hit.zone !== "glyph") return;
       const target = drill[info.hit.elementId];
-      if (target !== undefined) setDiagramId(target);
+      if (target !== undefined) {
+        setHistory((h) => [...h, diagramId]);
+        setDiagramId(target);
+      }
     },
-    [drill],
+    [drill, diagramId],
   );
+
+  const onUpLevel = useCallback(() => {
+    setHistory((h) => {
+      const next = h.slice(0, -1);
+      setDiagramId(h[h.length - 1] ?? DEFAULT_DIAGRAM);
+      return next;
+    });
+  }, []);
+
+  const onOpenDiagram = useCallback((id: string) => {
+    setHistory([]);
+    setDiagramId(id);
+  }, []);
 
   const { structural: scene } = useStructuralLayout(input, {
     direction: "DOWN",
@@ -138,6 +155,11 @@ export function FlowchartShell({ onBack }: { onBack: () => void }) {
         <button type="button" className="mbse-back" onClick={onBack}>
           {"←"} Scenarios
         </button>
+        {history.length > 0 && (
+          <button type="button" className="mbse-back" onClick={onUpLevel}>
+            {"↑"} Up
+          </button>
+        )}
         <div className="mbse-wordmark">
           <b>Flowchart Workbench</b>
           <span>routing engine</span>
@@ -154,7 +176,7 @@ export function FlowchartShell({ onBack }: { onBack: () => void }) {
           <ContainmentTree
             model={routingFlowchartModel}
             activeDiagramId={diagramId}
-            onOpenDiagram={setDiagramId}
+            onOpenDiagram={onOpenDiagram}
           />
         </aside>
 
