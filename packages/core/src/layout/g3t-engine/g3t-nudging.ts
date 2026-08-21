@@ -21,6 +21,7 @@
  */
 import type { RouteBox } from "../../route/orthogonal-router";
 import { polylineIntersectsBoxes } from "../../route/orthogonal-router";
+import { countBends, segmentsCross } from "../../metrics/layout-metrics";
 import { dedupeCollinear, type Pt } from "./g3t-polyline-utils";
 
 export interface NudgingOptions {
@@ -759,9 +760,16 @@ function attemptGroupRewrite(
   const isBarOnlyGroup = placements.every(
     (pl) => movable[pl.memberIdx]?.kind === "bar",
   );
+  // Two flags with different scopes:
+  //  - hasGroupCollinearOverlap: gates the crossing-increase BYPASS (only bar
+  //    groups + arms-only pass 2, per owner rulings 2026-08-20/20b).
+  //  - hadRealOverlap: gates the corner-cost gate (RF-C). Any collinear stack
+  //    among the group's members is a real overlap the nudge is fixing, so
+  //    adding corners to separate it is justified regardless of pass.
   let hasGroupCollinearOverlap = false;
-  if ((isBarOnlyGroup || allowArmCollinearBypass) && placements.length >= 2) {
-    outer: for (let pi = 0; pi < placements.length; pi++) {
+  let hadRealOverlap = false;
+  if (placements.length >= 2) {
+    for (let pi = 0; pi < placements.length; pi++) {
       for (let pj = pi + 1; pj < placements.length; pj++) {
         const pa = placements[pi];
         const pb = placements[pj];
@@ -771,14 +779,13 @@ function attemptGroupRewrite(
         if (sa === undefined || sb === undefined) continue;
         if (isNaN(sa.perp) || isNaN(sb.perp)) continue;
         if (Math.abs(sa.perp - sb.perp) >= 0.5) continue;
-        // Skip pairs that were already overlapping before nudging.
-        if (
+        const preExistingPair =
           allowArmCollinearBypass &&
-          preExisting?.has(armPairKey(sa.edgeId, sa.perp, sb.edgeId, sb.perp))
-        )
-          continue;
-        hasGroupCollinearOverlap = true;
-        break outer;
+          preExisting?.has(armPairKey(sa.edgeId, sa.perp, sb.edgeId, sb.perp));
+        if (!preExistingPair) hadRealOverlap = true;
+        if ((isBarOnlyGroup || allowArmCollinearBypass) && !preExistingPair) {
+          hasGroupCollinearOverlap = true;
+        }
       }
     }
   }
@@ -900,6 +907,21 @@ function attemptGroupRewrite(
       return { ok: false, rewritten: {}, failureKind: "box" };
     }
   }
+  // Self-intersection guard (RF-C): the Wide-separation loop/square defect.
+  // Arm-jog stubLen = min(trackGap, armAlongExtent/3) throws the run out to
+  // `newPerp`; at wide separation the run + rejoin can double back across
+  // the edge's own bar, closing a square. The pair-vs-other-edges crossing
+  // check below never sees a single polyline crossing itself, so guard here.
+  for (const pts of Object.values(rewritten)) {
+    if (polylineSelfCrosses(pts)) {
+      return { ok: false, rewritten: {}, failureKind: "crossing" };
+    }
+  }
+  // Sum pairwise crossings before/after so the corner-cost gate can tell
+  // whether the rewrite actually removed any real overlap. Retain the
+  // original per-pair increase-on-non-collinear guard as a tighter check.
+  let crossingsBefore = 0;
+  let crossingsAfter = 0;
   for (let i = 0; i < edgeIds.length; i++) {
     for (let j = i + 1; j < edgeIds.length; j++) {
       const idI = edgeIds[i];
@@ -910,12 +932,51 @@ function attemptGroupRewrite(
       if (a === undefined || b === undefined) continue;
       const now = countCrossings(a, b);
       const before = originalCrossings.get(`${idI}|${idJ}`) ?? 0;
+      crossingsBefore += before;
+      crossingsAfter += now;
       if (!hasGroupCollinearOverlap && now > before) {
         return { ok: false, rewritten: {}, failureKind: "crossing" }; // guard retained for bar groups
       }
     }
   }
+  // Corner-cost gate (RF-C): reject a rewrite whose net corner count went
+  // UP without removing a real overlap. "Real overlap removed" means either
+  // the group was fixing a collinear stack (hasGroupCollinearOverlap) or
+  // pairwise crossings actually decreased. A pure bar-translate adds no
+  // corners so this is a no-op there; the gate targets arm-jog rewrites
+  // that added bends without justification.
+  let bendsBefore = 0;
+  let bendsAfter = 0;
+  for (const edgeId of edgeIds) {
+    const bef = base[edgeId];
+    const aft = rewritten[edgeId];
+    if (bef) bendsBefore += countBends(bef);
+    if (aft) bendsAfter += countBends(aft);
+  }
+  if (
+    bendsAfter > bendsBefore &&
+    !hadRealOverlap &&
+    crossingsAfter >= crossingsBefore
+  ) {
+    return { ok: false, rewritten: {}, failureKind: "crossing" };
+  }
   return { ok: true, rewritten };
+}
+
+/** Non-adjacent proper self-intersection over a single polyline's segments. */
+function polylineSelfCrosses(pts: readonly Pt[]): boolean {
+  for (let i = 1; i < pts.length; i++) {
+    const a1 = pts[i - 1];
+    const a2 = pts[i];
+    if (!a1 || !a2) continue;
+    for (let j = i + 2; j < pts.length; j++) {
+      const b1 = pts[j - 1];
+      const b2 = pts[j];
+      if (!b1 || !b2) continue;
+      if (segmentsCross(a1, a2, b1, b2)) return true;
+    }
+  }
+  return false;
 }
 
 function replanPlacements(

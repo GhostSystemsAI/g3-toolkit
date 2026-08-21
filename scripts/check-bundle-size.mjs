@@ -101,7 +101,17 @@ const BUDGETS = {
   // reset) account for the +5.0 KB. Default false is byte-identical to
   // today (verified by g3t-smart-attach.test.ts determinism assertion +
   // the existing snapshot corpus). Headroom 0.8 KB.
-  core: 223 * 1024,
+  // 223 -> 224 KB, 2026-08-21 (RF-C self-intersection + corner-cost gate):
+  // measured 223.2 KB, +1.0 KB. attemptGroupRewrite gained (1) a per-edge
+  // self-intersection guard (polylineSelfCrosses over non-adjacent
+  // segments) that reverts a rewrite whose polyline doubles back — the
+  // Wide-separation loop/square Jake reported; (2) a corner-cost gate
+  // that reverts a rewrite whose net countBends went up without a real
+  // overlap being fixed (hadRealOverlap tracks any collinear stack in
+  // the group, independent of the crossing bypass whose scope is fixed
+  // by the 2026-08-20 rulings). Pulls in countBends + segmentsCross from
+  // layout-metrics. Headroom 0.8 KB.
+  core: 224 * 1024,
   // Core ledger:
   // - 169.0 -> 209 KB, 2026-08-17 (MERGE of ai-agent-guide into
   //   fable-updates). Measured 206.3 KB.

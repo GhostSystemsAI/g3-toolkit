@@ -481,6 +481,90 @@ describe("nudgeRoutes: contracts", () => {
   });
 });
 
+// RF-C: self-intersection guard + corner-cost gate (kill Wide-separation loop).
+function polylineSelfCrossesOracle(pts: readonly Pt[]): boolean {
+  const eps = 1e-9;
+  const orient = (a: Pt, b: Pt, c: Pt) =>
+    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const samePt = (a: Pt, b: Pt) =>
+    Math.abs(a.x - b.x) < eps && Math.abs(a.y - b.y) < eps;
+  for (let i = 1; i < pts.length; i++) {
+    for (let j = i + 2; j < pts.length; j++) {
+      const a1 = pts[i - 1]!;
+      const a2 = pts[i]!;
+      const b1 = pts[j - 1]!;
+      const b2 = pts[j]!;
+      if (samePt(a1, b1) || samePt(a1, b2) || samePt(a2, b1) || samePt(a2, b2))
+        continue;
+      const d1 = orient(b1, b2, a1);
+      const d2 = orient(b1, b2, a2);
+      const d3 = orient(a1, a2, b1);
+      const d4 = orient(a1, a2, b2);
+      if (
+        ((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) &&
+        ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps))
+      )
+        return true;
+    }
+  }
+  return false;
+}
+
+describe("nudgeRoutes: RF-C self-intersection guard + corner-cost gate", () => {
+  it("no rewritten polyline self-intersects at wide corridor separation", () => {
+    // Two coincident-arm 4-point Zs (arm-arm on y=100, bar-bar at x=30,
+    // arm-arm on y=200). Wide trackGap (32) pushes the arm-jog stubs far
+    // enough that a naive rewrite can double back across the bar,
+    // producing the reported loop/square. The self-intersection guard
+    // must either accept a clean rewrite or revert; no output polyline
+    // may self-cross regardless.
+    const input: Record<string, { points: Pt[] }> = twoParallelHRoutes();
+    const { routes } = nudgeRoutes(input, [], {
+      trackGap: 32,
+      clearance: 0,
+    });
+    for (const [id, r] of Object.entries(routes)) {
+      expect(
+        polylineSelfCrossesOracle(r.points),
+        `route ${id} self-crosses: ${JSON.stringify(r.points)}`,
+      ).toBe(false);
+    }
+  });
+
+  it("guard does not over-revert: coincident-arm jog that removes overlap still commits", () => {
+    // Exact fixture from "both arms jog to distinct tracks..." — two Zs
+    // whose top arms share y=100 (real collinear overlap) and whose
+    // second segments diverge (no bar conflict). The corner-cost gate
+    // must recognize the collinear overlap as a real overlap being fixed
+    // and let the arm-jog commit even though it adds bends.
+    const input: Record<string, { points: Pt[] }> = {
+      a: {
+        points: [
+          { x: 0, y: 100 },
+          { x: 50, y: 100 },
+          { x: 50, y: 50 },
+        ],
+      },
+      b: {
+        points: [
+          { x: 0, y: 100 },
+          { x: 50, y: 100 },
+          { x: 50, y: 150 },
+        ],
+      },
+    };
+    const { routes, corridorDemand } = nudgeRoutes(input, [], {
+      trackGap: 8,
+      clearance: 0,
+    });
+    const a = routes.a!.points;
+    const b = routes.b!.points;
+    expect(a[2]!.y).not.toEqual(b[2]!.y); // arms separated
+    const armCorridor = corridorDemand.find((d) => d.axis === "h");
+    expect(armCorridor?.blocked).toBe(false);
+  });
+});
+
 describe("polylineIntersectsBoxes: return polarity guard", () => {
   it("returns true when a segment passes through a box interior", () => {
     const boxes = [{ x: 10, y: 10, width: 20, height: 20 }];

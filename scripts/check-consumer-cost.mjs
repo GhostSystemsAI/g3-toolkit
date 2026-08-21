@@ -149,6 +149,9 @@ const SCENARIOS = [
     // RAISED 182 -> 194 KB, 2026-08-20 (post-merge routing hardening,
     // same additions as core-layout above). Measured 189.4 KB.
     // Headroom 4.6 KB.
+    // RAISED 194 -> 195 KB, 2026-08-21 (RF-C nudging guards). Barrel
+    // now reaches countBends + segmentsCross from layout-metrics via
+    // g3t-nudging.ts; measured 194.4 KB, +0.4 KB. Headroom 0.6 KB.
     //
     // Read this number as the CEILING, not as what an adopter pays.
     // Every one of those additions is a named export in a
@@ -157,7 +160,7 @@ const SCENARIOS = [
     // honest readings for real import shapes, and both moved far less.
     // This line existing is the reason the @g3t/layout extraction was
     // retired rather than reinstated when the routing arc landed.
-    budget: 194 * 1024,
+    budget: 195 * 1024,
     code: `export * from "@g3t/core";\n`,
   },
   {
