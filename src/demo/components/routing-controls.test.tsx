@@ -15,10 +15,13 @@ import { useRoutingControls, RoutingControlStrip } from "./routing-controls";
 afterEach(cleanup);
 
 describe("useRoutingControls", () => {
-  it("defaults to direct mode with correct config", () => {
+  it("defaults to direct mode with smartAttach on", () => {
     const { result } = renderHook(() => useRoutingControls());
     expect(result.current.routeMode).toBe("direct");
-    expect(result.current.routeEdgesConfig).toEqual({ mode: "direct" });
+    expect(result.current.routeEdgesConfig).toEqual({
+      mode: "direct",
+      smartAttach: true,
+    });
   });
 
   it("accepts a custom default mode", () => {
@@ -26,7 +29,10 @@ describe("useRoutingControls", () => {
       useRoutingControls({ mode: "orthogonal" }),
     );
     expect(result.current.routeMode).toBe("orthogonal");
-    expect(result.current.routeEdgesConfig).toEqual({ mode: "orthogonal" });
+    expect(result.current.routeEdgesConfig).toEqual({
+      mode: "orthogonal",
+      smartAttach: true,
+    });
   });
 
   it("routeEdgesConfig is false when mode is off", () => {

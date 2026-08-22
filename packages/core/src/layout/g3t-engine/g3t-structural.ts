@@ -457,6 +457,8 @@ export function g3tLayoutStructural(
       bendHints,
       // RF-B: opt-in crossing-aware attachment refinement.
       smartAttach: options?.smartAttach,
+      // RF-C propagation: bend penalty for the A* router.
+      bendPenalty: options?.bendPenalty,
     });
     if (options?.nudge) {
       const topBoxes = Object.entries(geometry.nodes).filter(

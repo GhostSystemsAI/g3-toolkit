@@ -214,6 +214,8 @@ export function MbseShell({ onBack }: { onBack: () => void }) {
   const [renderer, setRenderer] = useState<"cytoscape" | "svg">("svg");
   const { structural: scene } = useStructuralLayout(input, {
     direction: DIRECTION[type],
+    nudge: true,
+    smartAttach: true,
   });
   // Browser-acceptance hook (no-op outside ?e2e=1): the projection
   // specs assert DRAWN bounds against this exact geometry document.

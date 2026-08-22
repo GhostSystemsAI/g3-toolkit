@@ -88,7 +88,7 @@ describe("RoutingExplainShell", () => {
     await waitFor(() => {
       const last = captured.canvasCalls.at(-1);
       expect(last).toBeTruthy();
-      expect(last!.routeEdges).toEqual({ mode: "direct" });
+      expect(last!.routeEdges).toEqual({ mode: "direct", smartAttach: true });
     });
   });
 
@@ -99,7 +99,10 @@ describe("RoutingExplainShell", () => {
     });
     await waitFor(() => {
       const last = captured.canvasCalls.at(-1);
-      expect(last!.routeEdges).toEqual({ mode: "orthogonal" });
+      expect(last!.routeEdges).toEqual({
+        mode: "orthogonal",
+        smartAttach: true,
+      });
     });
   });
 

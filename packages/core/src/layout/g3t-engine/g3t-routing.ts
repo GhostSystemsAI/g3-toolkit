@@ -282,6 +282,13 @@ export function routeStructuralEdges(
      *  on a strict improvement; each edge is flipped at most once to
      *  prevent oscillation. Default false => byte-identical to today. */
     smartAttach?: boolean;
+    /** A* bend penalty passed through to every `routeOrthogonal` call.
+     *  Higher values produce straighter (fewer-corner) routes at the cost
+     *  of longer total path length. Default 30 (routeOrthogonal default);
+     *  80-120 gives noticeably straighter routes on sparse scenes; very
+     *  high values (>200) may force long detours around obstacles that a
+     *  direct corner would cheaply avoid. */
+    bendPenalty?: number;
   },
 ): Record<string, { points: Pt[]; intermediate?: Pt[] }> {
   // Direction-aware (WS-D D3a fix): under horizontal flow (RIGHT/
@@ -1241,6 +1248,9 @@ export function routeStructuralEdges(
             obstacles: attempt.obstacles,
             ...(attempt.clearance !== undefined
               ? { clearance: attempt.clearance, minStub: attempt.clearance }
+              : {}),
+            ...(options?.bendPenalty !== undefined
+              ? { bendPenalty: options.bendPenalty }
               : {}),
           });
           if (routed !== null) {

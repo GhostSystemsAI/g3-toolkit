@@ -36,17 +36,20 @@ export function useRoutingControls(defaults?: {
   const [routeRefreshSignal, setRouteRefreshSignal] = useState(0);
   const [relayoutSignal, setRelayoutSignal] = useState(0);
 
+  // smartAttach defaults ON (demo-wide ruling A39, 2026-08-22): crossing-
+  // aware attachment is gated by the oracle and only accepts strict
+  // improvements, so the default-on cost is zero for scenes that don't
+  // benefit. Callers that need it off can pass { smartAttach: false }.
+  const useSmartAttach = defaults?.smartAttach !== false;
   const routeEdgesConfig:
     | false
     | { mode: "direct" | "orthogonal"; smartAttach?: boolean } =
     routeMode === "off"
       ? false
-      : defaults?.smartAttach
-        ? {
-            mode: routeMode as "direct" | "orthogonal",
-            smartAttach: true,
-          }
-        : { mode: routeMode as "direct" | "orthogonal" };
+      : {
+          mode: routeMode as "direct" | "orthogonal",
+          smartAttach: useSmartAttach,
+        };
 
   return {
     routeMode,

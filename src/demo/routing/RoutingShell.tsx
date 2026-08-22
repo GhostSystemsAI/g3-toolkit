@@ -105,6 +105,17 @@ const NUDGE_SPACING = {
 } as const;
 type NudgeSpacing = keyof typeof NUDGE_SPACING;
 
+/** A* bend-penalty presets. Higher values make the router prefer straighter
+ *  (fewer-corner) routes at the cost of longer total path length. Default 30
+ *  matches the router's built-in default; 80 and 160 give progressively
+ *  straighter results. Exposed so the Wide-separation setting is legible. */
+const BEND_PENALTIES = {
+  default: undefined, // routeOrthogonal default (30)
+  high: 80,
+  max: 160,
+} as const;
+type BendPenaltyPreset = keyof typeof BEND_PENALTIES;
+
 /** Effort presets over the engine's anytime phase budgets (PRF-001
  *  allocation is the default; high trades latency for quality). */
 const EFFORTS = {
@@ -261,6 +272,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   const [placement, setPlacement] = useState<Placement>("brandes-koepf");
   const [layering, setLayering] = useState<Layering>("network-simplex");
   const [effort, setEffort] = useState<Effort>("default");
+  const [bendPreset, setBendPreset] = useState<BendPenaltyPreset>("default");
   const [colorMode, setColorMode] = useState<ColorMode>("rainbow");
   // A9 (owner: "line crossovers are hard to tail"): a clicked edge
   // pins a trace (everything else dims); clicking anything that is
@@ -313,6 +325,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
       anchorPitch: ANCHOR_PITCH[pitch],
       trackGap: NUDGE_SPACING[spacing].trackGap,
       corridorMaxGapFactor: NUDGE_SPACING[spacing].factor,
+      bendPenalty: BEND_PENALTIES[bendPreset],
       placement,
       layering,
       ...EFFORTS[effort],
@@ -332,6 +345,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
       anchor,
       pitch,
       spacing,
+      bendPreset,
       placement,
       layering,
       effort,
@@ -558,6 +572,21 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
                 <option value="default">Default (8 / 3x)</option>
                 <option value="roomy">Roomy (12 / 4x)</option>
                 <option value="wide">Wide (16 / 5x)</option>
+              </select>
+            </span>
+            <span title="A* bend penalty: higher values make the router prefer straighter (fewer-corner) routes. Default 30; High 80; Max 160. Particularly useful at Wide separation where loose penalty allows unnecessary corners.">
+              <label htmlFor="rlab-bend-penalty">Straightness</label>
+              <select
+                id="rlab-bend-penalty"
+                data-testid="rlab-bend-penalty-select"
+                value={bendPreset}
+                onChange={(e) =>
+                  setBendPreset(e.target.value as BendPenaltyPreset)
+                }
+              >
+                <option value="default">Default (30)</option>
+                <option value="high">High (80)</option>
+                <option value="max">Max (160)</option>
               </select>
             </span>
             <span>

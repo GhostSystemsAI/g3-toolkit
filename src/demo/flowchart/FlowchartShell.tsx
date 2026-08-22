@@ -144,6 +144,8 @@ export function FlowchartShell({ onBack }: { onBack: () => void }) {
 
   const { structural: scene } = useStructuralLayout(input, {
     direction: "DOWN",
+    nudge: true,
+    smartAttach: true,
   });
   publishScene("flowchart", scene);
 

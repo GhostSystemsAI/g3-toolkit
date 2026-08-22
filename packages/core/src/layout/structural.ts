@@ -264,6 +264,13 @@ export interface StructuralLayoutOptions extends G3tEngineTuning {
    */
   smartAttach?: boolean;
   /**
+   * A* bend penalty forwarded to `routeStructuralEdges` → `routeOrthogonal`.
+   * Higher values produce straighter (fewer-corner) initial routes. Default 30
+   * (the A* router default). 80-120 gives noticeably straighter results on
+   * sparse scenes; very high values may force long detours around obstacles.
+   */
+  bendPenalty?: number;
+  /**
    * Prior TOP-LEVEL positions: a layout sketch (G3L:LAY-017; the
    * ruled 12.20 experiment graduated). When present and non-empty,
    * the run switches ELK layered's cycle-breaking, layering, and
@@ -805,6 +812,7 @@ function layoutOptionsKey(options?: StructuralLayoutOptions): string {
       // Both change geometry, so both must key the cache.
       trackGap: options?.trackGap ?? null,
       corridorMaxGapFactor: options?.corridorMaxGapFactor ?? null,
+      bendPenalty: options?.bendPenalty ?? null,
     },
     // Sketch participates in the memo key: a sketched re-layout of the
     // same input+options is a DIFFERENT computation from the
