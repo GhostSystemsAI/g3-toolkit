@@ -14,10 +14,10 @@
 
 ```yaml
 project:      g3_toolkit
-repo:         spindle_g3_toolkit            # GraphDB repo
-graphdb:      https://forge.tail515200.ts.net:3030/repositories/spindle_g3_toolkit
-iri_segment:  g3_toolkit     # IRI scope segment (…/ontology/kb/g3_toolkit/graph/…)
-path:         /GSystems/src/g3-toolkit
+repo:         spindle_g3_toolkit            # Fuseki dataset (GraphDB discontinued 2026-07)
+graphdb:      https://forge.tail515200.ts.net:3030/spindle_g3_toolkit   # Fuseki SPARQL dataset (key kept for KB_GRAPHDB_URL override chain)
+iri_segment:  g3_toolkit     # IRI scope segment (https://loom.ghostsystems.ai/g3_toolkit/graph/… since serge-iri 2026-08-24)
+path:         /GSystems/src/misc/g3-toolkit
 ```
 
 ## Response style (Jake-specific)
@@ -68,8 +68,8 @@ plan_footer_when:  "only on turns that produce a dispatchable artifact"
 # references must hostname-ify.
 service_addresses:
   fuseki:     https://forge.tail515200.ts.net:3030      # ghost-fuseki — sole SPARQL store (kb_sparql target)
-  kb_namespace: https://forge.tail515200.ts.net/ontology/kb/   # KB_V2_NS; env KB_V2_NS overrides
-  ollama:     https://forge.tail515200.ts.net:11434     # ghost-ollama — local fallback transport
+  kb_namespace: https://loom.ghostsystems.ai/ontology/loom/   # KB_V2_NS (serge-iri flip 2026-08-24); env KB_V2_NS overrides
+  ollama:     http://10.10.10.20:11434     # ollama on mesh host .20 (moved off forge 2026-08-15); plain http
   ontology:   https://forge.tail515200.ts.net:443/ontology/<tier>/<repo_id>/<file>  # file-server
 
 # Runtime resolution chain:
@@ -108,30 +108,58 @@ service_url_overrides:
 ## Graph layout (kb chat queries these)
 
 ```yaml
-g3_toolkit:    # GraphDB repo spindle_g3_toolkit; IRI segment = g3_toolkit
-  statements:  ...kb/g3_toolkit/graph/statements    # typed atoms; the curated log
-  global:      ...kb/g3_toolkit/graph/global        # project-local Topic / HeadPointer
-  jobs:        ...kb/g3_toolkit/graph/jobs          # weaverd Job + JobEvent
-  usage:       ...kb/g3_toolkit/graph/usage         # UsageSession + UsageDaily
-  drift:       ...kb/g3_toolkit/graph/drift         # kb verify findings
-  code:        ...kb/g3_toolkit/graph/code          # File + Symbol projections
-  workblock:   ...kb/g3_toolkit/graph/workblock     # WorkBlocks (queried for /attach context)
-  ontology:    ...kb/g3_toolkit/graph/ontology      # TBox
+g3_toolkit:    # Fuseki dataset spindle_g3_toolkit; IRI segment = g3_toolkit; authority https://loom.ghostsystems.ai (serge-iri 2026-08-24)
+  statements:  …/g3_toolkit/graph/statements    # typed atoms; the curated log
+  global:      …/g3_toolkit/graph/global        # project-local Topic / HeadPointer
+  jobs:        …/g3_toolkit/graph/jobs          # weaverd Job + JobEvent
+  usage:       …/g3_toolkit/graph/usage         # UsageSession + UsageDaily
+  drift:       …/g3_toolkit/graph/drift         # kb verify findings
+  code:        …/g3_toolkit/graph/code          # File + Symbol projections
+  ontology:    …/g3_toolkit/graph/ontology      # TBox
 
 site:            # shared cross-project tier
-  statements:  ...kb/site/graph/statements       # standing UserNotes + RolePrompt (kb chat reads here)
-  config:      ...kb/site/graph/config           # kb:Config atoms (operator URL overrides)
-  projects:    ...kb/site/graph/projects-registry
+  statements:  …/site/graph/statements       # standing UserNotes + RolePrompt (kb chat reads here)
+  config:      …/site/graph/config           # kb:Config atoms (operator URL overrides)
+  projects:    …/site/graph/registry
 ```
 
-## What kb chat does NOT auto-do
+## Plan-done → execute (Jake rule 2026-08-10; supersedes no_default_dispatch)
 
 ```yaml
-# kb chat is INTERACTIVE. It does not silently dispatch on every non-trivial turn.
-# Dispatch is opt-in via /bg, /dispatch, /orchestrate, or /do. Default behavior:
-# investigate with tools, answer in-thread, only dispatch when the user explicitly
-# asks or the orchestrator budget gate triggers.
-no_default_dispatch:    true
+# A READY, in-scope plan (brief written / kb:Plan emitted / plan footer
+# reached) is DISPATCHED immediately and reported — not parked waiting for an
+# explicit /do. The plan footer is still emitted for traceability, re-dispatch
+# and undo. Cancel with /c; roll back with git + supersession.
+# Hard carve-outs that NEVER auto-execute: destructive project ops
+# (deinit/drop/graph-wipe), off-mesh pushes / git-history deletion,
+# subscription/billing changes, a genuine design fork with no safe default.
+execute_ready_plans:  true
+emit_plan_footer:     true
+```
+
+## Async work — site conductor (orchd, B2.38)
+
+```yaml
+workers_async:   kb orchestrate execute --detach   # supervised, ZERO-LLM loop
+                 kb dispatch                        # single brief -> weaverd
+# ONE site-scoped orchd.service conducts plan execution for ALL projects and
+# users (converted from per-(project,user) 2026-08-29; see loom doctrine atom
+# Doctrine/orchd-site-conductor-usage). Route plan-shaped work through it:
+#   kb orchestrate execute --enqueue <plan-iri> --project <slug> --cwd <tree>
+# Project onboarding is zero-install: add the user to the <project>-devs
+# group, grant the conductor rw on the project repo
+# (kb user grant weaver-orchd rw), then `kb acl apply --restart`. No
+# project-side daemon/timer/unit; legacy per-project reaper timers are retired.
+# Restart only via provisiond: kb weavers server service-restart --unit
+# orchd.service — NEVER raw systemctl / sudo from chat.
+# SOAK GATE (open as of 2026-08-29): --detach / plain `kb dispatch` remains
+# the sanctioned default until >=2 projects run with zero unrequested
+# dispatches; after the flip, --enqueue becomes mandatory for plan execution.
+# NEVER hand-arm an ad-hoc re-dispatch waiter from chat (the fb778d08
+# duplicate-dispatch class) — the conductor's tree-lease + plan-level
+# kb:dependsOn DAG own all in-flight state.
+worker_status:   /jobs  |  kb pipeline  |  weave list   # one-shot, zero-LLM
+monitoring_must_be_zero_llm: true
 ```
 
 ## Essentials (inlined — future projects have no ./twill/ to point at)
