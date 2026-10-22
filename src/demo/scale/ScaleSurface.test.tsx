@@ -39,7 +39,21 @@ const captured = vi.hoisted(() => ({
   routeRefreshSignal: [] as Array<number | undefined>,
   relayoutSignal: [] as Array<number | undefined>,
   edgeClickIsolate: [] as Array<boolean | undefined>,
+  generateCalls: 0,
 }));
+
+// Counts model builds: the 8,000-node generation (plus Louvain) must
+// run once per page, not once per mount.
+vi.mock("./generate", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./generate")>();
+  return {
+    ...actual,
+    generateScaleGraph: () => {
+      captured.generateCalls += 1;
+      return actual.generateScaleGraph();
+    },
+  };
+});
 
 vi.mock("@g3t/react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@g3t/react")>();
@@ -90,6 +104,15 @@ describe("ScaleSurface", () => {
     expect(screen.getByTestId("scale-status").textContent).toContain(
       "measured live",
     );
+  });
+
+  it("remounting reuses the seeded model instead of regenerating 8,000 nodes", () => {
+    render(<ScaleSurface onBack={() => {}} />);
+    const afterFirst = captured.generateCalls;
+    expect(afterFirst).toBeGreaterThan(0);
+    cleanup();
+    render(<ScaleSurface onBack={() => {}} />);
+    expect(captured.generateCalls).toBe(afterFirst);
   });
 
   it("drills into a cluster from the rail and returns", () => {

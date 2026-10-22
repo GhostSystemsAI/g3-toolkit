@@ -113,6 +113,17 @@ function buildModel(): Model {
   return { full, clustered, members, genMs, collapseMs, edgeCount };
 }
 
+/** The seeded model is deterministic and never mutated, so it is built
+ *  once per page, not once per mount: useMemo alone re-ran the 8,000-node
+ *  generation plus Louvain on every return to the surface (and on every
+ *  test render, which timed the suite out under parallel load). The
+ *  "measured live" timings are the first build's, which is what they
+ *  always claimed to measure. Module scope, like POS_CACHE. */
+let MODEL: Model | null = null;
+function getModel(): Model {
+  return (MODEL ??= buildModel());
+}
+
 type View = { kind: "clusters" } | { kind: "drill"; superId: string };
 
 // 12.4 instrumentation: three lag suspects were eliminated by code
@@ -267,7 +278,7 @@ function markReady(label: string) {
 }
 
 export function ScaleSurface({ onBack }: { onBack: () => void }) {
-  const model = useMemo(() => buildModel(), []);
+  const model = getModel();
 
   const reducedMotion = usePrefersReducedMotion();
   // Live instance for the GraphToolbar (review 4.1; also the 5.14
