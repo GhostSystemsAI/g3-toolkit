@@ -13,10 +13,16 @@
  */
 
 import { describe, it, expect } from "vitest";
+import * as ugmModule from "./ugm";
+import * as layoutModule from "./layout";
+import * as workingSetModule from "./working-set-manager";
+import * as adapterModule from "./adapter";
+import * as algorithmAdapterModule from "./algorithm-adapter";
+import * as virtualizerModule from "./relational-virtualizer";
 
 describe("D6 module boundary: core imports (M3.E4.T1)", () => {
   it("UGM module exports without React dependency", async () => {
-    const mod = await import("./ugm");
+    const mod = ugmModule;
     expect(mod.UGM).toBeDefined();
     // UGM constructor takes no React-typed args
     const ugm = new mod.UGM();
@@ -24,7 +30,7 @@ describe("D6 module boundary: core imports (M3.E4.T1)", () => {
   });
 
   it("Layout engines export without React dependency", async () => {
-    const mod = await import("./layout");
+    const mod = layoutModule;
     expect(mod.ForceLayout).toBeDefined();
     expect(mod.HierarchyLayout).toBeDefined();
     expect(mod.DagreLayout).toBeDefined();
@@ -37,27 +43,27 @@ describe("D6 module boundary: core imports (M3.E4.T1)", () => {
   });
 
   it("WorkingSetManager exports without React dependency", async () => {
-    const mod = await import("./working-set-manager");
+    const mod = workingSetModule;
     expect(mod.WorkingSetManager).toBeDefined();
     const wsm = new mod.WorkingSetManager();
     expect(wsm.getLimit("canvas")).toBe(500);
   });
 
   it("Adapter module exports without React dependency", async () => {
-    const mod = await import("./adapter");
+    const mod = adapterModule;
     expect(mod.SparqlAdapter).toBeDefined();
     expect(mod.CypherAdapter).toBeDefined();
     expect(mod.HolonicAdapter).toBeDefined();
   });
 
   it("AlgorithmAdapter exports without React dependency", async () => {
-    const mod = await import("./algorithm-adapter");
+    const mod = algorithmAdapterModule;
     expect(mod.ingestAlgorithmResults).toBeDefined();
     expect(typeof mod.ingestAlgorithmResults).toBe("function");
   });
 
   it("RelationalVirtualizer exports without React dependency", async () => {
-    const mod = await import("./relational-virtualizer");
+    const mod = virtualizerModule;
     expect(mod.virtualizeRelationalData).toBeDefined();
     expect(mod.parseCSV).toBeDefined();
   });

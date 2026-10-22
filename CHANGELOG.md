@@ -12,6 +12,28 @@ writes. The probe is removed, and `eslint.config.js` now rejects
 Regression fence: `tests/unit/no-stream-probe-lint.test.ts` lints the
 probe shape through the repo config and expects the rule to fire.
 
+## 1.0.0-rc015: 2026-10-22 (no cold module imported inside a test body)
+
+**Fix: the in-body dynamic import anti-pattern (gotcha
+in-body-dynamic-import-counts-against-test-timeout) survived the
+StatsPanel/TimelineView fix in four more files.** A dynamic import in
+an `it()` body that names a module not already loaded at collection
+time pays its cold transform against vitest's 5 s default, which is
+how StatsPanel and TimelineView timed out on a saturated host. The
+same import was still in `m7-charts.test.tsx` (`SankeyView`, which pulls
+in ECharts: the first test body went from 196 ms to 25 ms once it was
+static), `module-boundary.test.ts` (the layout barrel among others),
+`g3t-layered.test.ts` (routing and structural engines, 13 in-body
+imports) and `CytoscapeCanvas.test.tsx` (the mocked cytoscape,
+emphasis-store, ThemeManager). All are now static imports. Regression
+fence: `tests/unit/cold-mount-fence.test.ts` scans every tracked test
+file and fails on an in-body `await import()` of a specifier the file
+does not already load at collection time (Node builtins and the
+dist-import test exempt, with the reason in the file). It listed 30
+offenders before this change and none after.
+
+Lands g3_toolkit heal b4a780b8.
+
 ## 1.0.0-rc015: 2026-10-22 (Routing Explained lays out its flow diagram once)
 
 **Fix: `RoutingExplainShell.test.tsx` "flow diagram is fed to

@@ -11,6 +11,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 import { UGM } from "@g3t/core";
 import { useSelectionStore } from "../../state/selection-store";
+import { useEmphasisStore } from "../../state/emphasis-store";
+import { THEME_PRESETS, useThemeStore } from "../../theme/ThemeManager";
+// vi.mock below is hoisted, so this binds the mocked constructor.
+import cytoscapeMock from "cytoscape";
 
 // Mock cytoscape before importing the component
 const mockCy = {
@@ -82,7 +86,7 @@ describe("CytoscapeCanvas component (M0.E3.T1)", () => {
   });
 
   it("merges layoutOptions into the layout object after built-in tuning (5.11)", async () => {
-    const cytoscape = (await import("cytoscape")).default as unknown as {
+    const cytoscape = cytoscapeMock as unknown as {
       mock: { calls: Array<[{ layout: Record<string, unknown> }]> };
     };
     const ugm = new UGM();
@@ -123,7 +127,6 @@ describe("CytoscapeCanvas component (M0.E3.T1)", () => {
   });
 
   it("edgeClickIsolate routes edge taps through the emphasis store, not selection (brief 23)", async () => {
-    const { useEmphasisStore } = await import("../../state/emphasis-store");
     useEmphasisStore.getState().clear();
     const ugm = new UGM();
     ugm.addNode("a", { types: ["X"] });
@@ -158,7 +161,6 @@ describe("CytoscapeCanvas component (M0.E3.T1)", () => {
   });
 
   it("edgeClickIsolate default (off) preserves click-to-select behavior", async () => {
-    const { useEmphasisStore } = await import("../../state/emphasis-store");
     useEmphasisStore.getState().clear();
     useSelectionStore.getState().clearSelection();
     const ugm = new UGM();
@@ -232,7 +234,6 @@ describe("encoding spec node glyph rule", () => {
 describe("theme -> canvas wiring (round 20)", () => {
   it("themeColorRules speaks the theme's canvas vocabulary with generic selectors", async () => {
     const { themeColorRules } = await import("./CytoscapeCanvas");
-    const { THEME_PRESETS } = await import("../../theme/ThemeManager");
     const dark = THEME_PRESETS["dark"]!;
     const rules = themeColorRules(dark);
     const bySelector = new Map(
@@ -254,8 +255,7 @@ describe("theme -> canvas wiring (round 20)", () => {
   });
 
   it("a theme switch restyles in place without re-initializing", async () => {
-    const { useThemeStore } = await import("../../theme/ThemeManager");
-    const cytoscape = (await import("cytoscape")).default as unknown as {
+    const cytoscape = cytoscapeMock as unknown as {
       mock: { calls: unknown[][] };
     };
     const ugm = new UGM();
@@ -342,7 +342,7 @@ describe("structural scene rendering (slice A2, round 32)", () => {
     const ugm = new UGM();
     ugm.addNode("sensor.cal", { types: ["PropertyShape"] });
     render(<CytoscapeCanvas ugm={ugm} structural={{ input, geometry }} />);
-    const cytoscape = (await import("cytoscape")).default as unknown as {
+    const cytoscape = cytoscapeMock as unknown as {
       mock: { calls: Array<[Record<string, unknown>]> };
     };
     return cytoscape.mock.calls.at(-1)![0] as {
@@ -537,7 +537,7 @@ describe("structural decoration churn does not recreate the instance (round 57)"
   };
 
   it("a fresh decorations object with unchanged content does not re-init", async () => {
-    const cytoscape = (await import("cytoscape")).default as unknown as {
+    const cytoscape = cytoscapeMock as unknown as {
       mock: { calls: unknown[] };
     };
     const scene = await sensorScene();
@@ -564,7 +564,7 @@ describe("structural decoration churn does not recreate the instance (round 57)"
   });
 
   it("a real decoration content change does re-init", async () => {
-    const cytoscape = (await import("cytoscape")).default as unknown as {
+    const cytoscape = cytoscapeMock as unknown as {
       mock: { calls: unknown[] };
     };
     const scene = await sensorScene();
