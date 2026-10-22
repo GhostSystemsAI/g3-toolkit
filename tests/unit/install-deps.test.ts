@@ -4,7 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import {
   buildOverlayStore,
+  nodeModulesState,
   overlayRoot,
+  planInstall,
   storeIsWritable,
 } from "../../scripts/install-deps.mjs";
 
@@ -115,5 +117,65 @@ describe("install-deps overlay store", () => {
       fs.readFileSync(path.resolve(__dirname, "../../package.json"), "utf8"),
     ) as { scripts: Record<string, string> };
     expect(pkg.scripts["install:deps"]).toBe("node scripts/install-deps.mjs");
+  });
+});
+
+// Fence for heal 09cf2530: plan worktrees had no node_modules, and workers
+// symlinked the main checkout's, which resolves every `@g3t/*` workspace
+// link into the main checkout.
+describe("install-deps node_modules provisioning", () => {
+  const root = path.resolve(__dirname, "../..");
+
+  it("every package script that runs node scripts/<file> names a real file", () => {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(root, "package.json"), "utf8"),
+    ) as { scripts: Record<string, string> };
+    const missing = Object.entries(pkg.scripts).flatMap(([name, cmd]) =>
+      [...cmd.matchAll(/\bnode\s+(scripts\/\S+)/g)]
+        .flatMap((m) => (m[1] ? [m[1]] : []))
+        .filter((p) => !fs.existsSync(path.join(root, p)))
+        .map((p) => `${name}: ${p}`),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("classifies node_modules as missing, symlink or installed", () => {
+    const d = mkTmp();
+    expect(nodeModulesState(d)).toBe("missing");
+    const donor = mkTmp();
+    fs.mkdirSync(path.join(donor, "node_modules"));
+    fs.writeFileSync(path.join(donor, "node_modules", ".modules.yaml"), "");
+    expect(nodeModulesState(donor)).toBe("installed");
+    fs.symlinkSync(
+      path.join(donor, "node_modules"),
+      path.join(d, "node_modules"),
+    );
+    expect(nodeModulesState(d)).toBe("symlink");
+  });
+
+  it("replaces a borrowed symlink with a real install, never keeps it", () => {
+    expect(planInstall({ state: "installed", writable: true })).toEqual({
+      action: "none",
+    });
+    expect(planInstall({ state: "symlink", writable: true })).toEqual({
+      action: "install",
+      unlinkSymlink: true,
+      overlay: false,
+    });
+    expect(planInstall({ state: "missing", writable: false })).toMatchObject({
+      action: "install",
+      overlay: true,
+    });
+  });
+
+  it("this checkout's workspace links resolve inside it", () => {
+    expect(nodeModulesState(root)).toBe("installed");
+    const core = path.join(root, "node_modules", "@g3t", "core");
+    expect(
+      path.resolve(
+        path.join(root, "node_modules", "@g3t"),
+        fs.readlinkSync(core),
+      ),
+    ).toBe(path.join(root, "packages", "core"));
   });
 });

@@ -17,6 +17,13 @@
 // installs offline from that. Package files are copied into node_modules
 // (hardlinks cannot cross the mount), so the overlay is disposable.
 //
+// A git worktree carries no node_modules (gitignored). The tempting fix,
+// symlinking node_modules from the main checkout, is wrong: pnpm's
+// workspace links are relative, so every `@g3t/*` import would resolve into
+// the MAIN checkout and the worktree would test code it did not change
+// (heal 09cf2530). This script removes such a symlink and does a real
+// install; it is a no-op when node_modules is already installed.
+//
 // Usage: node scripts/install-deps.mjs [extra pnpm install args]
 //   G3T_PNPM_OVERLAY_STORE=<dir>  overlay location (default:
 //   $WEAVER_JOB_DIR/work/pnpm-store in a pool worker, else a temp dir)
@@ -30,6 +37,29 @@ import { fileURLToPath } from "node:url";
 // Entries pnpm writes during an install that is fully satisfied offline.
 const WRITABLE_DIRS = ["projects", ".tmp"];
 const isIndexFile = (name) => /^index\.db(-wal|-shm)?$/.test(name);
+
+/** State of `<root>/node_modules`: "missing", "symlink" or "installed". */
+export function nodeModulesState(root) {
+  const nm = path.join(root, "node_modules");
+  let st;
+  try {
+    st = fs.lstatSync(nm);
+  } catch {
+    return "missing";
+  }
+  if (st.isSymbolicLink()) return "symlink";
+  return fs.existsSync(path.join(nm, ".modules.yaml")) ? "installed" : "missing";
+}
+
+/** Decide what to do; pure, so the policy is testable without pnpm. */
+export function planInstall({ state, writable }) {
+  if (state === "installed") return { action: "none" };
+  return {
+    action: "install",
+    unlinkSymlink: state === "symlink",
+    overlay: !writable,
+  };
+}
 
 /** True when pnpm can register a project in this store. */
 export function storeIsWritable(storeDir) {
@@ -88,11 +118,25 @@ export function overlayRoot(env = process.env) {
 }
 
 function main(args) {
+  const root = path.resolve(fileURLToPath(import.meta.url), "../..");
+  const state = nodeModulesState(root);
+  if (state === "installed") {
+    console.log("install-deps: node_modules already installed");
+    return 0;
+  }
   const storeDir = execFileSync("pnpm", ["store", "path"], {
     encoding: "utf8",
   }).trim();
   let installArgs = ["install", "--frozen-lockfile", ...args];
-  if (!storeIsWritable(storeDir)) {
+  const plan = planInstall({ state, writable: storeIsWritable(storeDir) });
+  if (plan.unlinkSymlink) {
+    console.log(
+      `install-deps: replacing node_modules symlink -> ${fs.readlinkSync(path.join(root, "node_modules"))}`,
+    );
+    // Unlink only the link itself; the donor checkout is untouched.
+    fs.unlinkSync(path.join(root, "node_modules"));
+  }
+  if (plan.overlay) {
     const root = overlayRoot();
     buildOverlayStore(storeDir, root);
     console.log(
@@ -100,8 +144,9 @@ function main(args) {
     );
     installArgs = [...installArgs, "--offline", "--store-dir", root];
   }
-  const res = spawnSync("pnpm", installArgs, { stdio: "inherit" });
-  return res.status ?? 1;
+  const res = spawnSync("pnpm", installArgs, { stdio: "inherit", cwd: root });
+  if (res.status) return res.status;
+  return nodeModulesState(root) === "installed" ? 0 : 1;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
