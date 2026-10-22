@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-rc022: 2026-10-22 (label-wrap switch fenced through the real stylesheet merge)
+
+**Fence: the bio wrap-off regression could only be caught by rule shape.**
+Two sessions shipped two wrap mechanisms minutes apart (e7509d9's 110px
+base-rule wrap, 7e9e1bd's opt-in `labelWrapRule` whose OFF appended
+nothing); composed, OFF fell back to the base wrap. 88611c4 reconciled
+them to one knob (`labelWrapRule(false)` emits `text-wrap: none`), but the
+existing tests asserted only the returned rule, not what the canvas
+resolves. `packages/react/src/views/canvas/label-wrap-merge.test.ts`
+builds a headless cytoscape from `composeCanvasStylesheet` and asserts the
+computed `text-wrap`; it fails against the pre-fix OFF state. No runtime
+change.
+
 ## 1.0.0-rc021: 2026-10-22 (gates refuse dependencies borrowed from another checkout)
 
 **Fix: nothing stopped a gate run through a borrowed node_modules, and the
