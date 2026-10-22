@@ -55,7 +55,7 @@ describe("package scripts", () => {
     };
     const cmd = pkg.scripts["docs:demo"];
     expect(cmd).toBeDefined();
-    const base = cmd.match(/--base[=\s]+(\S+)/)?.[1];
+    const base = cmd?.match(/--base[=\s]+(\S+)/)?.[1];
     expect(base).toBe("./");
   });
 
