@@ -38,19 +38,20 @@ describe("cold one-time costs stay out of test bodies", () => {
 // static import or a top-level await import of the same specifier).
 // Anything else pays its cold transform against the 5 s test timeout.
 // Exemptions carry their reason; computed specifiers are not matched.
-const IN_BODY = /^[ \t]+(?![ \t]|\/\/|\*).*?await import\(\s*["']([^"']+)["']\s*\)/gm;
-const STATIC = /^import\s+(?!type\b)[^;]*?\bfrom\s+["']([^"']+)["']|^import\s+["']([^"']+)["']|^const\s.*?=\s*await import\(\s*["']([^"']+)["']\s*\)/gm;
+const IN_BODY =
+  /^[ \t]+(?![ \t]|\/\/|\*).*?await import\(\s*["']([^"']+)["']\s*\)/gm;
+const STATIC =
+  /^import\s+(?!type\b)[^;]*?\bfrom\s+["']([^"']+)["']|^import\s+["']([^"']+)["']|^const\s.*?=\s*await import\(\s*["']([^"']+)["']\s*\)/gm;
 const EXEMPT: Record<string, string> = {
   // Imports the BUILT dist by computed path; runs under vitest.dist.config.
   "tests/dist/public-api.test.ts": "dist import by design",
 };
 
 describe("in-body dynamic imports name a module loaded at collection time", () => {
-  const files = execFileSync(
-    "git",
-    ["ls-files", "*.test.ts", "*.test.tsx"],
-    { cwd: root, encoding: "utf8" },
-  )
+  const files = execFileSync("git", ["ls-files", "*.test.ts", "*.test.tsx"], {
+    cwd: root,
+    encoding: "utf8",
+  })
     .split("\n")
     .filter((f) => f && !(f in EXEMPT));
 
