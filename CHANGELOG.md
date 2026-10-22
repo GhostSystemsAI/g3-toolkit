@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-rc025: 2026-10-22 (verify reports both bundle ledgers)
+
+**Fix: an over-budget publish weight hid the consumer-cost result.**
+`verify` chained `verify:bundle && verify:consumer-cost`, so when core
+growth crossed the publish-weight cap the consumer-cost gate never ran,
+and a commit that raised only `check-bundle-size.mjs` looked green until
+the next run failed on the core-layout scenario. New
+`scripts/check-budgets.mjs` (`pnpm run verify:budgets`) runs both ledgers
+unconditionally and lists every file that needs a raise; each ledger's
+failure message now names the other, and the PR template asks for both.
+Fence in `tests/unit/package-scripts.test.ts` (fails on the pre-fix tree).
+Lands g3_toolkit heal 37303ded.
+
 ## 1.0.0-rc024: 2026-10-22 (LAY-005 bend hints clear same-layer boxes)
 
 **Fix: a dummy-chain bend hint could sit inside a real node.** Dummies stay

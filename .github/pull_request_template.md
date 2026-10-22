@@ -36,5 +36,6 @@ environmental reason, say which and why it is not the code. -->
       `node scripts/check-api-surface.mjs --update` and the diff is
       reviewable as the record of what changed.
 - [ ] Bundle budget raised: the ledger comment in
-      `scripts/check-bundle-size.mjs` says why, in the same commit, and
+      `scripts/check-bundle-size.mjs` AND the SCENARIOS table in
+      `scripts/check-consumer-cost.mjs` say why, in the same commit, and
       a sourcemap audit confirmed the growth is first-party.

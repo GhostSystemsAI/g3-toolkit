@@ -603,7 +603,9 @@ if (failures > 0) {
   );
   console.error(
     `If the growth is justified, raise the budget in scripts/check-bundle-size.mjs\n` +
-      `in the same commit, with a comment explaining why.`,
+      `in the same commit, with a comment explaining why. Core growth also\n` +
+      `moves the core-layout/core-all scenarios in check-consumer-cost.mjs;\n` +
+      `run pnpm run verify:budgets and raise every ledger it lists.`,
   );
   process.exit(1);
 }
