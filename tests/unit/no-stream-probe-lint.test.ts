@@ -12,10 +12,10 @@ const PROBE = 'process.stderr.write("PROBE render " + 12 + "\\n");\n';
 
 async function ruleIds(text: string, file: string): Promise<string[]> {
   const eslint = new ESLint({ cwd: root });
-  const [result] = await eslint.lintText(text, {
+  const results = await eslint.lintText(text, {
     filePath: resolve(root, file),
   });
-  return result.messages.map((m) => m.ruleId ?? "");
+  return results.flatMap((r) => r.messages.map((m) => m.ruleId ?? ""));
 }
 
 describe("lint: no stray process-stream probes", () => {
