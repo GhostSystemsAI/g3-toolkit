@@ -21,11 +21,12 @@ describe("cold one-time costs stay out of test bodies", () => {
     expect(read(file).match(WARM)?.[1]).toBe(shell);
   });
 
-  it("StatsPanel (ECharts) is imported at collection time", () => {
+  it.each([
+    ["StatsPanel", "stats"],
+    ["TimelineView", "timeline"],
+  ])("%s is imported at collection time", (name, mod) => {
     const src = read("packages/react/src/views/secondary-views.test.tsx");
-    expect(src).not.toMatch(/await import\(["']\.\.\/views\/stats["']\)/);
-    expect(src).toMatch(
-      /^import \{ StatsPanel \} from "\.\.\/views\/stats";$/m,
-    );
+    expect(src).not.toContain(`await import("../views/${mod}")`);
+    expect(src).toContain(`import { ${name} } from "../views/${mod}";`);
   });
 });

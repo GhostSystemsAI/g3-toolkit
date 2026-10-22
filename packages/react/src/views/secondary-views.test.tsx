@@ -15,10 +15,12 @@ import { WorkingSetManager } from "@g3t/core";
 import { useSelectionStore } from "../state/selection-store";
 import { MapView } from "../views/map";
 import { TreeView } from "../views/tree";
-// Static, not an in-test dynamic import: StatsPanel pulls in ECharts,
-// and a cold import inside the test body counted against the 5 s test
-// timeout (5.3 s on a saturated host). Collection-time imports do not.
+// Static, not in-test dynamic imports: StatsPanel pulls in ECharts and
+// TimelineView vis-timeline, and a cold import inside a test body counted
+// against the 5 s test timeout (5.3 s and 6.0 s on a saturated host).
+// Collection-time imports do not.
 import { StatsPanel } from "../views/stats";
+import { TimelineView } from "../views/timeline";
 
 // vis-timeline and echarts need DOM APIs not available in jsdom;
 // their component tests focus on data extraction and empty states.
@@ -38,9 +40,7 @@ describe("TimelineView (M5.E1.T1)", () => {
   // vis-timeline requires DOM measurement APIs not in jsdom.
   // Test the empty-state path and data extraction logic.
 
-  it("shows empty state when no temporal nodes exist", async () => {
-    // Dynamic import to avoid vis-timeline initialization errors
-    const { TimelineView } = await import("../views/timeline");
+  it("shows empty state when no temporal nodes exist", () => {
     const ugm = new UGM();
     ugm.addNode("a", { types: ["X"], properties: { name: "A" } });
 

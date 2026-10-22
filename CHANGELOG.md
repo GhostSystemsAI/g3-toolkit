@@ -10,8 +10,9 @@ against vitest's 5 s default. The first `AnalyticsDashboard` mount in a
 worker is about 3x a warm one (160 ms vs 53 ms alone; module JIT plus
 first ECharts and jsdom style setup) and landed on whichever test
 mounted first; the StatsPanel test imported ECharts dynamically inside
-its body. The dashboard file now warms one mount in a budgeted
-`beforeAll`, and StatsPanel is a static import. A leftover `PROBE`
+its body (TimelineView did the same with vis-timeline, 6.0 s). The
+dashboard file now warms one mount in a budgeted `beforeAll`, and
+StatsPanel and TimelineView are static imports. A leftover `PROBE`
 stderr write in `ScaleSurface.test.tsx` from rc014 is removed. Fence:
 `tests/unit/cold-mount-fence.test.ts` fails on the old test sources.
 
