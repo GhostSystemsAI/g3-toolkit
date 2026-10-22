@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0-rc022: 2026-10-22 (playground loads at every mount point)
+
+**Fix: the playground white-screened on GitHub Pages.** The same
+docs-out/ artifact is served at the root (g3.ghostsystems.ai) and at
+/g3-toolkit/ (GitHub Pages via docs.yml, the README's live link).
+`docs:demo` baked an absolute base into every asset URL, so it could fit
+only one host: /g3-toolkit/playground/ broke the root serve, and the
+/playground/ fix that replaced it broke Pages (entry module and CSS 404,
+#root never mounts). Reproduced in chromium against a static server at
+both mounts. `docs:demo` now builds with `--base=./`; the playground
+routes by query string only, so relative asset URLs are safe, and #root
+mounts at /, /g3-toolkit/ and a deeper mount with zero 404s. Fence:
+`tests/unit/package-scripts.test.ts` asserts the relative base.
+
 ## 1.0.0-rc021: 2026-10-22 (gates refuse dependencies borrowed from another checkout)
 
 **Fix: nothing stopped a gate run through a borrowed node_modules, and the

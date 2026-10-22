@@ -40,6 +40,25 @@ describe("package scripts", () => {
     expect(["warn", "error", "false"]).toContain(setting);
   });
 
+  // Fence for heal e615d5a8: the one docs-out artifact is served at two
+  // mount points (g3.ghostsystems.ai at /, GitHub Pages at /g3-toolkit/).
+  // An absolute base fits one and white-screens the other: the entry
+  // module 404s and #root never mounts. /g3-toolkit/playground/ broke the
+  // root serve; its replacement /playground/ broke Pages. Only a relative
+  // base loads under both, which is safe because the playground routes by
+  // query string, never by pathname.
+  it("docs:demo builds the playground with a mount-agnostic base", () => {
+    const pkg = JSON.parse(
+      readFileSync(resolve(root, "package.json"), "utf8"),
+    ) as {
+      scripts: Record<string, string>;
+    };
+    const cmd = pkg.scripts["docs:demo"];
+    expect(cmd).toBeDefined();
+    const base = cmd.match(/--base[=\s]+(\S+)/)?.[1];
+    expect(base).toBe("./");
+  });
+
   // A worktree that links node_modules to a main checkout gets a symlink,
   // which the directory-only pattern `node_modules/` does not match.
   it(".gitignore ignores node_modules symlinks, not only directories", () => {
