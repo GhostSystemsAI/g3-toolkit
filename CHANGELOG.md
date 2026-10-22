@@ -15,6 +15,22 @@ first frame while the hook idles. The test file pays the one-time layout
 in a `beforeAll` with its own budget. Regression fence: the new remount
 case fails when the flow diagram is re-laid-out per mount.
 
+## 1.0.0-rc015: 2026-10-22 (cold one-time costs leave test bodies)
+
+**Fix: `AnalyticsDashboard.test.tsx` ("registers the full toolkit node
+set") timed out at 5544 ms, and `secondary-views.test.tsx` ("StatsPanel
+shows empty state") at 5328 ms, with two full runs on one host.** Same
+mechanism as rc014: a one-time cold cost paid inside a test body counts
+against vitest's 5 s default. The first `AnalyticsDashboard` mount in a
+worker is about 3x a warm one (160 ms vs 53 ms alone; module JIT plus
+first ECharts and jsdom style setup) and landed on whichever test
+mounted first; the StatsPanel test imported ECharts dynamically inside
+its body (TimelineView did the same with vis-timeline, 6.0 s). The
+dashboard file now warms one mount in a budgeted `beforeAll`, and
+StatsPanel and TimelineView are static imports. A leftover `PROBE`
+stderr write in `ScaleSurface.test.tsx` from rc014 is removed. Fence:
+`tests/unit/cold-mount-fence.test.ts` fails on the old test sources.
+
 ## 1.0.0-rc014: 2026-10-22 (Scale surface builds its model once; demo tests stop timing out)
 
 **Fix: `Demo.test.tsx` and `ScaleSurface.test.tsx` timed out at 5000 ms
