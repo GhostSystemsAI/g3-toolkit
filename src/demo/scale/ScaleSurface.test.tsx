@@ -6,7 +6,7 @@
  * a supernode on the canvas drills the same way, and back restores
  * the cluster view. Rendering at scale stays browser-verified.
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import {
   render,
   screen,
@@ -92,8 +92,26 @@ afterEach(() => {
 });
 
 describe("ScaleSurface", () => {
-  it("renders supernodes, not the 8,000-node graph", () => {
+  // The seeded model (8,000-node generation plus Louvain) is built once
+  // per page. Pay that one-time cost here under its own budget: cold, on
+  // a saturated host, it alone can exceed the 5 s test timeout, and it
+  // would land on whichever test mounts first. Every test below keeps
+  // the default timeout and exercises mounts against the built model.
+  beforeAll(() => {
     render(<ScaleSurface onBack={() => {}} />);
+    cleanup();
+  }, 30_000);
+
+  it("renders supernodes, not the 8,000-node graph", () => {
+    const T0 = performance.now();
+    render(<ScaleSurface onBack={() => {}} />);
+    process.stderr.write(
+      "PROBE render " +
+        (performance.now() - T0).toFixed(0) +
+        " " +
+        screen.getByTestId("scale-status").textContent +
+        "\n",
+    );
     expect(screen.getByTestId("g3t-graph-toolbar")).toBeTruthy();
     const first = captured.counts.at(-1) ?? 0;
     expect(first).toBeGreaterThan(0);

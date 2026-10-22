@@ -12,7 +12,9 @@ pushed one past the cap. The model is deterministic and never mutated,
 so it is now built once per page at module scope, like the position
 cache. In `Demo.test.tsx` each lazy-shell wait declared a 15 s find
 budget that vitest's 5 s default test timeout pre-empted; each test now
-declares a timeout that covers its own wait. Regression fence: the new
+declares a timeout that covers its own wait. `ScaleSurface.test.tsx`
+now pays the one-time model build in a `beforeAll` with its own budget,
+so every test keeps the 5 s default. Regression fence: the new
 remount case in `ScaleSurface.test.tsx` fails when the model is
 regenerated per mount.
 
