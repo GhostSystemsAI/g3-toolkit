@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.0-rc016: 2026-10-22 (no stray debug probes in committed code)
+
+**Fix: `ScaleSurface.test.tsx` carried a debug timing probe,
+`process.stderr.write("PROBE render ...")`, committed with the
+build-once change (cd3db07).** It printed on every test run and the lint
+gate let it through because nothing restricted direct process stream
+writes. The probe is removed, and `eslint.config.js` now rejects
+`process.stdout.write` / `process.stderr.write` in `src/`, `packages/`,
+`examples/` and `tests/`; Node tooling under `scripts/` is unaffected.
+Regression fence: `tests/unit/no-stream-probe-lint.test.ts` lints the
+probe shape through the repo config and expects the rule to fire.
+
 ## 1.0.0-rc015: 2026-10-22 (Routing Explained lays out its flow diagram once)
 
 **Fix: `RoutingExplainShell.test.tsx` "flow diagram is fed to

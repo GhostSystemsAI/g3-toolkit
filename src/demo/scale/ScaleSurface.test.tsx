@@ -103,15 +103,7 @@ describe("ScaleSurface", () => {
   }, 30_000);
 
   it("renders supernodes, not the 8,000-node graph", () => {
-    const T0 = performance.now();
     render(<ScaleSurface onBack={() => {}} />);
-    process.stderr.write(
-      "PROBE render " +
-        (performance.now() - T0).toFixed(0) +
-        " " +
-        screen.getByTestId("scale-status").textContent +
-        "\n",
-    );
     expect(screen.getByTestId("g3t-graph-toolbar")).toBeTruthy();
     const first = captured.counts.at(-1) ?? 0;
     expect(first).toBeGreaterThan(0);
