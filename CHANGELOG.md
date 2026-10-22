@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.0-rc019: 2026-10-22 (pool workers keep the pnpm overlay in job scratch)
+
+**Fix: a pool worker's `pnpm install` EROFS remediation pointed at
+`--store-dir $WEAVER_JOB_DIR/work/pnpm-store`, but `install:deps` put the
+overlay in the worker's private /tmp.** Reproduced in a heal worktree:
+plain `pnpm install --frozen-lockfile` exits 226 EROFS on
+`<store>/projects`; `pnpm run install:deps` installs. The overlay root now
+resolves G3T_PNPM_OVERLAY_STORE, else `$WEAVER_JOB_DIR/work/pnpm-store`
+when WEAVER_JOB_DIR is set (reused across installs in one job), else a
+fresh temp dir. Fence: `overlayRoot` cases in
+`tests/unit/install-deps.test.ts`.
+
 ## 1.0.0-rc018: 2026-10-22 (perf ceilings stop measuring host load)
 
 **Fix: `canvas.test.ts` "initializes 500 nodes + 2,000 edges in under 2

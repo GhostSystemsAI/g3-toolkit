@@ -18,7 +18,8 @@
 // (hardlinks cannot cross the mount), so the overlay is disposable.
 //
 // Usage: node scripts/install-deps.mjs [extra pnpm install args]
-//   G3T_PNPM_OVERLAY_STORE=<dir>  overlay location (default: a temp dir)
+//   G3T_PNPM_OVERLAY_STORE=<dir>  overlay location (default:
+//   $WEAVER_JOB_DIR/work/pnpm-store in a pool worker, else a temp dir)
 
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -70,15 +71,29 @@ export function buildOverlayStore(storeDir, overlayRoot) {
   return overlay;
 }
 
+/**
+ * Where the overlay goes: G3T_PNPM_OVERLAY_STORE when set, else
+ * $WEAVER_JOB_DIR/work/pnpm-store in a pool worker (its scratch root,
+ * visible to `rev jobs status` and reused across installs in one job; the
+ * worker's /tmp is private), else a fresh temp dir.
+ */
+export function overlayRoot(env = process.env) {
+  if (env.G3T_PNPM_OVERLAY_STORE) return env.G3T_PNPM_OVERLAY_STORE;
+  if (env.WEAVER_JOB_DIR) {
+    const root = path.join(env.WEAVER_JOB_DIR, "work", "pnpm-store");
+    fs.mkdirSync(root, { recursive: true });
+    return root;
+  }
+  return fs.mkdtempSync(path.join(os.tmpdir(), "g3t-pnpm-overlay-"));
+}
+
 function main(args) {
   const storeDir = execFileSync("pnpm", ["store", "path"], {
     encoding: "utf8",
   }).trim();
   let installArgs = ["install", "--frozen-lockfile", ...args];
   if (!storeIsWritable(storeDir)) {
-    const root =
-      process.env.G3T_PNPM_OVERLAY_STORE ??
-      fs.mkdtempSync(path.join(os.tmpdir(), "g3t-pnpm-overlay-"));
+    const root = overlayRoot();
     buildOverlayStore(storeDir, root);
     console.log(
       `install-deps: store ${storeDir} is read-only; installing offline through overlay ${root}`,
