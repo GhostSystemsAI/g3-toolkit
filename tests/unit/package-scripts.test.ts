@@ -1,0 +1,32 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+// Fence for heal 627ca85d: `gates:spec` invoked bare `python`, which is
+// absent on hosts that ship only python3 (the forge worker pools among
+// them), so `pnpm run gates` died at its fifth step there. python3 is
+// present everywhere `python` is, including GitHub's setup-python.
+const root = resolve(__dirname, "../..");
+const BARE_PYTHON = /(^|[\s&;|(])python(?=\s)/;
+
+describe("package scripts", () => {
+  it("never invoke bare python (python3 only)", () => {
+    const pkg = JSON.parse(
+      readFileSync(resolve(root, "package.json"), "utf8"),
+    ) as {
+      scripts: Record<string, string>;
+    };
+    const offenders = Object.entries(pkg.scripts).filter(([, cmd]) =>
+      BARE_PYTHON.test(cmd),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("ci.yml runs the spec scripts through python3", () => {
+    const ci = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
+    const runs = ci.split("\n").filter((l) => /^\s*-?\s*run:/.test(l));
+    expect(
+      runs.filter((l) => BARE_PYTHON.test(l.replace(/^\s*-?\s*run:/, " "))),
+    ).toEqual([]);
+  });
+});
