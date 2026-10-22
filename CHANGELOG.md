@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.0-rc014: 2026-10-22 (Scale surface builds its model once; demo tests stop timing out)
+
+**Fix: `Demo.test.tsx` and `ScaleSurface.test.tsx` timed out at 5000 ms
+in a full `pnpm run test` while passing in isolation.** Two mechanisms.
+`ScaleSurface` built its seeded 8,000-node model (generation plus
+Louvain) in a per-mount `useMemo`, so every return to the surface, and
+every one of the file's renders, redid the whole build; under a parallel
+run each test took 1.1 to 2.2 s against 0.3 s alone, and a loaded host
+pushed one past the cap. The model is deterministic and never mutated,
+so it is now built once per page at module scope, like the position
+cache. In `Demo.test.tsx` each lazy-shell wait declared a 15 s find
+budget that vitest's 5 s default test timeout pre-empted; each test now
+declares a timeout that covers its own wait. `ScaleSurface.test.tsx`
+now pays the one-time model build in a `beforeAll` with its own budget,
+so every test keeps the 5 s default. Regression fence: the new
+remount case in `ScaleSurface.test.tsx` fails when the model is
+regenerated per mount.
+
 ## 1.0.0-rc013: 2026-10-22 (`pnpm run` no longer installs first)
 
 **Fix: every `pnpm run` failed EROFS where the pnpm store is read-only.**
