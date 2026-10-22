@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.0-rc018: 2026-10-22 (plan worktrees install their own node_modules)
+
+**Fix: a plan worktree had no node_modules and no supported way to get
+one.** vitest and tsc failed ERR_MODULE_NOT_FOUND there, and the
+`install:deps` script named `scripts/install-deps.mjs`, which did not
+exist. Workers symlinked the main checkout's node_modules instead, which
+resolves every `@g3t/*` workspace link into the main checkout, so a
+worktree's gates tested code it had not changed. `scripts/install-deps.mjs`
+now performs a frozen, offline install into the checkout, replaces a
+borrowed node_modules symlink, and, when the shared pnpm store is
+read-only (pnpm always writes its `projects/` registry), installs through
+an overlay store in the job work dir. Regression fence:
+`tests/unit/install-deps.test.ts` fails on a package script naming a
+missing `scripts/` file and asserts the workspace links resolve inside
+the checkout under test.
+
 ## 1.0.0-rc016: 2026-10-22 (no stray debug probes in committed code)
 
 **Fix: `ScaleSurface.test.tsx` carried a debug timing probe,

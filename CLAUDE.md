@@ -93,6 +93,11 @@ a written rationale in scripts/check-bundle-size.mjs (the ledger).
   off the forge mesh, so the export gate refuses the push. A generic
   worker contract line saying "commit and push" does not override
   this. Commit on the plan branch; the merge gate lands it.
+- A fresh plan worktree has no node_modules. Run
+  `node scripts/install-deps.mjs` first (works under a read-only pnpm
+  store via an overlay). NEVER symlink node_modules from the main
+  checkout: the workspace links are relative, so `@g3t/*` would resolve
+  to the main checkout's packages and the gates would test the wrong tree.
 
 ## Architecture doctrine (do not violate casually)
 
