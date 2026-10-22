@@ -1,103 +1,57 @@
 #!/usr/bin/env node
-// Install this checkout's own node_modules, including in a fresh plan
-// worktree under a sandbox whose shared pnpm store is mounted read-only.
+// Install workspace dependencies where the pnpm store is read-only.
 //
-// A git worktree carries no node_modules (gitignored), so vitest and tsc
-// fail ERR_MODULE_NOT_FOUND until something provides them (heal 09cf2530).
-// The tempting fix, symlinking node_modules from the main checkout, is
-// wrong: pnpm's workspace links are relative (`@g3t/core ->
-// ../../packages/core`), so through the symlink every `@g3t/*` import and
-// every workspace package's own node_modules resolve into the MAIN
-// checkout, and the worktree tests code it did not change. This script
-// replaces such a symlink with a real install.
+// pnpm 11 registers every project that installs from a store by writing a
+// symlink into <store>/projects (registerProject, unconditional) and keeps
+// the package index in a SQLite file (<store>/index.db) it opens for
+// writing. Where the store is mounted read-only (sandboxed worker pools,
+// heal worktrees) `pnpm install` therefore dies EROFS before it links a
+// single package, even when every package it needs is already in the
+// store. The workaround was symlinking node_modules from another checkout,
+// which ties one tree's dependencies to another tree's lockfile.
 //
-// `pnpm install` always registers the project in `<store>/projects`, which
-// dies EROFS when the store is read-only. In that case the install runs
-// against an overlay store: `files/` and `links/` symlinked to the real
-// store (read-only is fine for them), the index database copied, and a
-// writable `projects/` and `.tmp/`. --offline keeps it network-free.
+// This script runs plain `pnpm install --frozen-lockfile` when the store is
+// writable. When it is not, it builds an OVERLAY store: writable
+// projects/ and .tmp/ directories and a private copy of index.db*, with
+// every other entry (files/, links/) symlinked to the read-only store, and
+// installs offline from that. Package files are copied into node_modules
+// (hardlinks cannot cross the mount), so the overlay is disposable.
 //
-// Usage: node scripts/install-deps.mjs [--dry-run]
-import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readlinkSync,
-  rmSync,
-  symlinkSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+// A git worktree carries no node_modules (gitignored). The tempting fix,
+// symlinking node_modules from the main checkout, is wrong: pnpm's
+// workspace links are relative, so every `@g3t/*` import would resolve into
+// the MAIN checkout and the worktree would test code it did not change
+// (heal 09cf2530). This script removes such a symlink and does a real
+// install; it is a no-op when node_modules is already installed.
+//
+// Usage: node scripts/install-deps.mjs [extra pnpm install args]
+//   G3T_PNPM_OVERLAY_STORE=<dir>  overlay location (default:
+//   $WEAVER_JOB_DIR/work/pnpm-store in a pool worker, else a temp dir)
+
+import { execFileSync, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const STORE_LINKED = ["files", "links", ".pnpm-needs-build-marker"];
-const STORE_COPIED = ["index.db", "index.db-wal", "index.db-shm"];
-const STORE_WRITABLE = ["projects", ".tmp"];
+// Entries pnpm writes during an install that is fully satisfied offline.
+const WRITABLE_DIRS = ["projects", ".tmp"];
+const isIndexFile = (name) => /^index\.db(-wal|-shm)?$/.test(name);
 
 /** State of `<root>/node_modules`: "missing", "symlink" or "installed". */
 export function nodeModulesState(root) {
-  const nm = join(root, "node_modules");
+  const nm = path.join(root, "node_modules");
   let st;
   try {
-    st = lstatSync(nm);
+    st = fs.lstatSync(nm);
   } catch {
     return "missing";
   }
   if (st.isSymbolicLink()) return "symlink";
-  return existsSync(join(nm, ".modules.yaml")) ? "installed" : "missing";
+  return fs.existsSync(path.join(nm, ".modules.yaml")) ? "installed" : "missing";
 }
 
-/** True when `<storeVersionDir>/projects` accepts a write. */
-export function storeWritable(storeVersionDir) {
-  const probe = join(storeVersionDir, "projects", `.g3t-probe-${process.pid}`);
-  try {
-    mkdirSync(join(storeVersionDir, "projects"), { recursive: true });
-    writeFileSync(probe, "");
-    unlinkSync(probe);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Build an overlay of the read-only store `storeVersionDir` (a `.../v11`
- * directory) under `overlayRoot`. Returns the value for `--store-dir`,
- * which is the parent of the version directory, as pnpm appends it.
- */
-export function buildOverlayStore(storeVersionDir, overlayRoot) {
-  const version = storeVersionDir.split(/[\\/]/).filter(Boolean).pop();
-  const dir = join(overlayRoot, version);
-  rmSync(overlayRoot, { recursive: true, force: true });
-  mkdirSync(dir, { recursive: true });
-  for (const name of STORE_LINKED) {
-    if (existsSync(join(storeVersionDir, name))) {
-      symlinkSync(join(storeVersionDir, name), join(dir, name));
-    }
-  }
-  for (const name of STORE_COPIED) {
-    if (existsSync(join(storeVersionDir, name))) {
-      copyFileSync(join(storeVersionDir, name), join(dir, name));
-    }
-  }
-  for (const name of STORE_WRITABLE) mkdirSync(join(dir, name));
-  return overlayRoot;
-}
-
-/** Scratch location for the overlay: the job's work dir when dispatched. */
-export function overlayRootFor(env) {
-  const base = env.WEAVER_JOB_DIR ? join(env.WEAVER_JOB_DIR, "work") : tmpdir();
-  return join(base, "g3t-pnpm-store-overlay");
-}
-
-/**
- * Decide what to do. Pure apart from the filesystem reads passed in, so
- * the policy is testable without running pnpm.
- */
+/** Decide what to do; pure, so the policy is testable without pnpm. */
 export function planInstall({ state, writable }) {
   if (state === "installed") return { action: "none" };
   return {
@@ -107,44 +61,94 @@ export function planInstall({ state, writable }) {
   };
 }
 
-function main(argv) {
-  const dryRun = argv.includes("--dry-run");
-  const root = resolve(fileURLToPath(import.meta.url), "../..");
+/** True when pnpm can register a project in this store. */
+export function storeIsWritable(storeDir) {
+  const registry = path.join(storeDir, "projects");
+  try {
+    fs.mkdirSync(registry, { recursive: true });
+    const probe = fs.mkdtempSync(path.join(registry, ".g3t-probe-"));
+    fs.rmSync(probe, { recursive: true, force: true });
+    return true;
+  } catch (err) {
+    if (["EROFS", "EACCES", "EPERM"].includes(err.code)) return false;
+    throw err;
+  }
+}
+
+/**
+ * Build an overlay of the read-only store at storeDir under overlayRoot.
+ * storeDir is the versioned directory `pnpm store path` prints (".../v11");
+ * the overlay mirrors that last segment so `--store-dir overlayRoot`
+ * resolves to it. Returns the overlay's versioned directory.
+ */
+export function buildOverlayStore(storeDir, overlayRoot) {
+  const overlay = path.join(overlayRoot, path.basename(storeDir));
+  fs.mkdirSync(overlay, { recursive: true });
+  for (const entry of fs.readdirSync(storeDir, { withFileTypes: true })) {
+    const target = path.join(overlay, entry.name);
+    if (fs.existsSync(target)) continue;
+    if (WRITABLE_DIRS.includes(entry.name)) {
+      fs.mkdirSync(target);
+    } else if (isIndexFile(entry.name)) {
+      fs.copyFileSync(path.join(storeDir, entry.name), target);
+    } else {
+      fs.symlinkSync(path.join(storeDir, entry.name), target);
+    }
+  }
+  for (const dir of WRITABLE_DIRS) {
+    fs.mkdirSync(path.join(overlay, dir), { recursive: true });
+  }
+  return overlay;
+}
+
+/**
+ * Where the overlay goes: G3T_PNPM_OVERLAY_STORE when set, else
+ * $WEAVER_JOB_DIR/work/pnpm-store in a pool worker (its scratch root,
+ * visible to `rev jobs status` and reused across installs in one job; the
+ * worker's /tmp is private), else a fresh temp dir.
+ */
+export function overlayRoot(env = process.env) {
+  if (env.G3T_PNPM_OVERLAY_STORE) return env.G3T_PNPM_OVERLAY_STORE;
+  if (env.WEAVER_JOB_DIR) {
+    const root = path.join(env.WEAVER_JOB_DIR, "work", "pnpm-store");
+    fs.mkdirSync(root, { recursive: true });
+    return root;
+  }
+  return fs.mkdtempSync(path.join(os.tmpdir(), "g3t-pnpm-overlay-"));
+}
+
+function main(args) {
+  const root = path.resolve(fileURLToPath(import.meta.url), "../..");
   const state = nodeModulesState(root);
   if (state === "installed") {
     console.log("install-deps: node_modules already installed");
     return 0;
   }
-  const storeVersionDir = execFileSync("pnpm", ["store", "path"], {
-    cwd: root,
+  const storeDir = execFileSync("pnpm", ["store", "path"], {
     encoding: "utf8",
   }).trim();
-  const plan = planInstall({ state, writable: storeWritable(storeVersionDir) });
-  const args = ["install", "--frozen-lockfile", "--offline"];
+  let installArgs = ["install", "--frozen-lockfile", ...args];
+  const plan = planInstall({ state, writable: storeIsWritable(storeDir) });
   if (plan.unlinkSymlink) {
     console.log(
-      `install-deps: replacing node_modules symlink -> ${readlinkSync(join(root, "node_modules"))}`,
+      `install-deps: replacing node_modules symlink -> ${fs.readlinkSync(path.join(root, "node_modules"))}`,
     );
+    // Unlink only the link itself; the donor checkout is untouched.
+    fs.unlinkSync(path.join(root, "node_modules"));
   }
   if (plan.overlay) {
-    const overlayRoot = overlayRootFor(process.env);
+    const root = overlayRoot();
+    buildOverlayStore(storeDir, root);
     console.log(
-      `install-deps: store ${storeVersionDir} is read-only; overlay at ${overlayRoot}`,
+      `install-deps: store ${storeDir} is read-only; installing offline through overlay ${root}`,
     );
-    if (!dryRun)
-      args.push("--store-dir", buildOverlayStore(storeVersionDir, overlayRoot));
+    installArgs = [...installArgs, "--offline", "--store-dir", root];
   }
-  console.log(`install-deps: pnpm ${args.join(" ")}`);
-  if (dryRun) return 0;
-  // Unlink only the link itself; the main checkout's tree is untouched.
-  if (plan.unlinkSymlink) unlinkSync(join(root, "node_modules"));
-  execFileSync("pnpm", args, { cwd: root, stdio: "inherit" });
+  const res = spawnSync("pnpm", installArgs, { stdio: "inherit", cwd: root });
+  if (res.status) return res.status;
   return nodeModulesState(root) === "installed" ? 0 : 1;
 }
 
-if (
-  process.argv[1] &&
-  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-) {
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   process.exit(main(process.argv.slice(2)));
 }

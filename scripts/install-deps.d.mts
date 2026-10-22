@@ -2,15 +2,15 @@
 // Node ESM so it runs before any dependency (tsx included) is installed.
 export type NodeModulesState = "missing" | "symlink" | "installed";
 export function nodeModulesState(root: string): NodeModulesState;
-export function storeWritable(storeVersionDir: string): boolean;
-export function buildOverlayStore(
-  storeVersionDir: string,
-  overlayRoot: string,
-): string;
-export function overlayRootFor(env: Record<string, string | undefined>): string;
 export function planInstall(input: {
   state: NodeModulesState;
   writable: boolean;
 }):
   | { action: "none" }
   | { action: "install"; unlinkSymlink: boolean; overlay: boolean };
+export function storeIsWritable(storeDir: string): boolean;
+export function buildOverlayStore(
+  storeDir: string,
+  overlayRoot: string,
+): string;
+export function overlayRoot(env?: Record<string, string | undefined>): string;

@@ -43,6 +43,12 @@ export interface OptimizePlacementOptions {
   maxIterations?: number;
   /** Stop after this many consecutive non-improving iterations. Default 200. */
   noImproveStreak?: number;
+  /**
+   * Millisecond clock the budget and `elapsedMs` are read from. Default
+   * `performance.now` (falling back to `Date.now`). Inject one to make the
+   * budget deterministic, e.g. in tests on a loaded host.
+   */
+  now?: () => number;
 }
 
 export interface PlacementResult {
@@ -67,7 +73,7 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function now(): number {
+function defaultNow(): number {
   return typeof performance !== "undefined" && performance.now
     ? performance.now()
     : Date.now();
@@ -144,6 +150,7 @@ export function optimizePlacement(
   const maxIterations = opts.maxIterations ?? 2000;
   const seed = opts.seed ?? 1;
   const noImproveCap = opts.noImproveStreak ?? 200;
+  const now = opts.now ?? defaultNow;
 
   const start = now();
 

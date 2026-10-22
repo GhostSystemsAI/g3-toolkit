@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0-rc018: 2026-10-22 (plan worktrees install their own node_modules)
+## 1.0.0-rc020: 2026-10-22 (plan worktrees install their own node_modules)
 
 **Fix: a plan worktree had no node_modules and no supported way to get
 one.** vitest and tsc failed ERR_MODULE_NOT_FOUND there, and the
@@ -15,6 +15,54 @@ an overlay store in the job work dir. Regression fence:
 `tests/unit/install-deps.test.ts` fails on a package script naming a
 missing `scripts/` file and asserts the workspace links resolve inside
 the checkout under test.
+
+## 1.0.0-rc019: 2026-10-22 (pool workers keep the pnpm overlay in job scratch)
+
+**Fix: a pool worker's `pnpm install` EROFS remediation pointed at
+`--store-dir $WEAVER_JOB_DIR/work/pnpm-store`, but `install:deps` put the
+overlay in the worker's private /tmp.** Reproduced in a heal worktree:
+plain `pnpm install --frozen-lockfile` exits 226 EROFS on
+`<store>/projects`; `pnpm run install:deps` installs. The overlay root now
+resolves G3T_PNPM_OVERLAY_STORE, else `$WEAVER_JOB_DIR/work/pnpm-store`
+when WEAVER_JOB_DIR is set (reused across installs in one job), else a
+fresh temp dir. Fence: `overlayRoot` cases in
+`tests/unit/install-deps.test.ts`.
+
+## 1.0.0-rc018: 2026-10-22 (perf ceilings stop measuring host load)
+
+**Fix: `canvas.test.ts` "initializes 500 nodes + 2,000 edges in under 2
+seconds" and `crossing-aware-placement.test.ts` "respects the wall-clock
+budget" (249 ms vs 200) failed on a saturated host.** Mechanism: both
+asserted wall-clock time, which counts the time the worker sat
+descheduled. Reproduced with 60 CPU hogs pinned to the test core: the
+Cytoscape init read 3676 ms of wall clock for 112-136 ms of CPU. The
+canvas benchmark now measures process CPU time (`process.cpuUsage`)
+against the same 2 s ceiling. The optimizer fixture converges to zero
+crossings in 169 iterations (~10 ms), so its 50 ms budget was never the
+binding stop and the old test checked nothing about the budget.
+`optimizePlacement` now takes an optional `now` clock (default
+`performance.now`); the test injects a clock that advances 10 ms per read
+and asserts the loop stops at exactly 4 iterations with `elapsedMs` 60.
+Regression fences: the budget test fails on the old source (169
+iterations), and `tests/unit/host-load-fence.test.ts` fails if the canvas
+benchmark goes back to wall time.
+
+## 1.0.0-rc017: 2026-10-22 (dependencies install where the pnpm store is read-only)
+
+**Fix: `pnpm install` died EROFS in heal worktrees and sandboxed worker
+pools.** pnpm 11 registers every installing project by writing a symlink
+into `<store>/projects` and opens `<store>/index.db` for writing, both
+unconditionally, so a read-only store failed the install before a single
+package was linked even though every package was already present. The
+workaround was symlinking `node_modules` from the main checkout, which
+binds one tree's dependencies to another tree's lockfile. New
+`pnpm run install:deps` (`scripts/install-deps.mjs`) runs a plain frozen
+install when the store is writable; otherwise it builds a disposable
+overlay store (private `projects/`, `.tmp/` and `index.db*`, everything
+else symlinked to the read-only store) and installs offline through it.
+Package files are copied into `node_modules`, so nothing references the
+overlay afterwards. Regression fence: `tests/unit/install-deps.test.ts`.
+Lands g3_toolkit heal 02acfa2b (worker finding e793bdc7).
 
 ## 1.0.0-rc016: 2026-10-22 (no stray debug probes in committed code)
 

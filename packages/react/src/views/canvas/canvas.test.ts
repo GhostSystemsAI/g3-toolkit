@@ -166,7 +166,13 @@ describe("CytoscapeCanvas benchmark (M0.E3.T2)", () => {
 
     const elements = ugmToCytoscapeElements(ugm);
 
-    const start = performance.now();
+    // Cost is measured as this process's CPU time, not wall time: a
+    // ~45 ms init read past 2 s of wall clock on a saturated host (heal
+    // b4a780b8) because wall time also counts the time the worker sat
+    // descheduled. CPU time keeps the 2 s ceiling on the init itself
+    // (vitest's default forks pool makes it per-test-file; a threads pool
+    // only over-counts, never hides a regression).
+    const start = process.cpuUsage();
 
     const cy = cytoscape({
       headless: true,
@@ -174,7 +180,8 @@ describe("CytoscapeCanvas benchmark (M0.E3.T2)", () => {
       layout: { name: "preset" }, // no layout computation for pure init benchmark
     });
 
-    const elapsed = performance.now() - start;
+    const used = process.cpuUsage(start);
+    const elapsed = (used.user + used.system) / 1000;
 
     expect(cy.nodes().length).toBe(500);
     expect(cy.edges().length).toBeGreaterThan(1900); // some self-edges skipped
