@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import type { Core } from "cytoscape";
-import { runCanvasEdgeRouting } from "./CytoscapeCanvas";
+import { resolveRouteCfg, runCanvasEdgeRouting } from "./CytoscapeCanvas";
 
 interface FakeNode {
   id: string;
@@ -211,5 +211,44 @@ describe("runCanvasEdgeRouting", () => {
     expect(r.skipped).toBe(false);
     // No interior obstacle -> the route is straight -> no routed class.
     expect(edges[0]!.classes.has("g3t-canvas-edge-routed")).toBe(false);
+  });
+});
+
+// Regression fence, gotcha b63b56c0: bare `routeEdges={true}` had its own
+// hand-written literal in resolveRouteCfg, so Brief 19's flip from
+// always-orthogonal to direct-unless-crossing rode on that literal with
+// nothing pinning it. `true` must resolve exactly as `{}` does, and the
+// documented mode mapping must hold on a real routing pass.
+describe("resolveRouteCfg (routeEdges prop shape)", () => {
+  it("bare true resolves identically to an empty config object", () => {
+    expect(resolveRouteCfg(true)).toStrictEqual(resolveRouteCfg({}));
+    expect(resolveRouteCfg(true).mode).toBe("direct-unless-crossing");
+  });
+
+  it("maps mode: direct and orthogonal to the core router modes", () => {
+    expect(resolveRouteCfg({ mode: "direct" }).mode).toBe(
+      "direct-unless-crossing",
+    );
+    expect(resolveRouteCfg({ mode: "orthogonal" }).mode).toBe("always");
+  });
+
+  it("bare true leaves a clear diagonal edge bezier; orthogonal routes it", () => {
+    const nodes: FakeNode[] = [
+      { id: "a", x: 0, y: 0, w: 40, h: 40 },
+      { id: "b", x: 240, y: 180, w: 40, h: 40 },
+    ];
+    const mk = (): FakeEdge[] => [
+      { id: "e1", source: "a", target: "b", data: {}, classes: new Set() },
+    ];
+    const bare = mk();
+    runCanvasEdgeRouting(makeFakeCy(nodes, bare), resolveRouteCfg(true));
+    expect(bare[0]!.classes.has("g3t-canvas-edge-routed")).toBe(false);
+
+    const ortho = mk();
+    runCanvasEdgeRouting(
+      makeFakeCy(nodes, ortho),
+      resolveRouteCfg({ mode: "orthogonal" }),
+    );
+    expect(ortho[0]!.classes.has("g3t-canvas-edge-routed")).toBe(true);
   });
 });

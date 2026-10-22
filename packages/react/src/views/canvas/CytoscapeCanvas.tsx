@@ -884,7 +884,10 @@ export interface CytoscapeCanvasProps {
    * this prop is a no-op there (detected by the presence of any edge
    * bearing the `g3t-structural-edge-routed` class).
    *
-   * `true` enables the pass with defaults; a config object sets
+   * `true` enables the pass with defaults, which means `mode: "direct"`
+   * (route only edges whose straight shot crosses a node; clear edges stay
+   * bezier). It is NOT always-orthogonal: pass `{ mode: "orthogonal" }`
+   * for that. `true` resolves exactly as `{}` does. A config object sets
    * `maxEdges` (default 600 — above this, the pass skips and warns
    * once) plus optional router tuning (`clearance`, `bendPenalty`,
    * `minStub`; the router's own defaults are 12, 30, 28). Applied on
@@ -954,7 +957,7 @@ export interface CytoscapeCanvasProps {
  *  the SAME way from the LIVE prop value (the handlers previously
  *  captured a snapshot at cy init, so a Routes-mode change never reached
  *  drag-free or layoutstop reroutes). */
-function resolveRouteCfg(
+export function resolveRouteCfg(
   routeConfig: NonNullable<Exclude<CytoscapeCanvasProps["routeEdges"], false>>,
 ): {
   maxEdges: number;
@@ -965,20 +968,19 @@ function resolveRouteCfg(
   mode: "direct-unless-crossing" | "always";
   smartAttach?: boolean;
 } {
-  return routeConfig === true
-    ? { maxEdges: 600, grazeTolerance: 8, mode: "direct-unless-crossing" }
-    : {
-        maxEdges: routeConfig.maxEdges ?? 600,
-        clearance: routeConfig.clearance,
-        bendPenalty: routeConfig.bendPenalty,
-        minStub: routeConfig.minStub,
-        grazeTolerance: routeConfig.grazeTolerance ?? 8,
-        mode:
-          routeConfig.mode === "orthogonal"
-            ? "always"
-            : "direct-unless-crossing",
-        smartAttach: routeConfig.smartAttach,
-      };
+  // Bare `true` takes the object path with every field unset, so the
+  // defaults live in ONE place. A separate literal for `true` is how the
+  // Brief-19 mode flip went unpinned (gotcha b63b56c0).
+  const cfg = routeConfig === true ? {} : routeConfig;
+  return {
+    maxEdges: cfg.maxEdges ?? 600,
+    clearance: cfg.clearance,
+    bendPenalty: cfg.bendPenalty,
+    minStub: cfg.minStub,
+    grazeTolerance: cfg.grazeTolerance ?? 8,
+    mode: cfg.mode === "orthogonal" ? "always" : "direct-unless-crossing",
+    smartAttach: cfg.smartAttach,
+  };
 }
 
 /** ROUTE_EDGES pass (routeEdges prop). Reads current node bounding boxes

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-rc022: 2026-10-22 (bare `routeEdges={true}` resolves through the config path)
+
+**Fix: `resolveRouteCfg` kept a separate hand-written literal for bare
+`routeEdges={true}`.** Brief 19 flipped the default from always-orthogonal
+to direct-unless-crossing by editing that literal, and no test pinned the
+`true` path, so hosts reading "`true` enables the pass with defaults" kept
+assuming orthogonal (gotcha b63b56c0). `true` now resolves as `{}` does, so
+the defaults live in one place, and the prop JSDoc names the default mode
+and points at `{ mode: "orthogonal" }`. Behavior is unchanged. Fence:
+`resolveRouteCfg` cases in `canvas-edge-routing.test.ts` (`true` deep-equals
+`{}`; on a clear diagonal edge, bare `true` stays bezier and orthogonal
+routes).
+
 ## 1.0.0-rc021: 2026-10-22 (gates refuse dependencies borrowed from another checkout)
 
 **Fix: nothing stopped a gate run through a borrowed node_modules, and the
