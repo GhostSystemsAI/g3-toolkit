@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0-rc013: 2026-10-22 (`pnpm run` no longer installs first)
+
+**Fix: every `pnpm run` failed EROFS where the pnpm store is read-only.**
+pnpm 11 defaults `verifyDepsBeforeRun` to `install`, so each script run
+first registered the project in the shared store and installed. In the
+sandboxed worker pools (store mounted read-only) and in heal worktrees
+whose node_modules link to a main checkout, that killed every script
+before it started, gates included. `pnpm-workspace.yaml` now sets
+`verifyDepsBeforeRun: warn`: drift is reported, the script runs, and
+installs stay explicit (`pnpm install`; CI already does this). Also
+`.gitignore` now matches `node_modules` as a symlink, not only as a
+directory, so a linked worktree no longer shows six untracked entries.
+Regression fence: `tests/unit/package-scripts.test.ts`.
+
 ## 1.0.0-rc012: 2026-10-22 (gates:spec runs on python3-only hosts)
 
 **Fix: `gates:spec` invoked bare `python`.** Hosts that ship only
