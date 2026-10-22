@@ -1,6 +1,6 @@
 {
   "name": "@g3t/react",
-  "version": "1.0.0-rc014",
+  "version": "1.0.0-rc015",
   "description": "React components for graph visualization: canvas, table, tree, map, schema, charts. Pairs with @g3t/core.",
   "type": "module",
   "module": "./dist/index.mjs",

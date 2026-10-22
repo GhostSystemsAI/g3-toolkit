@@ -4,7 +4,7 @@
  * pure functions only. Pins the CoverageMeter fold: one meter per tier,
  * width equal to the computed origin coverage.
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { stubChartDims } from "../../../tests/chart-dims";
 import {
   render,
@@ -93,6 +93,21 @@ import { buildSupplyNetwork, originCoverageByTier } from "./supply-data";
 afterEach(cleanup);
 
 stubChartDims();
+
+// The first mount in a worker is cold (module JIT, first ECharts and
+// jsdom style setup): about 3x a warm mount alone, and on a saturated
+// host (two full runs at once) it measured 5.5 s and timed out whichever
+// test mounted first. Pay it once here under its own budget so every
+// test below keeps vitest's 5 s default and measures a warm mount.
+beforeAll(() => {
+  render(<AnalyticsDashboard />);
+  cleanup();
+  captured.specs.length = 0;
+  captured.menus.length = 0;
+  captured.hidden.length = 0;
+  captured.routeEdges.length = 0;
+  captured.edgeClickIsolate.length = 0;
+}, 30_000);
 
 describe("AnalyticsDashboard context menu (full toolkit action set)", () => {
   const nodeId = () => {
