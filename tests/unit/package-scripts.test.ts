@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { LEDGERS, runLedgers } from "../../scripts/check-budgets.mjs";
 
 // Fence for heal 627ca85d: `gates:spec` invoked bare `python`, which is
 // absent on hosts that ship only python3 (the forge worker pools among
@@ -66,5 +67,31 @@ describe("package scripts", () => {
       .split("\n")
       .map((l) => l.trim());
     expect(lines).toContain("node_modules");
+  });
+
+  // Fence for heal 5d333f9b: verify chained the two bundle ledgers with
+  // `&&`, so an over-budget publish weight hid the consumer-cost result
+  // and a raise that ratified one ledger looked green until the next run.
+  it("verify runs both bundle ledgers without short-circuiting", () => {
+    const pkg = JSON.parse(
+      readFileSync(resolve(root, "package.json"), "utf8"),
+    ) as {
+      scripts: Record<string, string>;
+    };
+    const verify = pkg.scripts.verify ?? "";
+    expect(verify).toMatch(/pnpm run verify:budgets(\s|$)/);
+    expect(verify).not.toMatch(/verify:bundle|verify:consumer-cost/);
+    expect(pkg.scripts["verify:budgets"]).toBe("node scripts/check-budgets.mjs");
+    expect(LEDGERS.map((l) => l.script).sort()).toEqual([
+      "scripts/check-bundle-size.mjs",
+      "scripts/check-consumer-cost.mjs",
+    ]);
+    const ran: string[] = [];
+    const failed = runLedgers(LEDGERS, (l) => {
+      ran.push(l.script);
+      return 1;
+    });
+    expect(ran).toEqual(LEDGERS.map((l) => l.script));
+    expect(failed).toEqual(LEDGERS);
   });
 });

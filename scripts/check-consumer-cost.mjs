@@ -285,7 +285,8 @@ if (failures > 0) {
     `\nConsumer-cost budget exceeded: ${failures} scenario(s) over budget.\n` +
       `This is what an adopter's bundle grows by, so a raise needs a written\n` +
       `reason in the SCENARIOS table in the same commit, the same as the\n` +
-      `publish-weight ledger in check-bundle-size.mjs.`,
+      `publish-weight ledger in check-bundle-size.mjs. Run pnpm run\n` +
+      `verify:budgets to see both ledgers at once.`,
   );
   process.exit(1);
 }
