@@ -777,3 +777,95 @@ describe("R-12 (round 21): structural style overrides and arrangement", () => {
     expect(Number(x)).toBe(250);
   });
 });
+
+describe("drag re-route separates parallel runs (gotcha a4356315)", () => {
+  // Two stacked sources, two stacked targets, both targets dragged
+  // 200px down. Each edge's jog targets the corridor midline, so
+  // without the nudge pass both vertical runs land on x=180 and
+  // overlap over y 75..215: two edges drawn as one line.
+  const inp: StructuralGraphInput = {
+    nodes: ["S1", "S2", "T1", "T2"].map((id) => ({
+      id,
+      header: { name: id },
+      width: 60,
+      height: 30,
+    })),
+    edges: [
+      { id: "e1", source: "S1", target: "T1" },
+      { id: "e2", source: "S2", target: "T2" },
+    ],
+  };
+  const box = (x: number, y: number) => ({
+    x,
+    y,
+    width: 60,
+    height: 30,
+    kind: "container" as const,
+  });
+  const geo: StructuralGeometry = {
+    version: 1,
+    headerHeight: 24,
+    nodes: { S1: box(0, 0), S2: box(0, 60), T1: box(300, 0), T2: box(300, 60) },
+    ports: {},
+    edges: {
+      e1: {
+        points: [
+          { x: 60, y: 15 },
+          { x: 300, y: 15 },
+        ],
+      },
+      e2: {
+        points: [
+          { x: 60, y: 75 },
+          { x: 300, y: 75 },
+        ],
+      },
+    },
+  };
+  const offsets = { T1: { dx: 0, dy: 200 }, T2: { dx: 0, dy: 200 } };
+  const verticalRunX = (d: string): number[] => {
+    const pts = [...d.matchAll(/[ML]\s*([-\d.]+)[ ,]([-\d.]+)/g)].map((m) => ({
+      x: Number(m[1]),
+      y: Number(m[2]),
+    }));
+    const xs: number[] = [];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1]!;
+      const b = pts[i]!;
+      if (Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) > 1) xs.push(a.x);
+    }
+    return xs;
+  };
+  const runsOf = (props: Record<string, unknown> = {}) => {
+    const { container } = render(
+      <StructuralSvgView
+        input={inp}
+        geometry={geo}
+        width={400}
+        height={320}
+        view={{ k: 1, tx: 0, ty: 0 }}
+        dragOffsets={offsets}
+        {...props}
+      />,
+    );
+    const d = (id: string) =>
+      container
+        .querySelector(`[data-ssv-edge-path='${id}']`)!
+        .getAttribute("d") ?? "";
+    expect(container.querySelector("[data-ssv-edge-fallback]")).toBeNull();
+    return { e1: verticalRunX(d("e1")), e2: verticalRunX(d("e2")) };
+  };
+
+  it("nudges by default: the two dragged edges take distinct tracks", () => {
+    const { e1, e2 } = runsOf();
+    expect(e1).toHaveLength(1);
+    expect(e2).toHaveLength(1);
+    expect(Math.abs(e1[0]! - e2[0]!)).toBeGreaterThanOrEqual(4);
+  });
+
+  it("dragRouteOptions reaches the router: nudge off restores the shared midline", () => {
+    const { e1, e2 } = runsOf({ dragRouteOptions: { nudge: false } });
+    expect(e1).toEqual([180]);
+    expect(e2).toEqual([180]);
+  });
+});

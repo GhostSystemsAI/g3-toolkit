@@ -325,6 +325,19 @@ export interface StructuralSvgViewProps extends ElementPointerHandlers<Structura
   /** Flow direction of the layout that produced `geometry`; the
    *  live drag re-router anchors against it (RTE-011). */
   direction?: "RIGHT" | "LEFT" | "DOWN" | "UP";
+  /** Routing options for the live drag re-route (RTE-011). Pass the
+   *  same routing knobs the layout that produced `geometry` used
+   *  (nudge, trackGap, anchorPitch, smartAttach, ...) so a drag
+   *  re-routes the way the layout did. Defaults: `nudge: true` and
+   *  `longEdgeNear: 12` (the layout pipeline's default). Nudge is on
+   *  by default here because a drag packs boxes the layout never
+   *  reserved corridors for; without the separation pass every
+   *  moved edge's jog targets the same corridor midline and the
+   *  runs draw on top of each other. `direction` above wins. */
+  dragRouteOptions?: Omit<
+    NonNullable<Parameters<typeof routeStructuralEdges>[2]>,
+    "direction"
+  >;
   /** LR-46 (owner review 2026-07-22): SHACL-style decorations so
    *  the shapes surface can ride this view. Row ids map to their
    *  worst validation severity (text tint); closed containers get
@@ -356,6 +369,7 @@ export function StructuralSvgView({
   input,
   geometry,
   direction = "RIGHT",
+  dragRouteOptions,
   rowSeverities,
   closedContainers,
   width,
@@ -508,11 +522,16 @@ export function StructuralSvgView({
   const liveRoutes = useMemo(() => {
     if (Object.keys(dragOffsets).length === 0) return null;
     try {
-      return routeStructuralEdges(input, effectiveGeometry, { direction });
+      return routeStructuralEdges(input, effectiveGeometry, {
+        nudge: true,
+        longEdgeNear: 12,
+        ...dragRouteOptions,
+        direction,
+      });
     } catch {
       return null; // last-resort fallback below stays honest
     }
-  }, [dragOffsets, input, effectiveGeometry, direction]);
+  }, [dragOffsets, input, effectiveGeometry, direction, dragRouteOptions]);
 
   const draggedEdgeFallback = useMemo(() => {
     const moved = new Set(Object.keys(dragOffsets));
