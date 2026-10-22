@@ -40,6 +40,24 @@ routes by query string only, so relative asset URLs are safe, and #root
 mounts at /, /g3-toolkit/ and a deeper mount with zero 404s. Fence:
 `tests/unit/package-scripts.test.ts` asserts the relative base.
 
+## 1.0.0-rc022: 2026-10-22 (every data() style mapper sits on a [field]-scoped selector)
+
+**Fix: three stylesheet producers still mapped `data(field)` on selectors
+that match elements without the field**, the per-element per-style-pass
+Cytoscape warning flood behind the 2026-06-17 block-view lag. The named
+`_confidence` / `_rdfStatement` sites were already scoped; these were not:
+`COMPOUND_CONTAINER_RULE` (`:parent { label: data(_compoundLabel) }`,
+warning for any container the containment pre-pass did not stamp, e.g. a
+property-carried `parent`), the host export `deriveCytoscapeStyle` (bare
+`node { label: data(label) }`, flooding every structural element when a
+host merges it over the block view), and `overridesToCytoscapeStyles`
+`labelField`. Reproduced headless on the satellite BDD. The label mappers
+now ride `:parent[_compoundLabel]` (new `COMPOUND_LABEL_RULE`),
+`node[label]`, and a separate `<scope>[labelField]` entry; the canvas
+override pass bypasses that entry only onto nodes carrying the field.
+Fence: `packages/react/src/views/canvas/data-mapper-scoping.test.ts`
+(runtime zero-warning scenes plus a static scan of every producer).
+
 ## 1.0.0-rc021: 2026-10-22 (gates refuse dependencies borrowed from another checkout)
 
 **Fix: nothing stopped a gate run through a borrowed node_modules, and the

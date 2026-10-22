@@ -349,7 +349,9 @@ export const COMPOUND_CONTAINER_RULE: CyStylesheet = {
     "background-opacity": 0.35,
     "border-width": 1.5,
     "border-color": "#adb5bd",
-    label: "data(_compoundLabel)",
+    // label lives on COMPOUND_LABEL_RULE ([_compoundLabel]-scoped):
+    // parents without the field (property-carried `parent`, host
+    // compounds) made Cytoscape warn per container per style pass.
     "text-valign": "top",
     "text-halign": "center",
     "text-wrap": "wrap",
@@ -357,6 +359,12 @@ export const COMPOUND_CONTAINER_RULE: CyStylesheet = {
     "font-size": 11,
     padding: 14,
   } as any,
+};
+
+/** The «Stereotype» label mapper, scoped to containers that carry it. */
+export const COMPOUND_LABEL_RULE: CyStylesheet = {
+  selector: ":parent[_compoundLabel]",
+  style: { label: "data(_compoundLabel)" } as any,
 };
 
 /** Subtle position-pin indicator: a soft underlay hugging the node
@@ -694,6 +702,7 @@ export function composeCanvasStylesheet(
   merged.push(
     PIN_INDICATOR_RULE,
     COMPOUND_CONTAINER_RULE,
+    COMPOUND_LABEL_RULE,
     // Structural-scene rules (slice A2): class-scoped, inert
     // without structural elements; AFTER the compound rule so the
     // structural container override (zero padding, no compound
@@ -2196,18 +2205,8 @@ export function CytoscapeCanvas({
       overriddenIdsRef.current.clear();
       overrideIconRef.current.clear();
       for (const override of styleOverrides) {
-        const entry = overridesToCytoscapeStyles([override])[0];
-        if (!entry) continue;
-        // LR-37 ROOT CAUSE: icon overrides used to ship as a FLAT
-        // background-image style bypass: invisible to
-        // composePinStack (which reads _icon data) and clobbering
-        // its multi-image array on pinned nodes. Hence "icon
-        // replaces pin" and, on unpin/pin, "pin change removes the
-        // icon until other changes re-apply it". splitIcon... moves
-        // the icon to _icon DATA; background-* leaves the bypass.
-        const { style, iconUri } = splitIconFromOverrideStyle(
-          entry.style as Record<string, unknown>,
-        );
+        const entries = overridesToCytoscapeStyles([override]);
+        if (entries.length === 0) continue;
         const targets =
           "nodeId" in override.scope
             ? cy.getElementById(override.scope.nodeId)
@@ -2222,15 +2221,32 @@ export function CytoscapeCanvas({
                     (override.scope as { type: string }).type,
                   ),
               );
-        targets.forEach((ele) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ele.style(style as any);
-          if (iconUri !== undefined) {
-            ele.data("_icon", iconUri);
-            overrideIconRef.current.set(ele.id(), iconUri);
-          }
-          overriddenIdsRef.current.add(ele.id());
-        });
+        for (const entry of entries) {
+          // A [field]-scoped entry carries a data(field) mapper
+          // (labelField): bypass it only onto targets that HAVE the
+          // field, the bypass analogue of the scoped selector.
+          const field = /\[(\w+)\]$/.exec(String(entry.selector))?.[1];
+          // LR-37 ROOT CAUSE: icon overrides used to ship as a FLAT
+          // background-image style bypass: invisible to
+          // composePinStack (which reads _icon data) and clobbering
+          // its multi-image array on pinned nodes. Hence "icon
+          // replaces pin" and, on unpin/pin, "pin change removes the
+          // icon until other changes re-apply it". splitIcon... moves
+          // the icon to _icon DATA; background-* leaves the bypass.
+          const { style, iconUri } = splitIconFromOverrideStyle(
+            entry.style as Record<string, unknown>,
+          );
+          targets.forEach((ele) => {
+            if (field !== undefined && ele.data(field) === undefined) return;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ele.style(style as any);
+            if (iconUri !== undefined) {
+              ele.data("_icon", iconUri);
+              overrideIconRef.current.set(ele.id(), iconUri);
+            }
+            overriddenIdsRef.current.add(ele.id());
+          });
+        }
       }
       // Pinned nodes render from the composed stack: re-compose so
       // badge AND (any) icon coexist after every override pass.
