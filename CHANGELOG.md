@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0-rc021: 2026-10-22 (gates refuse dependencies borrowed from another checkout)
+
+**Fix: nothing stopped a gate run through a borrowed node_modules, and the
+rc020 fence could not see one.** It checked the `@g3t/core` link with
+`path.resolve(readlink)`, which is lexical: the links are relative, so
+with node_modules symlinked to the main checkout it still reported the
+worktree's own `packages/core` while Node loaded the main checkout's.
+Reproduced on a heal worktree. `install-deps.mjs` now resolves every
+`@g3t/*` link with realpath (`foreignWorkspaceLinks`), classifies a real
+install whose links escape the checkout as `foreign` (reinstalled), and
+`--check` fails with the remediation. `pnpm run gates` runs that check
+first, before typecheck. Fence: realpath and borrowed-scope cases in
+`tests/unit/install-deps.test.ts`.
+
 ## 1.0.0-rc020: 2026-10-22 (plan worktrees install their own node_modules)
 
 **Fix: a plan worktree had no node_modules and no supported way to get

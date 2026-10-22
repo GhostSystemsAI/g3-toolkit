@@ -25,6 +25,9 @@
 // install; it is a no-op when node_modules is already installed.
 //
 // Usage: node scripts/install-deps.mjs [extra pnpm install args]
+//        node scripts/install-deps.mjs --check   (gate preflight: exit 1
+//        unless node_modules is a real install whose @g3t links resolve
+//        inside this checkout)
 //   G3T_PNPM_OVERLAY_STORE=<dir>  overlay location (default:
 //   $WEAVER_JOB_DIR/work/pnpm-store in a pool worker, else a temp dir)
 
@@ -38,7 +41,36 @@ import { fileURLToPath } from "node:url";
 const WRITABLE_DIRS = ["projects", ".tmp"];
 const isIndexFile = (name) => /^index\.db(-wal|-shm)?$/.test(name);
 
-/** State of `<root>/node_modules`: "missing", "symlink" or "installed". */
+/**
+ * Workspace packages (`node_modules/@g3t/*`) whose real path is outside
+ * root. A lexical readlink check cannot see this: the links are relative,
+ * so they read as in-tree even when node_modules itself (or @g3t) is a
+ * symlink into another checkout. Only realpath follows the whole chain.
+ */
+export function foreignWorkspaceLinks(root) {
+  const scope = path.join(root, "node_modules", "@g3t");
+  let names;
+  try {
+    names = fs.readdirSync(scope);
+  } catch {
+    return [];
+  }
+  const realRoot = fs.realpathSync(root) + path.sep;
+  return names.filter((name) => {
+    let real;
+    try {
+      real = fs.realpathSync(path.join(scope, name));
+    } catch {
+      return false;
+    }
+    return !real.startsWith(realRoot);
+  });
+}
+
+/**
+ * State of `<root>/node_modules`: "missing", "symlink", "foreign" (a real
+ * install whose @g3t links resolve into another checkout) or "installed".
+ */
 export function nodeModulesState(root) {
   const nm = path.join(root, "node_modules");
   let st;
@@ -48,7 +80,8 @@ export function nodeModulesState(root) {
     return "missing";
   }
   if (st.isSymbolicLink()) return "symlink";
-  return fs.existsSync(path.join(nm, ".modules.yaml")) ? "installed" : "missing";
+  if (!fs.existsSync(path.join(nm, ".modules.yaml"))) return "missing";
+  return foreignWorkspaceLinks(root).length ? "foreign" : "installed";
 }
 
 /** Decide what to do; pure, so the policy is testable without pnpm. */
@@ -120,6 +153,21 @@ export function overlayRoot(env = process.env) {
 function main(args) {
   const root = path.resolve(fileURLToPath(import.meta.url), "../..");
   const state = nodeModulesState(root);
+  if (args[0] === "--check") {
+    // Gate preflight: refuse to typecheck/test through dependencies that
+    // resolve into another checkout (the run would test unchanged code).
+    if (state === "installed") return 0;
+    const where =
+      state === "symlink"
+        ? `node_modules is a symlink -> ${fs.readlinkSync(path.join(root, "node_modules"))}`
+        : state === "foreign"
+          ? `@g3t/{${foreignWorkspaceLinks(root).join(",")}} resolve outside ${root}`
+          : "node_modules is not installed";
+    console.error(
+      `install-deps --check: ${where}; run \`pnpm run install:deps\` (never symlink node_modules from another checkout)`,
+    );
+    return 1;
+  }
   if (state === "installed") {
     console.log("install-deps: node_modules already installed");
     return 0;
