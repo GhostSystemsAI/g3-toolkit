@@ -34,6 +34,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StructuralSvgView, useStructuralLayout } from "@g3t/react";
+import type { StructuralSvgViewProps } from "@g3t/react";
 import type {
   StructuralGeometry,
   StructuralGraphInput,
@@ -166,10 +167,14 @@ type ColorMode = "rainbow" | "mono";
 function SizedStructuralSvg({
   scene,
   direction,
+  dragRouteOptions,
   onEdgeClick,
 }: {
   scene: { input: StructuralGraphInput; geometry: StructuralGeometry };
   direction: "RIGHT" | "DOWN";
+  /** The Lab's routing knobs, so a drag re-routes the way the
+   *  layout did instead of with the library defaults. */
+  dragRouteOptions: StructuralSvgViewProps["dragRouteOptions"];
   /** An edge click reports its id; any other click reports null so
    *  the shell can clear a pinned trace. */
   onEdgeClick: (edgeId: string | null) => void;
@@ -196,6 +201,7 @@ function SizedStructuralSvg({
     <div ref={hostRef} style={{ width: "100%", height: "100%" }}>
       <StructuralSvgView
         direction={direction}
+        dragRouteOptions={dragRouteOptions}
         input={scene.input}
         geometry={scene.geometry}
         width={size.w}
@@ -355,6 +361,20 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
 
   const { structural: scene } = useStructuralLayout(input, options);
   publishScene("routing", scene);
+  // The routing subset of `options`, so a node drag re-routes with
+  // the knobs the layout used (nudge in particular).
+  const dragRouteOptions = useMemo(
+    () => ({
+      nudge: options.nudge ?? false,
+      smartAttach: options.smartAttach,
+      longEdgeNear: options.longEdgeNear,
+      anchor: options.anchor,
+      anchorPitch: options.anchorPitch,
+      trackGap: options.trackGap,
+      bendPenalty: options.bendPenalty,
+    }),
+    [options],
+  );
 
   const quality: RouteQuality | null = useMemo(
     () => (scene ? gradeRoutes(scene.input, scene.geometry) : null),
@@ -675,6 +695,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
               <SizedStructuralSvg
                 scene={scene}
                 direction={dir}
+                dragRouteOptions={dragRouteOptions}
                 onEdgeClick={handleEdgeClick}
               />
             ) : (

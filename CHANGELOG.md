@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0-rc011: 2026-10-22 (drag re-routes separate parallel runs)
+
+**Fix: post-drag routes no longer bunch onto one line.** The live drag
+re-route in `StructuralSvgView` (RTE-011) called `routeStructuralEdges`
+with only `direction`, so it skipped the nudge post-pass and every
+routing knob the layout had used. Each moved edge's jog targets the
+corridor midline, so two dragged edges between stacked boxes drew
+coincident vertical runs. New prop `dragRouteOptions` forwards the
+routing options to the drag re-route; its defaults are `nudge: true` and
+`longEdgeNear: 12` (the layout pipeline's default). The Routing Lab now
+passes its own knobs, so a drag re-routes the way the layout did.
+Regression fence: `structural-svg-view.test.tsx` "drag re-route
+separates parallel runs".
+
 ## 1.0.0-rc010: 2026-08-20 (Routing Flowcharts on their own card)
 
 **Feature — dedicated "Routing Flowcharts" capability surface.** The two
