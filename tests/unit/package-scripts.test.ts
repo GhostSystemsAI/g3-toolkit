@@ -81,7 +81,9 @@ describe("package scripts", () => {
     const verify = pkg.scripts.verify ?? "";
     expect(verify).toMatch(/pnpm run verify:budgets(\s|$)/);
     expect(verify).not.toMatch(/verify:bundle|verify:consumer-cost/);
-    expect(pkg.scripts["verify:budgets"]).toBe("node scripts/check-budgets.mjs");
+    expect(pkg.scripts["verify:budgets"]).toBe(
+      "node scripts/check-budgets.mjs",
+    );
     expect(LEDGERS.map((l) => l.script).sort()).toEqual([
       "scripts/check-bundle-size.mjs",
       "scripts/check-consumer-cost.mjs",
