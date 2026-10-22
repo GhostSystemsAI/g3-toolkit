@@ -50,34 +50,53 @@ import { Demo } from "./Demo";
 
 afterEach(cleanup);
 
+const LAZY_SHELL_MS = 15_000;
+const TEST_MS = LAZY_SHELL_MS + 5_000;
+
 describe("Demo routing to capability surfaces", () => {
   // Shells are lazy (round 49): navigation assertions await the
-  // chunk's resolution via findBy*.
-  it("routes landing -> Analytics Dashboard -> back to landing", async () => {
-    const { container } = render(<Demo />);
-    fireEvent.click(screen.getByText("Analytics Dashboard"));
-    await screen.findByText(/Origin coverage by tier/, undefined, {
-      timeout: 15_000,
-    });
-    fireEvent.click(screen.getByText(/Scenarios/));
-    expect(container.textContent).toContain("Analytics Dashboard"); // landing card (LR-1 removed the section header)
-  });
+  // chunk's resolution via findBy*. The first import transforms the
+  // shell's whole module graph, which under a parallel full run can
+  // exceed vitest's 5 s default test timeout; that cap killed the test
+  // before the 15 s find budget could ever apply, so each test
+  // declares a timeout that covers its own wait.
+  it(
+    "routes landing -> Analytics Dashboard -> back to landing",
+    async () => {
+      const { container } = render(<Demo />);
+      fireEvent.click(screen.getByText("Analytics Dashboard"));
+      await screen.findByText(/Origin coverage by tier/, undefined, {
+        timeout: LAZY_SHELL_MS,
+      });
+      fireEvent.click(screen.getByText(/Scenarios/));
+      expect(container.textContent).toContain("Analytics Dashboard"); // landing card (LR-1 removed the section header)
+    },
+    TEST_MS,
+  );
 
-  it("the retired Schema Dashboard's views live on the Analytics surface (ruling 8.4)", async () => {
-    const { container } = render(<Demo />);
-    fireEvent.click(screen.getByText("Analytics Dashboard"));
-    await screen.findByText(/Adjacency matrix/, undefined, {
-      timeout: 15_000,
-    });
-    expect(container.textContent).toContain("Type flows (sankey)");
-  });
+  it(
+    "the retired Schema Dashboard's views live on the Analytics surface (ruling 8.4)",
+    async () => {
+      const { container } = render(<Demo />);
+      fireEvent.click(screen.getByText("Analytics Dashboard"));
+      await screen.findByText(/Adjacency matrix/, undefined, {
+        timeout: LAZY_SHELL_MS,
+      });
+      expect(container.textContent).toContain("Type flows (sankey)");
+    },
+    TEST_MS,
+  );
 
-  it("routes landing -> Ontology Workbench", async () => {
-    render(<Demo />);
-    fireEvent.click(screen.getByText("Ontology Workbench"));
-    await screen.findByText(/Ontology statistics/, undefined, {
-      timeout: 15_000,
-    });
-    expect(await screen.findByTestId("ow-class-tree")).toBeTruthy();
-  });
+  it(
+    "routes landing -> Ontology Workbench",
+    async () => {
+      render(<Demo />);
+      fireEvent.click(screen.getByText("Ontology Workbench"));
+      await screen.findByText(/Ontology statistics/, undefined, {
+        timeout: LAZY_SHELL_MS,
+      });
+      expect(await screen.findByTestId("ow-class-tree")).toBeTruthy();
+    },
+    TEST_MS,
+  );
 });
