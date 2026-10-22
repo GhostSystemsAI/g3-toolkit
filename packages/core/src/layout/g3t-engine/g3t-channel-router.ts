@@ -21,19 +21,25 @@ import type { RouteBox } from "../../route/orthogonal-router";
 import { routeOrthogonal, type RouteSide } from "../../route/orthogonal-router";
 import { dedupeCollinear, type Pt } from "./g3t-polyline-utils";
 
-/** One inter-layer channel. `axis` is the channel's TRAVEL axis (the
- *  axis edges cross it along): "v" for a horizontal-flow layout (the
- *  channel sits between layer i and layer i+1 along x; edges cross
- *  it moving in x while jogging in y), "h" for vertical-flow. Track
- *  offsets are applied along the CROSS axis to `midline`. */
+/** One inter-layer channel. `axis` names the orientation of the jogs
+ *  the channel hosts: "v" for a horizontal-flow layout (the channel
+ *  sits between layer i and layer i+1 along x; an edge crosses it
+ *  moving in x and makes its vertical jog inside it), "h" for
+ *  vertical-flow. Tracks are parallel jog lines, so track offsets are
+ *  applied along the FLOW axis to `midline` (heal 2144aa96). */
 export interface Channel {
   /** Boundary index (between layer i and layer i+1). */
   boundary: number;
-  /** Travel axis for tracks inside this channel. "v" = tracks are
-   *  offset along y (horizontal-flow layout); "h" = tracks along x. */
+  /** Jog orientation inside this channel. "v" = vertical jogs, tracks
+   *  offset along x (horizontal-flow layout); "h" = horizontal jogs,
+   *  tracks offset along y. */
   axis: "v" | "h";
-  /** Channel midline coordinate on the CROSS axis (y for "v", x for
-   *  "h"). */
+  /** Gap centre on the FLOW axis (x for "v", y for "h"): the
+   *  coordinate halfway between layer i's far face and layer i+1's
+   *  near face, the same quantity the corridor-supply midlines and
+   *  nudging's corridor midline measure. Owner ruling (heal 2144aa96):
+   *  it is NOT a cross coordinate; reading it as one turned every
+   *  multi-boundary edge into a single cross-axis bus. */
   midline: number;
   /** Layout's supply for this channel: the maximum number of tracks
    *  the channel width can host (from brief 04's
@@ -71,6 +77,29 @@ export interface ChannelEdge {
   /** Cross-coord where the edge exits (target-side). Defaults to
    *  target node's cross center. */
   exitCross?: number;
+  /** Cross-coord at which the edge passes each INTERMEDIATE layer, in
+   *  source-to-target order (length = boundaries spanned - 1), e.g.
+   *  from LAY-005 dummy-chain bend hints. Channel k jogs from the
+   *  cross at its near layer to the cross at its far layer. Omitted
+   *  (or the wrong length): the edge holds its entry cross through
+   *  the intermediate layers and jogs in the last channel. */
+  layerCross?: readonly number[];
+}
+
+/** Cross coordinate per layer the edge touches, source-to-target:
+ *  [entry, ...intermediate layers, exit]. One cross step per channel
+ *  traversed, so channel k jogs from seq[k] to seq[k+1]. */
+function crossSequence(
+  entry: number,
+  exit: number,
+  span: number,
+  layerCross: readonly number[] | undefined,
+): number[] {
+  const mid =
+    layerCross !== undefined && layerCross.length === span - 1
+      ? [...layerCross]
+      : Array.from({ length: Math.max(0, span - 1) }, () => entry);
+  return [entry, ...mid, exit];
 }
 
 /** Per-channel track assignment: edge id -> integer track index
@@ -87,6 +116,12 @@ export interface TrackAssignment {
 /** Libavoid divergence sort key: (entry cross, exit cross, edge id).
  *  Fully-tied entry+exit is crossing-equivalent under any stable
  *  sort; id gives determinism. */
+function at(seq: readonly number[], i: number): number {
+  const v = seq[i];
+  if (v === undefined) throw new Error(`channel router: no cross at ${i}`);
+  return v;
+}
+
 function divergenceCompare(
   a: ChannelEdge,
   b: ChannelEdge,
@@ -126,9 +161,22 @@ export function assignTracks(
     const lo = Math.min(sL, tL);
     const hi = Math.max(sL, tL);
     if (lo === hi) continue; // same-layer: caller routes as fallback
+    // Sort keys are per GAP: the cross the edge enters and leaves THIS
+    // channel at, matching what emitChannelRoute draws there.
+    const seq = crossSequence(
+      e.entryCross ?? 0,
+      e.exitCross ?? 0,
+      hi - lo,
+      e.layerCross,
+    );
     for (let b = lo; b < hi; b++) {
+      const k = sL < tL ? b - lo : hi - 1 - b;
       const list = byBoundary.get(b) ?? [];
-      list.push(e);
+      list.push({
+        ...e,
+        entryCross: at(seq, k),
+        exitCross: at(seq, k + 1),
+      });
       byBoundary.set(b, list);
     }
   }
@@ -165,14 +213,22 @@ export function assignTracks(
 /**
  * Emit a track-anchored polyline for a single edge that crosses one
  * or more channels. The route leaves the source anchor along the
- * source stub, enters each channel at `midline + offset`, jogs at the
- * channel offset, exits, and finally enters the target anchor.
+ * source stub and runs along the flow axis; inside EACH channel it
+ * traverses it jogs on its own track (flow coordinate `midline +
+ * offset`) from the cross it holds at that channel's near layer to the
+ * cross at its far layer (`ChannelEdge.layerCross`), then continues
+ * along the flow axis and enters the target anchor.
  *
- * Track separation is expressed as GENUINE ORTHOGONAL BENDS (nonzero
- * offset from the channel midline): `dedupeCollinear` never collapses
- * a properly separated track. Two edges assigned the same integer
- * track in the same channel are a bug in `assignTracks`, not
- * something the emitter tolerates.
+ * Heal 2144aa96: this used to read `midline` as a cross coordinate
+ * and run the first channel all the way to `targetTip.x`, so a
+ * multi-boundary edge became one cross-axis bus and every later
+ * boundary jogged at the target column, outside its own channel.
+ *
+ * Track separation is expressed as GENUINE ORTHOGONAL BENDS (distinct
+ * jog lines a trackGap apart): `dedupeCollinear` never collapses a
+ * properly separated track. Two edges assigned the same integer track
+ * in the same channel are a bug in `assignTracks`, not something the
+ * emitter tolerates.
  *
  * Caller MUST supply the source/target anchors; the channel plan
  * decides only the interior geometry.
@@ -219,33 +275,35 @@ export function emitChannelRoute(
   };
 
   const horizontal = plan.direction === "RIGHT" || plan.direction === "LEFT";
+  // (flow, cross) -> point in layout space.
+  const pt = (flow: number, cross: number): Pt =>
+    horizontal ? { x: flow, y: cross } : { x: cross, y: flow };
+  const crossOf = (p: Pt): number => (horizontal ? p.y : p.x);
+  const flowOf = (p: Pt): number => (horizontal ? p.x : p.y);
+  const seq = crossSequence(
+    crossOf(anchors.sourceTip),
+    crossOf(anchors.targetTip),
+    traversed.length,
+    edge.layerCross,
+  );
+
   const points: Pt[] = [anchors.source.point, anchors.sourceTip];
-  let prev: Pt = anchors.sourceTip;
-  for (const b of traversed) {
+  let cross = crossOf(anchors.sourceTip);
+  traversed.forEach((b, k) => {
     const channel = channelByBoundary.get(b);
-    if (channel === undefined) continue;
+    if (channel === undefined) return;
     const t = assignment.tracks.get(b)?.get(edge.id);
-    if (t === undefined) continue; // overflow: caller handles
-    const off = offsetFor(t, channel.trackGap);
-    if (horizontal) {
-      // channel travel is along x; jog is at y = midline+off.
-      const y = channel.midline + off;
-      // A non-zero offset must produce a real bend: enter the channel
-      // at (prev.x, y), then exit at some x we choose. If the offset
-      // is zero we still emit the jog as (prev.x, y)-(nextX, y) to
-      // keep the shape uniform; dedupeCollinear will collapse it only
-      // when it is genuinely collinear with the neighbors.
-      const nextX = anchors.targetTip.x; // final x is the tip; jogs cascade through the same y band
-      points.push({ x: prev.x, y });
-      points.push({ x: nextX, y });
-      prev = { x: nextX, y };
-    } else {
-      const x = channel.midline + off;
-      const nextY = anchors.targetTip.y;
-      points.push({ x, y: prev.y });
-      points.push({ x, y: nextY });
-      prev = { x, y: nextY };
-    }
+    if (t === undefined) return; // overflow: caller handles
+    const flow = channel.midline + offsetFor(t, channel.trackGap);
+    const next = at(seq, k + 1);
+    points.push(pt(flow, cross));
+    points.push(pt(flow, next));
+    cross = next;
+  });
+  // A skipped channel (no plan or no track) leaves a pending cross
+  // step; close it at the target tip rather than drawing a diagonal.
+  if (cross !== crossOf(anchors.targetTip)) {
+    points.push(pt(flowOf(anchors.targetTip), cross));
   }
   points.push(anchors.targetTip);
   points.push(anchors.target.point);

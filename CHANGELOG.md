@@ -15,6 +15,24 @@ literal in package and demo source against its nearest selector, and adds
 `MULTI_TYPE_PIE_RULES` to the producer check. Fails on the pre-fix tree.
 Lands g3_toolkit heal c6334e47 (follow-up to d6c7c3a5).
 
+## 1.0.0-rc023: 2026-10-22 (channel router: per-gap tracks, not a cross-axis bus)
+
+**Fix: `emitChannelRoute` read the channel midline as a cross coordinate.**
+For a horizontal-flow plan it drew each channel as a horizontal run at
+`y = midline + offset` and ran the FIRST channel all the way to
+`targetTip.x`, so a multi-boundary edge became one cross-axis bus and
+every later boundary jogged at the target column, outside its own gap.
+Owner ruling (heal 2144aa96): `Channel.midline` is the gap centre on the
+FLOW axis (the quantity corridor supply and nudging already measure);
+tracks offset along the flow axis; each traversed channel hosts one jog
+from the edge's cross at its near layer to its cross at its far layer.
+New `ChannelEdge.layerCross` carries the per-intermediate-layer cross,
+and `routeStructuralEdges` fills it from the LAY-005 dummy-chain
+`bendHints`. `assignTracks` sorts each channel on that channel's own
+entry/exit cross. The 05a "genuine orthogonal bends" oracle pinned the
+bus reading (`y = 108`) and now pins `x = 108`. Behind the
+default-off `useChannelRouter` flag: no shipped geometry changes.
+
 ## 1.0.0-rc022: 2026-10-22 (label-wrap switch fenced through the real stylesheet merge)
 
 **Fence: the bio wrap-off regression could only be caught by rule shape.**

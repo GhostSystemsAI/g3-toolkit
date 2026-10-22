@@ -127,7 +127,15 @@ const SCENARIOS = [
     // routing chain already pulled by G3tLayeredLayout, and default off
     // means the additional code is dead when unused. core-ugm holds at
     // 4.8 KB (no leak). Headroom 1.2 KB.
-    budget: 78 * 1024,
+    // RAISED 78 -> 79 KB, 2026-10-22 (heal 2144aa96, channel router
+    // per-gap tracks). Measured 78.5 KB, +0.7 KB over 77.8. The emitter
+    // now builds a per-layer cross sequence (ChannelEdge.layerCross, fed
+    // from LAY-005 bendHints) so a multi-boundary edge jogs inside each
+    // gap instead of riding one cross-axis bus; assignTracks sorts per
+    // gap on the same sequence. All of it lives in g3t-channel-router
+    // and g3t-routing, already pulled by G3tLayeredLayout. core-ugm
+    // holds at 4.8 KB (no leak). Headroom 0.5 KB.
+    budget: 79 * 1024,
     code:
       `import { UGM, ForceLayout, G3tLayeredLayout } from "@g3t/core";\n` +
       `export const g = new UGM();\n` +
@@ -152,6 +160,9 @@ const SCENARIOS = [
     // RAISED 194 -> 195 KB, 2026-08-21 (RF-C nudging guards). Barrel
     // now reaches countBends + segmentsCross from layout-metrics via
     // g3t-nudging.ts; measured 194.4 KB, +0.4 KB. Headroom 0.6 KB.
+    // RAISED 195 -> 196 KB, 2026-10-22 (heal 2144aa96, same channel
+    // router change as core-layout above). Measured 195.2 KB, +0.7 KB
+    // over 194.5. Headroom 0.8 KB.
     //
     // Read this number as the CEILING, not as what an adopter pays.
     // Every one of those additions is a named export in a
@@ -160,7 +171,7 @@ const SCENARIOS = [
     // honest readings for real import shapes, and both moved far less.
     // This line existing is the reason the @g3t/layout extraction was
     // retired rather than reinstated when the routing arc landed.
-    budget: 195 * 1024,
+    budget: 196 * 1024,
     code: `export * from "@g3t/core";\n`,
   },
   {
