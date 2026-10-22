@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0-rc015: 2026-10-22 (Routing Explained lays out its flow diagram once)
+
+**Fix: `RoutingExplainShell.test.tsx` "flow diagram is fed to
+StructuralSvgView after layout completes" failed (expected 0 > 0) in
+concurrent full vitest runs while passing alone.** The shell's decision
+flow diagram is a module-constant input with constant options, yet every
+mount re-ran the async `layoutStructural` through `useStructuralLayout`,
+so each return to the shell redid it and the test raced that per-mount
+layout against `waitFor`'s 1 s default; alone it lands in about 10 ms, on
+a saturated host it did not. The laid-out scene is now kept at module
+scope once the hook produces it, and later mounts render it on their
+first frame while the hook idles. The test file pays the one-time layout
+in a `beforeAll` with its own budget. Regression fence: the new remount
+case fails when the flow diagram is re-laid-out per mount.
+
 ## 1.0.0-rc014: 2026-10-22 (Scale surface builds its model once; demo tests stop timing out)
 
 **Fix: `Demo.test.tsx` and `ScaleSurface.test.tsx` timed out at 5000 ms

@@ -27,7 +27,11 @@ import {
 } from "@g3t/react";
 import type { CyStylesheet } from "@g3t/react";
 import { UGM } from "@g3t/core";
-import type { StructuralGraphInput, StructuralLayoutOptions } from "@g3t/core";
+import type {
+  StructuralGeometry,
+  StructuralGraphInput,
+  StructuralLayoutOptions,
+} from "@g3t/core";
 import {
   useRoutingControls,
   RoutingControlStrip,
@@ -198,6 +202,17 @@ const FLOW_OPTIONS: Omit<StructuralLayoutOptions, "sketch"> = {
   nudge: true,
   layerSpacing: 60,
 };
+
+/** The flow diagram's laid-out scene, kept for the page. FLOW_INPUT and
+ *  FLOW_OPTIONS are module constants and layoutStructural is
+ *  deterministic, so once one mount has laid it out every later mount
+ *  renders it on its first frame instead of re-running the async layout
+ *  (a return to this shell redid it every visit, and the shell's test
+ *  raced that per-mount layout against a 1 s wait under parallel load).
+ *  Module scope, like ScaleSurface's POS_CACHE. */
+const FLOW_SCENE_CACHE: {
+  scene: { input: StructuralGraphInput; geometry: StructuralGeometry } | null;
+} = { scene: null };
 
 // ── Live demo UGM ───────────────────────────────────────────────────
 
@@ -418,11 +433,17 @@ export function RoutingExplainShell({ onBack }: { onBack?: () => void } = {}) {
     [],
   );
 
-  // Flow diagram layout.
-  const { structural: flowScene } = useStructuralLayout(
-    FLOW_INPUT,
+  // Flow diagram layout: the hook lays it out once per page, then the
+  // cached scene serves every later mount and the hook idles.
+  const cachedFlowScene = FLOW_SCENE_CACHE.scene;
+  const { structural: laidOutFlowScene } = useStructuralLayout(
+    cachedFlowScene ? null : FLOW_INPUT,
     FLOW_OPTIONS,
   );
+  useEffect(() => {
+    if (laidOutFlowScene) FLOW_SCENE_CACHE.scene = laidOutFlowScene;
+  }, [laidOutFlowScene]);
+  const flowScene = cachedFlowScene ?? laidOutFlowScene;
 
   const accentColor = "#a3e635";
 
