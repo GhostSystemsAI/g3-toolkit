@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.0-rc016: 2026-10-22 (perf ceilings stop measuring host load)
+
+**Fix: `canvas.test.ts` "initializes 500 nodes + 2,000 edges in under 2
+seconds" and `crossing-aware-placement.test.ts` "respects the wall-clock
+budget" (249 ms vs 200) failed on a saturated host.** Mechanism: both
+asserted wall-clock time, which counts the time the worker sat
+descheduled. Reproduced with 60 CPU hogs pinned to the test core: the
+Cytoscape init read 3676 ms of wall clock for 112-136 ms of CPU. The
+canvas benchmark now measures process CPU time (`process.cpuUsage`)
+against the same 2 s ceiling. The optimizer fixture converges to zero
+crossings in 169 iterations (~10 ms), so its 50 ms budget was never the
+binding stop and the old test checked nothing about the budget.
+`optimizePlacement` now takes an optional `now` clock (default
+`performance.now`); the test injects a clock that advances 10 ms per read
+and asserts the loop stops at exactly 4 iterations with `elapsedMs` 60.
+Regression fences: the budget test fails on the old source (169
+iterations), and `tests/unit/host-load-fence.test.ts` fails if the canvas
+benchmark goes back to wall time.
+
 ## 1.0.0-rc015: 2026-10-22 (Routing Explained lays out its flow diagram once)
 
 **Fix: `RoutingExplainShell.test.tsx` "flow diagram is fed to
