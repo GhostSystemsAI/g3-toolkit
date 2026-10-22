@@ -111,7 +111,13 @@ const BUDGETS = {
   // the group, independent of the crossing bypass whose scope is fixed
   // by the 2026-08-20 rulings). Pulls in countBends + segmentsCross from
   // layout-metrics. Headroom 0.8 KB.
-  core: 224 * 1024,
+  // 224 -> 225 KB, 2026-10-22 (LAY-005 bend hints clear same-layer
+  // boxes, heal ec55a139): measured 224.6 KB. clearHintCross plus the
+  // per-layer cross-extent lookup in g3tLayoutStructural move a
+  // dummy-chain hint out of the real nodes in its layer; before it the
+  // hint could land on a node's centre. The rc023 channel-router
+  // per-gap tracks had already spent the prior headroom. Headroom 0.4 KB.
+  core: 225 * 1024,
   // Core ledger:
   // - 169.0 -> 209 KB, 2026-08-17 (MERGE of ai-agent-guide into
   //   fable-updates). Measured 206.3 KB.
