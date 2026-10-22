@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.0-rc012: 2026-10-22 (gates:spec runs on python3-only hosts)
+
+**Fix: `gates:spec` invoked bare `python`.** Hosts that ship only
+python3 (the forge worker pools among them) failed the fifth gate step
+with "python: not found". `gates:spec` and the three spec steps in
+ci.yml now call `python3`, which GitHub's setup-python also provides.
+Regression fence: `tests/unit/package-scripts.test.ts` rejects bare
+`python` in any package script or ci.yml run line. Not fixed here: in a
+heal worktree `pnpm install` (and `pnpm run`, which pnpm 11 precedes with
+an install) still fails EROFS because the pool sandbox mounts the shared
+pnpm store read-only; that grant lives in the pool unit renderer.
+
 ## 1.0.0-rc011: 2026-10-22 (drag re-routes separate parallel runs)
 
 **Fix: post-drag routes no longer bunch onto one line.** The live drag

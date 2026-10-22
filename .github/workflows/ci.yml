@@ -70,11 +70,11 @@ jobs:
       # Both scripts exit non-zero on findings (the original linter
       # returned 0 unconditionally; two audits flagged the gate as
       # decorative before it was fixed).
-      - run: python scripts/lint_specs.py specs/
-      - run: python scripts/sync_spec_status.py
+      - run: python3 scripts/lint_specs.py specs/
+      - run: python3 scripts/sync_spec_status.py
       # Every in-progress/proposed requirement must be owned by exactly
       # one roadmap file (contract in roadmap/CLAUDE.md).
-      - run: python scripts/check_roadmap_coverage.py
+      - run: python3 scripts/check_roadmap_coverage.py
 
   perf:
     # PRF benchmarks (MR-5 execution). Owner ruling 2026-07-12: this
