@@ -89,6 +89,10 @@ a written rationale in scripts/check-bundle-size.mjs (the ledger).
 - Status changes ripple: flipping a requirement to implemented
   requires removing it from its roadmap Owns header AND the
   roadmap/CLAUDE.md index row (coverage gate enforces).
+- Dispatched workers DO NOT `git push`. origin is github.com, which is
+  off the forge mesh, so the export gate refuses the push. A generic
+  worker contract line saying "commit and push" does not override
+  this. Commit on the plan branch; the merge gate lands it.
 
 ## Architecture doctrine (do not violate casually)
 
