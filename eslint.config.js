@@ -63,6 +63,24 @@ export default tseslint.config(
       "@typescript-eslint/no-non-null-assertion": "off",
     },
   },
+  {
+    // Library, demo, example and test code never writes to the process
+    // streams directly. A timing probe (`process.stderr.write("PROBE ...")`)
+    // was committed in ScaleSurface.test.tsx because nothing here objected;
+    // scripts/ and root configs are Node tooling and keep stdout/stderr.
+    files: ["{src,packages,examples,tests}/**/*.{ts,tsx,js,mjs,cjs}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.property.name='write'][callee.object.property.name=/^(stdout|stderr)$/][callee.object.object.name='process']",
+          message:
+            "No direct process.stdout/stderr writes outside scripts/ (stray debug probe). Assert on the value instead.",
+        },
+      ],
+    },
+  },
   prettier,
   storybook.configs["flat/recommended"],
 );
