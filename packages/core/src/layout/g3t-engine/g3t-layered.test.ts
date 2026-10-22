@@ -12,6 +12,8 @@
 import { describe, expect, it } from "vitest";
 import type { StructuralGraphInput } from "../structural";
 import { layoutStructural } from "../structural";
+import { detourAround, routeStructuralEdges } from "./g3t-routing";
+import { g3tLayoutStructural } from "./g3t-structural";
 import {
   assignLayers,
   g3tLayoutFlat,
@@ -682,7 +684,6 @@ describe("D2b property sweep (multi-seed; guards nondeterminism and order-depend
 
 describe("LR-21: near-aligned pairs route STRAIGHT (snap pass)", () => {
   it("a 6px center offset collapses to a direct 2-point line; a large offset keeps its jog", async () => {
-    const { routeStructuralEdges } = await import("./g3t-routing");
     const mk = (): StructuralGraphInput => ({
       nodes: [
         { id: "a", width: 120, height: 40 },
@@ -713,7 +714,6 @@ describe("LR-21: near-aligned pairs route STRAIGHT (snap pass)", () => {
 
 describe("LR-16/17/20: port routing contracts (round B)", () => {
   it("routes approach ports along the port axis, terminate at the outer face, and clear their own box", async () => {
-    const { routeStructuralEdges } = await import("./g3t-routing");
     const input: StructuralGraphInput = {
       nodes: [
         {
@@ -776,7 +776,6 @@ describe("VR-7d/e/f: route simplicity, vertical lock, overlap escape (owner re-v
     >,
     direction: "DOWN" | "RIGHT" = "DOWN",
   ) => {
-    const { routeStructuralEdges } = await import("./g3t-routing");
     const nodes = Object.entries(geometry).map(([id, g]) => ({
       id,
       width: g.width,
@@ -853,7 +852,6 @@ describe("VR-7d/e/f: route simplicity, vertical lock, overlap escape (owner re-v
 
 describe("VR-9: dense corridors detour instead of drawing through containers", () => {
   it("detourAround clears a full-height wall between the tips", async () => {
-    const { detourAround } = await import("./g3t-routing");
     const near = [
       { id: "wall", x: 160, y: 0, width: 120, height: 300 },
       { id: "src", x: 0, y: 100, width: 120, height: 60 },
@@ -873,7 +871,6 @@ describe("VR-9: dense corridors detour instead of drawing through containers", (
   });
 
   it("a five-box port chain (the IBD screenshot shape) never routes through intermediates", async () => {
-    const { routeStructuralEdges } = await import("./g3t-routing");
     const boxes = {
       power: { x: 0, y: 120, width: 180, height: 70 },
       payload: { x: 240, y: 120, width: 160, height: 70 },
@@ -996,7 +993,6 @@ describe("R-4: target-first anchoring (upstream round 17)", () => {
   };
 
   it("distributes arrivals across the sink's side (no stacking) under both modes", async () => {
-    const { routeStructuralEdges } = await import("./g3t-routing");
     const { input, geometry } = manyToOne();
     for (const anchor of ["source", "target"] as const) {
       const routes = routeStructuralEdges(input, geometry as never, {
@@ -1021,7 +1017,6 @@ describe("R-4: target-first anchoring (upstream round 17)", () => {
     // is complete-bipartite on purpose (every node degree 3, cross
     // axis interleaved) and asserts a real behavioral difference,
     // so the option cannot silently become a no-op again.
-    const { routeStructuralEdges } = await import("./g3t-routing");
     const srcs = ["a", "b", "c"];
     const dsts = ["x", "y", "z"];
     const edges = srcs.flatMap((sid) =>
@@ -1090,7 +1085,6 @@ describe("R-4: target-first anchoring (upstream round 17)", () => {
   });
 
   it("target-first orders arrivals MONOTONICALLY with the sources' own order", async () => {
-    const { routeStructuralEdges } = await import("./g3t-routing");
     const { input, geometry } = manyToOne();
     const routes = routeStructuralEdges(input, geometry as never, {
       direction: "RIGHT",
@@ -1115,7 +1109,6 @@ describe("R-4: target-first anchoring (upstream round 17)", () => {
 
 describe("congestion sizing (owner directive 2026-07-28 #2)", () => {
   it("a hub with six one-side attachments grows tall enough for the fan", async () => {
-    const { g3tLayoutStructural } = await import("./g3t-structural");
     const spokes = ["s1", "s2", "s3", "s4", "s5", "s6"];
     const input: StructuralGraphInput = {
       nodes: [
@@ -1134,7 +1127,6 @@ describe("congestion sizing (owner directive 2026-07-28 #2)", () => {
   });
 
   it("declared E/W ports stretch the height exactly (five WEST ports)", async () => {
-    const { g3tLayoutStructural } = await import("./g3t-structural");
     const input: StructuralGraphInput = {
       nodes: [
         {
@@ -1158,7 +1150,6 @@ describe("congestion sizing (owner directive 2026-07-28 #2)", () => {
 
 describe("port pairs straighten within their own bodies (owner 2026-07-28)", () => {
   it("an E/W port pair with anchors 8px apart draws a straight line", async () => {
-    const { routeStructuralEdges } = await import("./g3t-routing");
     const input: StructuralGraphInput = {
       nodes: [
         {
@@ -1208,7 +1199,6 @@ describe("port pairs straighten within their own bodies (owner 2026-07-28)", () 
 
 describe("VR-8: mixed pairs (box + port) straighten too", () => {
   it("the box anchor slides to the port's tangent (parametric bindings)", async () => {
-    const { routeStructuralEdges } = await import("./g3t-routing");
     const input: StructuralGraphInput = {
       nodes: [
         { id: "a", width: 200, height: 120 },
@@ -1245,7 +1235,6 @@ describe("VR-8: mixed pairs (box + port) straighten too", () => {
 
 describe("VR-7: adjacent boxes under DOWN flow (the BDD screenshots)", () => {
   it("takes the facing E/W sides and never crosses either endpoint block", async () => {
-    const { routeStructuralEdges } = await import("./g3t-routing");
     const input: StructuralGraphInput = {
       nodes: [
         { id: "smallsat", width: 280, height: 150 },

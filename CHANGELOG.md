@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0-rc016: 2026-10-22 (perf ceilings stop measuring host load)
+## 1.0.0-rc018: 2026-10-22 (perf ceilings stop measuring host load)
 
 **Fix: `canvas.test.ts` "initializes 500 nodes + 2,000 edges in under 2
 seconds" and `crossing-aware-placement.test.ts` "respects the wall-clock
@@ -18,6 +18,57 @@ and asserts the loop stops at exactly 4 iterations with `elapsedMs` 60.
 Regression fences: the budget test fails on the old source (169
 iterations), and `tests/unit/host-load-fence.test.ts` fails if the canvas
 benchmark goes back to wall time.
+
+## 1.0.0-rc017: 2026-10-22 (dependencies install where the pnpm store is read-only)
+
+**Fix: `pnpm install` died EROFS in heal worktrees and sandboxed worker
+pools.** pnpm 11 registers every installing project by writing a symlink
+into `<store>/projects` and opens `<store>/index.db` for writing, both
+unconditionally, so a read-only store failed the install before a single
+package was linked even though every package was already present. The
+workaround was symlinking `node_modules` from the main checkout, which
+binds one tree's dependencies to another tree's lockfile. New
+`pnpm run install:deps` (`scripts/install-deps.mjs`) runs a plain frozen
+install when the store is writable; otherwise it builds a disposable
+overlay store (private `projects/`, `.tmp/` and `index.db*`, everything
+else symlinked to the read-only store) and installs offline through it.
+Package files are copied into `node_modules`, so nothing references the
+overlay afterwards. Regression fence: `tests/unit/install-deps.test.ts`.
+Lands g3_toolkit heal 02acfa2b (worker finding e793bdc7).
+
+## 1.0.0-rc016: 2026-10-22 (no stray debug probes in committed code)
+
+**Fix: `ScaleSurface.test.tsx` carried a debug timing probe,
+`process.stderr.write("PROBE render ...")`, committed with the
+build-once change (cd3db07).** It printed on every test run and the lint
+gate let it through because nothing restricted direct process stream
+writes. The probe is removed, and `eslint.config.js` now rejects
+`process.stdout.write` / `process.stderr.write` in `src/`, `packages/`,
+`examples/` and `tests/`; Node tooling under `scripts/` is unaffected.
+Regression fence: `tests/unit/no-stream-probe-lint.test.ts` lints the
+probe shape through the repo config and expects the rule to fire.
+
+## 1.0.0-rc015: 2026-10-22 (no cold module imported inside a test body)
+
+**Fix: the in-body dynamic import anti-pattern (gotcha
+in-body-dynamic-import-counts-against-test-timeout) survived the
+StatsPanel/TimelineView fix in four more files.** A dynamic import in
+an `it()` body that names a module not already loaded at collection
+time pays its cold transform against vitest's 5 s default, which is
+how StatsPanel and TimelineView timed out on a saturated host. The
+same import was still in `m7-charts.test.tsx` (`SankeyView`, which pulls
+in ECharts: the first test body went from 196 ms to 25 ms once it was
+static), `module-boundary.test.ts` (the layout barrel among others),
+`g3t-layered.test.ts` (routing and structural engines, 13 in-body
+imports) and `CytoscapeCanvas.test.tsx` (the mocked cytoscape,
+emphasis-store, ThemeManager). All are now static imports. Regression
+fence: `tests/unit/cold-mount-fence.test.ts` scans every tracked test
+file and fails on an in-body `await import()` of a specifier the file
+does not already load at collection time (Node builtins and the
+dist-import test exempt, with the reason in the file). It listed 30
+offenders before this change and none after.
+
+Lands g3_toolkit heal b4a780b8.
 
 ## 1.0.0-rc015: 2026-10-22 (Routing Explained lays out its flow diagram once)
 

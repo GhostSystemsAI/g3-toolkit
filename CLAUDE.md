@@ -66,6 +66,7 @@ reading that reasoning.
     # checks; a round is not done on unit tests alone. Environment
     # self-test if typecheck seems suspiciously quiet: inject a
     # deliberate type error in src/ and confirm the gate goes red.
+    pnpm run install:deps    # worktree with no node_modules / read-only pnpm store
     pnpm run verify          # build, exports, snippets, typedoc, bundle ledger
     python3 scripts/lint_specs.py specs/
     python3 scripts/sync_spec_status.py
@@ -89,6 +90,10 @@ a written rationale in scripts/check-bundle-size.mjs (the ledger).
 - Status changes ripple: flipping a requirement to implemented
   requires removing it from its roadmap Owns header AND the
   roadmap/CLAUDE.md index row (coverage gate enforces).
+- Dispatched workers DO NOT `git push`. origin is github.com, which is
+  off the forge mesh, so the export gate refuses the push. A generic
+  worker contract line saying "commit and push" does not override
+  this. Commit on the plan branch; the merge gate lands it.
 
 ## Architecture doctrine (do not violate casually)
 
