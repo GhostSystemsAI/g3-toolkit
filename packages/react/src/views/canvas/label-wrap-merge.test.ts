@@ -23,7 +23,9 @@ function computedWrap(userStylesheet?: CyStylesheet[]) {
   const cy = cytoscape({
     headless: true,
     styleEnabled: true,
-    elements: [{ group: "nodes", data: { id: "n", label: "a long biomedical label" } }],
+    elements: [
+      { group: "nodes", data: { id: "n", label: "a long biomedical label" } },
+    ],
     style: composeCanvasStylesheet(LIGHT_THEME, { userStylesheet }) as never,
   });
   const n = cy.getElementById("n");
