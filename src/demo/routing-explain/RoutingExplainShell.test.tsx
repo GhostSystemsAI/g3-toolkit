@@ -8,8 +8,10 @@
  *    the select changes
  *  - DEV-only: the "DEV only" badge renders (not a gate test, just
  *    confirms the label is present for reviewers)
+ *  - page-scoped flow layout: once laid out, a remount renders the
+ *    flow diagram on its first frame (no per-mount async re-layout)
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -66,6 +68,23 @@ afterEach(() => {
 });
 
 describe("RoutingExplainShell", () => {
+  // The flow diagram is laid out once per page. Pay that one-time async
+  // layout here under its own budget: on a saturated host (two full
+  // vitest runs at once) it alone outran waitFor's 1 s default and
+  // landed on whichever test waited for it.
+  beforeAll(async () => {
+    render(<RoutingExplainShell />);
+    await waitFor(
+      () => {
+        expect(captured.svgCalls.length).toBeGreaterThan(0);
+      },
+      { timeout: 15_000 },
+    );
+    cleanup();
+    captured.canvasCalls.length = 0;
+    captured.svgCalls.length = 0;
+  }, 30_000);
+
   it("mounts and renders the flow diagram host and canvas host", async () => {
     render(<RoutingExplainShell />);
     expect(screen.getByTestId("rexplain-flow-host")).toBeTruthy();
@@ -128,6 +147,14 @@ describe("RoutingExplainShell", () => {
     expect(nodeIds).toContain("n-mode");
     expect(nodeIds).toContain("n-route");
     expect(nodeIds).toContain("n-structural");
+  });
+
+  it("a remount renders the laid-out flow diagram on its first frame", () => {
+    // Regression fence: the flow layout used to re-run per mount, so a
+    // fresh mount showed the placeholder until an async layout landed.
+    render(<RoutingExplainShell />);
+    expect(screen.getByTestId("svg-stub")).toBeTruthy();
+    expect(captured.svgCalls.length).toBeGreaterThan(0);
   });
 
   it("DEV-only badge is visible", () => {
