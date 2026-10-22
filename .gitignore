@@ -17,7 +17,7 @@ docs/source/research/
 docs/source/planning/
 
 # === Dependencies ===
-node_modules/
+node_modules
 .pnpm-store/
 
 # === Test outputs ===

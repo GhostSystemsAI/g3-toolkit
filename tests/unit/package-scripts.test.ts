@@ -29,4 +29,23 @@ describe("package scripts", () => {
       runs.filter((l) => BARE_PYTHON.test(l.replace(/^\s*-?\s*run:/, " "))),
     ).toEqual([]);
   });
+
+  // Fence for heal 4912fc90: pnpm 11 defaults verifyDepsBeforeRun to
+  // "install", so `pnpm run <anything>` wrote the shared store first and
+  // died EROFS wherever that store is mounted read-only.
+  it("pnpm run never installs as a side effect", () => {
+    const ws = readFileSync(resolve(root, "pnpm-workspace.yaml"), "utf8");
+    const setting = ws.match(/^verifyDepsBeforeRun:\s*(\S+)/m)?.[1];
+    expect(setting).toBeDefined();
+    expect(["warn", "error", "false"]).toContain(setting);
+  });
+
+  // A worktree that links node_modules to a main checkout gets a symlink,
+  // which the directory-only pattern `node_modules/` does not match.
+  it(".gitignore ignores node_modules symlinks, not only directories", () => {
+    const lines = readFileSync(resolve(root, ".gitignore"), "utf8")
+      .split("\n")
+      .map((l) => l.trim());
+    expect(lines).toContain("node_modules");
+  });
 });
