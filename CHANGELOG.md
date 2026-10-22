@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.0-rc017: 2026-10-22 (dependencies install where the pnpm store is read-only)
+
+**Fix: `pnpm install` died EROFS in heal worktrees and sandboxed worker
+pools.** pnpm 11 registers every installing project by writing a symlink
+into `<store>/projects` and opens `<store>/index.db` for writing, both
+unconditionally, so a read-only store failed the install before a single
+package was linked even though every package was already present. The
+workaround was symlinking `node_modules` from the main checkout, which
+binds one tree's dependencies to another tree's lockfile. New
+`pnpm run install:deps` (`scripts/install-deps.mjs`) runs a plain frozen
+install when the store is writable; otherwise it builds a disposable
+overlay store (private `projects/`, `.tmp/` and `index.db*`, everything
+else symlinked to the read-only store) and installs offline through it.
+Package files are copied into `node_modules`, so nothing references the
+overlay afterwards. Regression fence: `tests/unit/install-deps.test.ts`.
+Lands g3_toolkit heal 02acfa2b (worker finding e793bdc7).
+
 ## 1.0.0-rc016: 2026-10-22 (no stray debug probes in committed code)
 
 **Fix: `ScaleSurface.test.tsx` carried a debug timing probe,
