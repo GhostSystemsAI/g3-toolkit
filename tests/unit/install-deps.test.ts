@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   buildOverlayStore,
+  foreignWorkspaceLinks,
   nodeModulesState,
   overlayRoot,
   planInstall,
@@ -168,14 +169,71 @@ describe("install-deps node_modules provisioning", () => {
     });
   });
 
+  // realpath, not path.resolve(readlink): the links are relative, so a
+  // lexical check reads as in-tree even through a symlinked node_modules
+  // (gotcha symlinked-node-modules-resolves-g3t-into-main-checkout).
   it("this checkout's workspace links resolve inside it", () => {
     expect(nodeModulesState(root)).toBe("installed");
-    const core = path.join(root, "node_modules", "@g3t", "core");
+    expect(foreignWorkspaceLinks(root)).toEqual([]);
     expect(
-      path.resolve(
-        path.join(root, "node_modules", "@g3t"),
-        fs.readlinkSync(core),
-      ),
-    ).toBe(path.join(root, "packages", "core"));
+      fs.realpathSync(path.join(root, "node_modules", "@g3t", "core")),
+    ).toBe(fs.realpathSync(path.join(root, "packages", "core")));
+  });
+
+  // A pnpm-shaped checkout: packages/core plus a relative @g3t/core link.
+  function fakeCheckout(): string {
+    const d = mkTmp();
+    fs.mkdirSync(path.join(d, "packages", "core"), { recursive: true });
+    fs.mkdirSync(path.join(d, "node_modules", "@g3t"), { recursive: true });
+    fs.writeFileSync(path.join(d, "node_modules", ".modules.yaml"), "");
+    fs.symlinkSync(
+      path.join("..", "..", "packages", "core"),
+      path.join(d, "node_modules", "@g3t", "core"),
+    );
+    return d;
+  }
+
+  it("flags @g3t links that resolve into another checkout", () => {
+    const main = fakeCheckout();
+    expect(nodeModulesState(main)).toBe("installed");
+    expect(foreignWorkspaceLinks(main)).toEqual([]);
+    // The anti-pattern: a real node_modules dir whose @g3t scope is
+    // borrowed from the main checkout. Relative links now land there.
+    const wt = mkTmp();
+    fs.mkdirSync(path.join(wt, "packages", "core"), { recursive: true });
+    fs.mkdirSync(path.join(wt, "node_modules"));
+    fs.writeFileSync(path.join(wt, "node_modules", ".modules.yaml"), "");
+    fs.symlinkSync(
+      path.join(main, "node_modules", "@g3t"),
+      path.join(wt, "node_modules", "@g3t"),
+    );
+    expect(foreignWorkspaceLinks(wt)).toEqual(["core"]);
+    expect(nodeModulesState(wt)).toBe("foreign");
+    expect(planInstall({ state: "foreign", writable: true })).toEqual({
+      action: "install",
+      unlinkSymlink: false,
+      overlay: false,
+    });
+  });
+
+  it("sees through a whole-node_modules symlink to the donor checkout", () => {
+    const main = fakeCheckout();
+    const wt = mkTmp();
+    fs.mkdirSync(path.join(wt, "packages", "core"), { recursive: true });
+    fs.symlinkSync(
+      path.join(main, "node_modules"),
+      path.join(wt, "node_modules"),
+    );
+    expect(nodeModulesState(wt)).toBe("symlink");
+    expect(foreignWorkspaceLinks(wt)).toEqual(["core"]);
+  });
+
+  it("runs the dependency preflight first in the gates script", () => {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(root, "package.json"), "utf8"),
+    ) as { scripts: Record<string, string> };
+    expect(pkg.scripts.gates?.split(" && ")[0]).toBe(
+      "node scripts/install-deps.mjs --check",
+    );
   });
 });

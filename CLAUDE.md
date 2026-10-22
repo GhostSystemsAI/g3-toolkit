@@ -99,6 +99,8 @@ a written rationale in scripts/check-bundle-size.mjs (the ledger).
   store via an overlay). NEVER symlink node_modules from the main
   checkout: the workspace links are relative, so `@g3t/*` would resolve
   to the main checkout's packages and the gates would test the wrong tree.
+  `pnpm run gates` starts with `install-deps.mjs --check`, which fails on
+  that (realpath, not readlink: the relative links read as in-tree).
 
 ## Architecture doctrine (do not violate casually)
 
