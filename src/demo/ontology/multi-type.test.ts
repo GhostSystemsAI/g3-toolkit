@@ -58,7 +58,11 @@ describe("MULTI_TYPE_PIE_RULES", () => {
   it("is one attribute-guarded rule per slice (mapping-warning discipline)", () => {
     expect(MULTI_TYPE_PIE_RULES).toHaveLength(MAX_SLICES);
     MULTI_TYPE_PIE_RULES.forEach((rule, i) => {
-      expect(rule.selector).toBe(`node[_pie${i + 1}Color]`);
+      // Guarded on every field the rule maps, not only the color.
+      expect(rule.selector).toBe(
+        `node[_pie${i + 1}Color][_pie${i + 1}Size]` +
+          (i === 0 ? "[_pieSize]" : ""),
+      );
       const style = (rule as unknown as { style: Record<string, unknown> })
         .style;
       expect(style[`pie-${i + 1}-background-color`]).toBe(
