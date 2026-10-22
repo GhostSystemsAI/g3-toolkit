@@ -140,6 +140,11 @@ const EDGE_STYLE: CyStylesheet[] = [
       "curve-style": "bezier",
       "control-point-step-size": 40,
       width: 1.5,
+    } as any,
+  },
+  {
+    selector: `edge[type = '${STAR_EDGE_TYPE}'][annP]`,
+    style: {
       label: "data(annP)",
       "font-size": 9,
       color: "#8b949e",

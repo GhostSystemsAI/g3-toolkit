@@ -58,10 +58,12 @@ export function stampMultiTypePies(
   return ugm;
 }
 
-/** One rule per slice: attribute-presence guarded (see module doc). */
+/** One rule per slice: attribute-presence guarded on EVERY field the
+ *  rule maps (see module doc). A host that stamps a color without its
+ *  size would otherwise draw a per-frame missing-field warning. */
 export const MULTI_TYPE_PIE_RULES: CyStylesheet[] = [
   {
-    selector: "node[_pie1Color]",
+    selector: "node[_pie1Color][_pie1Size][_pieSize]",
     style: {
       // 12.15 (Zach's confirmation): the pie is a CIRCLE overlay, so
       // on any non-ellipse node the two shapes clash visually. A
@@ -76,7 +78,7 @@ export const MULTI_TYPE_PIE_RULES: CyStylesheet[] = [
     } as never,
   },
   {
-    selector: "node[_pie2Color]",
+    selector: "node[_pie2Color][_pie2Size]",
     style: {
       "pie-2-background-color": "data(_pie2Color)",
       "pie-2-background-size": "data(_pie2Size)",
@@ -84,7 +86,7 @@ export const MULTI_TYPE_PIE_RULES: CyStylesheet[] = [
     } as never,
   },
   {
-    selector: "node[_pie3Color]",
+    selector: "node[_pie3Color][_pie3Size]",
     style: {
       "pie-3-background-color": "data(_pie3Color)",
       "pie-3-background-size": "data(_pie3Size)",
@@ -92,7 +94,7 @@ export const MULTI_TYPE_PIE_RULES: CyStylesheet[] = [
     } as never,
   },
   {
-    selector: "node[_pie4Color]",
+    selector: "node[_pie4Color][_pie4Size]",
     style: {
       "pie-4-background-color": "data(_pie4Color)",
       "pie-4-background-size": "data(_pie4Size)",

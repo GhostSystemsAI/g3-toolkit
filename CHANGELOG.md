@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0-rc023: 2026-10-22 (data-mapper fence follows the source, not a producer list)
+
+**Fix: two stylesheets still mapped fields their selector did not guard.**
+`MULTI_TYPE_PIE_RULES` (exported) guarded each slice on `_pieNColor` but
+also mapped `_pieNSize` and `_pieSize`; a host stamping a color without its
+size drew a per-frame missing-field warning. Each rule now guards every
+field it maps. The RDF 1.2 shell's star-edge `label: data(annP)` sat on an
+unguarded `edge[type = ...]` rule; the label is now its own `[annP]` rule.
+Mechanism: rc022's fence scanned a hand-picked list of producers, so any
+other producer escaped it (cascade shadowing hides the rest at render
+time). `data-mapper-scoping.test.ts` now also sweeps every `data(x)`
+literal in package and demo source against its nearest selector, and adds
+`MULTI_TYPE_PIE_RULES` to the producer check. Fails on the pre-fix tree.
+Lands g3_toolkit heal c6334e47 (follow-up to d6c7c3a5).
+
 ## 1.0.0-rc022: 2026-10-22 (label-wrap switch fenced through the real stylesheet merge)
 
 **Fence: the bio wrap-off regression could only be caught by rule shape.**
