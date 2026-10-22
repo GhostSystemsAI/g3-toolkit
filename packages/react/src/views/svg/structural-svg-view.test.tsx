@@ -808,8 +808,18 @@ describe("drag re-route separates parallel runs (gotcha a4356315)", () => {
     nodes: { S1: box(0, 0), S2: box(0, 60), T1: box(300, 0), T2: box(300, 60) },
     ports: {},
     edges: {
-      e1: { points: [{ x: 60, y: 15 }, { x: 300, y: 15 }] },
-      e2: { points: [{ x: 60, y: 75 }, { x: 300, y: 75 }] },
+      e1: {
+        points: [
+          { x: 60, y: 15 },
+          { x: 300, y: 15 },
+        ],
+      },
+      e2: {
+        points: [
+          { x: 60, y: 75 },
+          { x: 300, y: 75 },
+        ],
+      },
     },
   };
   const offsets = { T1: { dx: 0, dy: 200 }, T2: { dx: 0, dy: 200 } };
