@@ -13,6 +13,19 @@ builds a headless cytoscape from `composeCanvasStylesheet` and asserts the
 computed `text-wrap`; it fails against the pre-fix OFF state. No runtime
 change.
 
+## 1.0.0-rc022: 2026-10-22 (routing engine refuses experiment scaffolding)
+
+**Fix: nothing stopped an unowned experiment block from riding a commit
+into the routing engine.** Two sessions implemented brief 05b in the
+same routing files at once, and one rewrote `g3t-structural.ts` mid-turn
+with an `expChannelPlan` "EXPERIMENT" block (a single field-center bus,
+`midline=crossCenter`, for every channel). It did not land; verified
+absent on this tree. The ownership rule (one owner per destructive
+brief, its own plan worktree) is now in CLAUDE.md editing discipline.
+Fence: `packages/core/src/layout/g3t-engine/engine-source-fence.test.ts`
+scans the g3t-engine and route sources for the experiment markers;
+it goes red with the block re-injected.
+
 ## 1.0.0-rc021: 2026-10-22 (gates refuse dependencies borrowed from another checkout)
 
 **Fix: nothing stopped a gate run through a borrowed node_modules, and the
