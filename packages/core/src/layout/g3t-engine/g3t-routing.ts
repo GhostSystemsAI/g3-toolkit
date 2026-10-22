@@ -741,6 +741,17 @@ export function routeStructuralEdges(
     // node centers (deterministic, geometry-only); the emitter reads this
     // per edge inside the loop. When `useChannelRouter` is off (default)
     // this whole block is dead code (channelPlan === undefined).
+    // Heal 2144aa96: LAY-005 dummy-chain hints give each long edge its
+    // cross coordinate at every intermediate layer, so a multi-boundary
+    // edge jogs inside each channel it crosses instead of riding one
+    // cross-axis bus.
+    const layerCrossOf = (id: string): number[] | undefined => {
+      const hints = bendHints?.get(id);
+      if (hints === undefined || channelPlan === undefined) return undefined;
+      const flowX =
+        channelPlan.direction === "RIGHT" || channelPlan.direction === "LEFT";
+      return hints.map((h) => (flowX ? h.y : h.x));
+    };
     const channelAssignment = channelPlan
       ? assignTracks(
           edges.map((e) => ({
@@ -757,6 +768,7 @@ export function routeStructuralEdges(
               channelPlan.direction === "LEFT"
                 ? centerY(e.target)
                 : centerX(e.target),
+            layerCross: layerCrossOf(e.id),
           })),
           channelPlan,
         )
@@ -939,6 +951,7 @@ export function routeStructuralEdges(
               id: e.id,
               source: e.source,
               target: e.target,
+              layerCross: layerCrossOf(e.id),
             },
             {
               source: s,
