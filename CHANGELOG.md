@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.0-rc024: 2026-10-22 (LAY-005 bend hints clear same-layer boxes)
+
+**Fix: a dummy-chain bend hint could sit inside a real node.** Dummies stay
+out of Brandes-Koepf placement, and their cross coordinate was a straight
+interpolation between the endpoint centres, so nothing kept it out of the
+intermediate layer's boxes: for n1..n4 (80x40) with n1->n2, n2->n3, n1->n4,
+n1->n3, the `e13` hint landed at (184,0), the centre of n2, in all four
+directions. The old comment claimed the between-endpoints envelope made
+this impossible; that envelope contains the layer's nodes. New
+`clearHintCross` moves the interpolated coordinate to the nearer end of
+the layer's merged box extents, widened by half the node spacing (a
+minimally spaced gap gets its midline). On the repro the hint now sits on
+the detour track the router already took. Fence in
+`g3t-dummy-chain.test.ts` (fails on the pre-fix tree, every direction).
+Lands g3_toolkit heal ec55a139.
+
 ## 1.0.0-rc023: 2026-10-22 (data-mapper fence follows the source, not a producer list)
 
 **Fix: two stylesheets still mapped fields their selector did not guard.**

@@ -233,6 +233,42 @@ export function harvestBendHints(
 }
 
 /**
+ * Move an interpolated dummy cross coordinate out of the real boxes
+ * that share its layer. Dummies sit out of BK placement, so the
+ * linear interpolation between endpoint centres knows nothing about
+ * the intermediate layer: for n1->n3 past a same-layer n2 it lands
+ * on n2's centre, and any route following the hint crosses n2.
+ *
+ * `boxes` are the [lo, hi] cross-axis extents of the layer's real
+ * nodes. Each is widened by `clearance`; widened extents that
+ * strictly overlap merge, and a coordinate strictly inside a merged
+ * extent moves to its nearer end (the lower end on a tie, for
+ * determinism). Touching extents do not merge, so a gap of exactly
+ * 2*clearance yields its midline. A coordinate already clear is
+ * returned unchanged.
+ */
+export function clearHintCross(
+  v: number,
+  boxes: readonly (readonly [number, number])[],
+  clearance: number,
+): number {
+  const widened = boxes
+    .map(([lo, hi]) => [lo - clearance, hi + clearance] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const iv of widened) {
+    const last = merged[merged.length - 1];
+    if (last !== undefined && iv[0] < last[1]) {
+      last[1] = Math.max(last[1], iv[1]);
+    } else merged.push([iv[0], iv[1]]);
+  }
+  for (const [lo, hi] of merged) {
+    if (v > lo && v < hi) return v - lo <= hi - v ? lo : hi;
+  }
+  return v;
+}
+
+/**
  * Pick the compound parent a dummy should live under, given the
  * source and target endpoints' parents and an ancestor lookup.
  * `ancestorsOf(id)` returns the compound ancestry from the innermost

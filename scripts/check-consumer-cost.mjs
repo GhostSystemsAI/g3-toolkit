@@ -135,7 +135,12 @@ const SCENARIOS = [
     // gap on the same sequence. All of it lives in g3t-channel-router
     // and g3t-routing, already pulled by G3tLayeredLayout. core-ugm
     // holds at 4.8 KB (no leak). Headroom 0.5 KB.
-    budget: 79 * 1024,
+    // RAISED 79 -> 80 KB, 2026-10-22 (heal ec55a139, LAY-005 bend
+    // hints clear same-layer boxes). Measured 79.1 KB, +0.6 KB over
+    // 78.5: clearHintCross plus the per-layer cross-extent lookup in
+    // g3tLayoutStructural, both already pulled by G3tLayeredLayout.
+    // core-ugm holds at 4.8 KB (no leak). Headroom 0.9 KB.
+    budget: 80 * 1024,
     code:
       `import { UGM, ForceLayout, G3tLayeredLayout } from "@g3t/core";\n` +
       `export const g = new UGM();\n` +

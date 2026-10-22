@@ -36,6 +36,8 @@ import {
 } from "./g3t-layered";
 import {
   CORRIDOR_DRIFT_TOLERANCE,
+  DUMMY_NODE_SIZE,
+  clearHintCross,
   computeCorridorGap,
   estimateCorridorDemand,
   harvestBendHints,
@@ -373,12 +375,22 @@ export function g3tLayoutStructural(
   // endpoints. Along the FLOW axis the dummy takes its layer's
   // center (the same slot BK would land it in with zero size and
   // zero spacing); along the CROSS axis it interpolates linearly by
-  // layer-index fraction between source and target centers. Straight
-  // by construction: the router uses these as bend hints and may
-  // choose a different corridor, but the seed is always inside the
-  // between-endpoints envelope so it can never introduce a violation
-  // the router wouldn't produce anyway (the escalation ladder still
-  // runs when the seed doesn't clear).
+  // layer-index fraction between source and target centers, then
+  // clears out of the real boxes in its own layer (clearHintCross).
+  // The straight line alone is NOT safe: the between-endpoints
+  // envelope contains the intermediate layer's nodes, so n1->n3 past
+  // a same-layer n2 put its hint on n2's centre and any hint-following
+  // route crossed n2. Clearance is half the node spacing, so a hint
+  // between two minimally spaced siblings lands on the gap midline.
+  const hintClearance = Math.max(DUMMY_NODE_SIZE / 2, nodeSpacing / 2);
+  const crossBoxesOfLayer = (l: number): [number, number][] =>
+    (realLayers[l] ?? []).flatMap((id) => {
+      const g = nodes[id];
+      if (g === undefined) return [];
+      return horizontal
+        ? [[g.y, g.y + g.height] as [number, number]]
+        : [[g.x, g.x + g.width] as [number, number]];
+    });
   for (const [edgeId, dummyIds] of dummyIdsByEdge) {
     const origEdge = input.edges.find((e) => e.id === edgeId);
     if (origEdge === undefined) continue;
@@ -393,9 +405,11 @@ export function g3tLayoutStructural(
       const l = augmentedLayerOf.get(did);
       if (l === undefined) continue;
       const f = tl === sl ? 0.5 : (l - sl) / (tl - sl);
-      const crossCoord = horizontal
-        ? sc.y + f * (tc.y - sc.y)
-        : sc.x + f * (tc.x - sc.x);
+      const crossCoord = clearHintCross(
+        horizontal ? sc.y + f * (tc.y - sc.y) : sc.x + f * (tc.x - sc.x),
+        crossBoxesOfLayer(l),
+        hintClearance,
+      );
       const flowCoord = layerFlowCenter[l] ?? 0;
       dummyPositions.set(
         did,
