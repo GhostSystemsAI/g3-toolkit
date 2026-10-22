@@ -90,6 +90,15 @@ a written rationale in scripts/check-bundle-size.mjs (the ledger).
 - Status changes ripple: flipping a requirement to implemented
   requires removing it from its roadmap Owns header AND the
   roadmap/CLAUDE.md index row (coverage gate enforces).
+- One owner per destructive brief. Before a refactor that rewrites
+  shared engine files (routing, layout), check `git status`, `git diff`
+  and file mtimes for a parallel session already editing them, and do
+  the work in that brief's own plan worktree, not the main checkout.
+  Two sessions hand-implemented brief 05b in g3t-structural.ts and
+  g3t-routing.ts at once; one rewrote a file between the other's Read
+  and Edit. If you find a collision, back out your own footprint and
+  stand down. `engine-source-fence.test.ts` keeps experiment
+  scaffolding (`EXPERIMENT`, `expChannelPlan`) out of commits.
 - Dispatched workers DO NOT `git push`. origin is github.com, which is
   off the forge mesh, so the export gate refuses the push. A generic
   worker contract line saying "commit and push" does not override
