@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   buildOverlayStore,
+  overlayRoot,
   storeIsWritable,
 } from "../../scripts/install-deps.mjs";
 
@@ -85,6 +86,28 @@ describe("install-deps overlay store", () => {
     const root = mkTmp();
     buildOverlayStore(store, root);
     expect(() => buildOverlayStore(store, root)).not.toThrow();
+  });
+
+  // Fence for heal b4083ff3 (gotcha worker-pnpm-install-erofs-shared-store):
+  // a pool worker's overlay lives in its job scratch root, not private /tmp.
+  it("puts the overlay under the pool worker's scratch root", () => {
+    const job = mkTmp();
+    const root = overlayRoot({ WEAVER_JOB_DIR: job });
+    expect(root).toBe(path.join(job, "work", "pnpm-store"));
+    expect(fs.statSync(root).isDirectory()).toBe(true);
+    expect(overlayRoot({ WEAVER_JOB_DIR: job })).toBe(root);
+  });
+
+  it("prefers an explicit overlay location over the job scratch root", () => {
+    expect(
+      overlayRoot({ G3T_PNPM_OVERLAY_STORE: "/x", WEAVER_JOB_DIR: mkTmp() }),
+    ).toBe("/x");
+  });
+
+  it("falls back to a fresh temp dir outside a pool worker", () => {
+    const a = overlayRoot({});
+    tmp.push(a);
+    expect(a.startsWith(os.tmpdir())).toBe(true);
   });
 
   it("is exposed as a package script", () => {

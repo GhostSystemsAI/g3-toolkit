@@ -116,12 +116,22 @@ describe("optimizePlacement", () => {
       });
     }
 
+    // Unbudgeted, this fixture converges to zero crossings in ~170
+    // iterations and ~10 ms, so a 50 ms budget on the real clock is never
+    // reached and a wall-clock assertion only measures host load (heal
+    // b4a780b8: 249 ms on a saturated host). A clock that advances 10 ms
+    // per read makes the budget the binding stop: reads at 10..40 pass the
+    // loop guard, the read at 50 breaks, and the result read is 60.
+    let t = 0;
     const result = optimizePlacement(nodes, edges, {
       seed: 3,
       budgetMs: 50,
+      now: () => (t += 10) - 10,
     });
 
-    expect(result.elapsedMs).toBeLessThan(200);
+    expect(result.iterations).toBe(4);
+    expect(result.elapsedMs).toBe(60);
+    expect(result.crossingsAfter).toBeGreaterThan(0);
     expect(result.crossingsAfter).toBeLessThanOrEqual(result.crossingsBefore);
     // Sanity: verify reported crossings match a re-computation.
     const sizes = new Map<string, { width: number; height: number }>();
