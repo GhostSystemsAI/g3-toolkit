@@ -66,6 +66,7 @@ reading that reasoning.
     # checks; a round is not done on unit tests alone. Environment
     # self-test if typecheck seems suspiciously quiet: inject a
     # deliberate type error in src/ and confirm the gate goes red.
+    pnpm run install:deps    # worktree with no node_modules / read-only pnpm store
     pnpm run verify          # build, exports, snippets, typedoc, bundle ledger
     python3 scripts/lint_specs.py specs/
     python3 scripts/sync_spec_status.py

@@ -60,8 +60,9 @@ describe("install-deps overlay store", () => {
     expect(fs.lstatSync(path.join(overlay, "files")).isSymbolicLink()).toBe(
       true,
     );
-    expect(fs.readFileSync(path.join(overlay, "files", "00", "blob"), "utf8"))
-      .toBe("pkg");
+    expect(
+      fs.readFileSync(path.join(overlay, "files", "00", "blob"), "utf8"),
+    ).toBe("pkg");
     expect(fs.lstatSync(path.join(overlay, "links")).isSymbolicLink()).toBe(
       true,
     );
