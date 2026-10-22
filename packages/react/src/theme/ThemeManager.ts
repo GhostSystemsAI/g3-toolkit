@@ -331,12 +331,18 @@ export function deriveCytoscapeStyle(
         "background-color": theme.typePalette[0],
         "border-color": theme.nodeStroke,
         "border-width": 2,
-        label: "data(label)",
         color: theme.nodeLabelColor,
         "font-size": 11,
         "text-valign": "bottom",
         "text-margin-y": 4,
       },
+    },
+    {
+      // Label mapper scoped to nodes that carry `label`: on the bare
+      // node rule, Cytoscape warns per unlabeled element (structural
+      // nodes carry _label) on every style pass.
+      selector: "node[label]",
+      style: { label: "data(label)" },
     },
     {
       // C1 selection signature: halo geometry from the shared token so

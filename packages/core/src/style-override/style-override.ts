@@ -60,7 +60,6 @@ export function overridesToCytoscapeStyles(
     if (override.borderColor) style["border-color"] = override.borderColor;
     if (override.borderWidth) style["border-width"] = override.borderWidth;
     if (override.opacity !== undefined) style.opacity = override.opacity;
-    if (override.labelField) style.label = `data(${override.labelField})`;
     if (override.icon) {
       style["background-image"] = svgToDataUri(
         override.icon.svg,
@@ -72,6 +71,16 @@ export function overridesToCytoscapeStyles(
 
     if (Object.keys(style).length > 0) {
       styles.push({ selector, style });
+    }
+    // The data() mapper gets its own [field]-scoped rule: on the
+    // unscoped selector Cytoscape warns for every targeted node that
+    // lacks the field, on every style pass (CLAUDE.md data-mapper
+    // doctrine).
+    if (override.labelField) {
+      styles.push({
+        selector: `${selector}[${override.labelField}]`,
+        style: { label: `data(${override.labelField})` },
+      });
     }
   }
 

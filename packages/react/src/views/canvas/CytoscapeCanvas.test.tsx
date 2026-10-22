@@ -280,8 +280,17 @@ describe("compound container rule (slice 1, round 17)", () => {
     const style = (
       COMPOUND_CONTAINER_RULE as unknown as { style: Record<string, unknown> }
     ).style;
-    expect(style["label"]).toBe("data(_compoundLabel)");
+    // The label mapper is NOT on the bare :parent rule (a parent
+    // without _compoundLabel would warn per style pass); it rides the
+    // [_compoundLabel]-scoped COMPOUND_LABEL_RULE.
+    expect(style["label"]).toBeUndefined();
     expect(style["text-valign"]).toBe("top");
+    const { COMPOUND_LABEL_RULE } = await import("./CytoscapeCanvas");
+    expect(COMPOUND_LABEL_RULE.selector).toBe(":parent[_compoundLabel]");
+    expect(
+      (COMPOUND_LABEL_RULE as unknown as { style: Record<string, unknown> })
+        .style["label"],
+    ).toBe("data(_compoundLabel)");
   });
 });
 
