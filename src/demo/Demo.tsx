@@ -32,8 +32,12 @@ type ShellLoader = () => Promise<{
  * than ready-made lazy components: React.lazy caches a rejected import
  * forever, so retrying a failed chunk fetch means building a new lazy
  * from the loader. A module-level `lazy(...)` can only ever re-throw.
+ *
+ * Exported as the AUTHORITY for which ids are routable: the landing
+ * test and scripts/build-landing.mjs check the cards against it, so
+ * adding a surface means one card plus one entry here, no id lists.
  */
-const SHELL_MAP: Record<string, ShellLoader> = {
+export const SHELL_MAP: Record<string, ShellLoader> = {
   mbse: () =>
     import("./mbse/MbseShell").then((m) => ({ default: m.MbseShell })),
   "routing-flowcharts": () =>

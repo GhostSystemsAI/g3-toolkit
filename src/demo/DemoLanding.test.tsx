@@ -3,21 +3,34 @@
  * actually ships: exactly one card per shell the router maps, card copy
  * that describes the current MBSE workbench (the old block-only demo's
  * copy regressed here once already), and the select wiring.
+ *
+ * The routable id set is DERIVED from Demo.tsx's SHELL_MAP, never
+ * restated here: a hardcoded id list made every correctly wired new
+ * surface fail this file as if it were a regression.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { DemoLanding, SCENARIOS, CAPABILITY_SURFACES } from "./DemoLanding";
+import { SHELL_MAP } from "./Demo";
 
 afterEach(cleanup);
 
 describe("DemoLanding", () => {
-  it("ships exactly the four routed scenarios", () => {
-    expect(SCENARIOS.map((s) => s.id).sort()).toEqual([
-      "auditor",
-      "biomedical",
-      "mbse",
-      "supply-chain",
-    ]);
+  it("ships exactly one card per routed shell, and no unrouted card", () => {
+    const cardIds = [...SCENARIOS, ...CAPABILITY_SURFACES].map((s) => s.id);
+    // No id is offered twice (within or across the two sections).
+    expect(new Set(cardIds).size).toBe(cardIds.length);
+    // Two-way match against the router: a card with no shell bounces
+    // the visitor back to the landing; a shell with no card is dead.
+    expect([...cardIds].sort()).toEqual(Object.keys(SHELL_MAP).sort());
+  });
+
+  it("keeps the four domain stories in the scenario section", () => {
+    // Removal pin, not a closed list: a fifth story is an addition,
+    // not a regression, and is covered by the router match above.
+    expect(SCENARIOS.map((s) => s.id)).toEqual(
+      expect.arrayContaining(["auditor", "biomedical", "mbse", "supply-chain"]),
+    );
   });
 
   it("renders a card per scenario with its tags", () => {
@@ -39,17 +52,11 @@ describe("DemoLanding", () => {
   });
 
   it("lists the capability surfaces beneath the scenarios (P1.4)", () => {
-    expect(CAPABILITY_SURFACES.map((s) => s.id).sort()).toEqual([
-      "analytics-dashboard",
-      "legibility",
-      "ontology-workbench",
-      "rdf12-hyperarcs",
-      "routing-explain",
-      "routing-flowcharts",
-      "routing-lab",
-      "scale",
-      "style-lab",
-    ]);
+    // Membership is the router match above; here, the gated ids the
+    // visibility assertions below depend on must still be surfaces.
+    expect(CAPABILITY_SURFACES.map((s) => s.id)).toEqual(
+      expect.arrayContaining(["analytics-dashboard", "scale", "style-lab"]),
+    );
     const { container } = render(<DemoLanding onSelect={() => {}} />);
     // LR-1: the section header was removed; the cards themselves
     // are the contract now.
