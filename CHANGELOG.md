@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-rc026: 2026-10-23 (landing test derives ids from the router)
+
+**Fix: adding a demo surface failed the landing test as a regression.**
+`src/demo/DemoLanding.test.tsx` restated the SCENARIOS and
+CAPABILITY_SURFACES ids as closed lists, so a correctly wired new
+surface (card plus `SHELL_MAP` entry) went red until someone edited the
+list by hand. `SHELL_MAP` is now exported from `src/demo/Demo.tsx` and
+the test asserts the card ids match it in both directions with no
+duplicates; the four domain stories and the gated surfaces stay pinned
+as removal checks. Proved on the real files: a probe surface wired into
+both passes, a card with no shell fails. Fixes gotcha
+demolanding-test-tsx-hardcodes-capability_surfaces-id-list (heal 1fa6f019).
+
 ## 1.0.0-rc025: 2026-10-22 (verify reports both bundle ledgers)
 
 **Fix: an over-budget publish weight hid the consumer-cost result.**
