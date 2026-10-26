@@ -12,6 +12,24 @@ interface Pt {
   y: number;
 }
 
+/** Proper (interior, non-collinear) crossings between two polylines. */
+const properCrossings = (p: readonly Pt[], q: readonly Pt[]): number => {
+  const orient = (o: Pt, s: Pt, t: Pt) =>
+    Math.sign((s.x - o.x) * (t.y - o.y) - (s.y - o.y) * (t.x - o.x));
+  let n = 0;
+  for (let i = 1; i < p.length; i++) {
+    for (let j = 1; j < q.length; j++) {
+      const [a1, a2, b1, b2] = [p[i - 1]!, p[i]!, q[j - 1]!, q[j]!];
+      if (
+        orient(b1, b2, a1) * orient(b1, b2, a2) < 0 &&
+        orient(a1, a2, b1) * orient(a1, a2, b2) < 0
+      )
+        n++;
+    }
+  }
+  return n;
+};
+
 const twoParallelHRoutes = (): Record<string, { points: Pt[] }> => ({
   a: {
     points: [
@@ -101,6 +119,22 @@ describe("nudgeRoutes: basics", () => {
     // corrupts an anchor or produces a self-crossing polyline.
     for (const arm of arms) {
       if (arm.blocked) expect(arm.blockedReason).toBe("reverted");
+    }
+    // Crossing-no-worse (gotcha arm-jog-run-crosses-sibling-s-translated-bar):
+    // whatever the arms did, the output pair crosses no more than the input
+    // pair (zero), so no committed jog run sweeps through the sibling's bar.
+    expect(properCrossings(a, b)).toBe(0);
+    expect(properCrossings(a, a)).toBe(0);
+    expect(properCrossings(b, b)).toBe(0);
+    // A reverted arm group leaves its edges on the bar-translated Z: no
+    // half-applied jog points remain spliced into the polyline.
+    if (arms.every((arm) => arm.blocked)) {
+      expect(a).toHaveLength(4);
+      expect(b).toHaveLength(4);
+      expect(a[1]!.y).toBe(100);
+      expect(a[2]!.y).toBe(200);
+      expect(b[1]!.y).toBe(100);
+      expect(b[2]!.y).toBe(200);
     }
   });
 

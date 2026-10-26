@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0-rc027: 2026-10-26 (Z-route arm-jog crossing fence)
+
+**Test fence: Z-route arm-jog revert pinned by geometry, not just status.**
+Re-reproduced on `nudgeRoutes` with the two coincident Z copies: the bars
+translate (x 26/34) and both arm corridors revert ("reverted") because
+the arm jog run would sweep through the sibling's translated bar. The
+pairwise crossing guard in `attemptGroupRewrite` already produces this
+outcome, so the engine is unchanged. The fixture test now also asserts
+zero proper crossings between and within the output polylines, and that
+a fully reverted arm group leaves each edge on its 4-point bar-translated
+Z with no half-spliced jog points. Closes gotcha
+arm-jog-run-crosses-sibling-s-translated-bar-in-z-route-fixture (heal
+e9f6b873).
+
 ## 1.0.0-rc026: 2026-10-23 (landing test derives ids from the router)
 
 **Fix: adding a demo surface failed the landing test as a regression.**
