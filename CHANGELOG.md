@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0-rc028: 2026-10-26 (git-gate refusal drops chained edits)
+
+**Doctrine: a refused git op discards the whole Bash command.** A worker
+chained file edits with `git stash` to compare against old source; the
+PreToolUse git gate refused the stash and the edits never ran. The hook
+(wake `pretooluse-bash-git-gate.sh`) now names the dropped steps; CLAUDE.md
+Editing discipline now says to keep edits in their own call and use
+`git show HEAD:<path>` instead of stashing, fenced by
+`tests/unit/worker-git-gate-doctrine.test.ts`. Fixes gotcha
+worker-git-stash-refused-by-hook-whole-command (heal d455ee76).
+
 ## 1.0.0-rc027: 2026-10-26 (Z-route arm-jog crossing fence)
 
 **Test fence: Z-route arm-jog revert pinned by geometry, not just status.**

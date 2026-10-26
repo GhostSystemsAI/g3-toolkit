@@ -103,6 +103,12 @@ a written rationale in scripts/check-bundle-size.mjs (the ledger).
   off the forge mesh, so the export gate refuses the push. A generic
   worker contract line saying "commit and push" does not override
   this. Commit on the plan branch; the merge gate lands it.
+- A refused git op drops the WHOLE Bash command. The PreToolUse git
+  gate refuses `git stash` (save) in dispatched workers and `git add -A`;
+  any sed/cp/edit chained before it in the same call never ran, and the
+  refusal reads as if only the git step failed. Keep edits in their own
+  Bash call. To compare against old source, `git show HEAD:<path>` into
+  scratch instead of stashing.
 - A fresh plan worktree has no node_modules. Run
   `node scripts/install-deps.mjs` first (works under a read-only pnpm
   store via an overlay). NEVER symlink node_modules from the main
