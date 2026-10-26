@@ -169,7 +169,8 @@ describe("OntologyShell", () => {
     const open = svg.querySelector("[data-ssv-open]");
     expect(open).not.toBeNull();
     expect(open?.getAttribute("stroke-dasharray")).toBe("6 3");
-  });
+    // The findBy budget above is dead under the 5 s default test timeout.
+  }, 15_000);
 
   it("gives instance views one stable color domain plus a shortened-label legend (4.4/4.3)", () => {
     render(<OntologyShell onBack={() => undefined} />);

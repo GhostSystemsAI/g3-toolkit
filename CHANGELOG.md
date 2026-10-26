@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.0-rc028: 2026-10-26 (wait budgets fit inside their test timeout)
+
+**Fix: a findBy/waitFor timeout at or above the test timeout is dead.**
+cd89cde fixed Demo.test.tsx by hand (15 s findBy budgets under vitest's
+5 s default), but nothing stopped the shape recurring, and it had:
+OntologyShell's shapes-tab findBy waited 10 s inside a 5 s test, and
+MbseShell's three 5 s waitFor budgets equalled their test timeout, so
+the render before each wait guaranteed the test died first. Both now
+carry a test timeout that covers their waits. New
+`tests/unit/wait-budget-fence.test.ts` parses every collected test file
+(TypeScript AST, resolving top-level numeric consts) and requires each
+literal waitFor/findBy timeout to sit strictly below the budget of the
+enclosing test or hook. Fails on the pre-cd89cde Demo.test.tsx and on
+the pre-fix MbseShell/OntologyShell. Fixes gotcha
+findby-timeout-preempted-by-vitest-test-timeout (heal 98f9a6d9).
+
 ## 1.0.0-rc028: 2026-10-26 (git-gate refusal drops chained edits)
 
 **Doctrine: a refused git op discards the whole Bash command.** A worker

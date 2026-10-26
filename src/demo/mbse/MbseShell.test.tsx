@@ -59,51 +59,63 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+// Each wait below is budgeted by its test: a waitFor timeout at or above
+// the test timeout is dead, vitest kills the test first (heal 98f9a6d9).
+const LAYOUT_WAIT_MS = 5_000;
+
 describe("MbseShell canvas contract", () => {
-  it("shows the loading state, then hands the BDD projection's layout to the canvas", async () => {
-    render(<MbseShell onBack={() => {}} />);
-    // Before the async layout resolves the canvas must not mount.
-    expect(screen.queryByTestId("canvas-stub")).toBeNull();
-    expect(screen.getByText(/Laying out/)).toBeDefined();
+  it(
+    "shows the loading state, then hands the BDD projection's layout to the canvas",
+    async () => {
+      render(<MbseShell onBack={() => {}} />);
+      // Before the async layout resolves the canvas must not mount.
+      expect(screen.queryByTestId("canvas-stub")).toBeNull();
+      expect(screen.getByText(/Laying out/)).toBeDefined();
 
-    await waitFor(
-      () => expect(screen.getByTestId("canvas-stub")).toBeDefined(),
-      {
-        timeout: 5000,
-      },
-    );
-    const last = captured.scenes.at(-1);
-    expect(last).toBeDefined();
-    // The scene's input is exactly the pure projection of the default diagram.
-    expect(last?.input).toEqual(projectDiagram(satelliteModel, "dg.bdd"));
-    expect(Object.keys(last?.geometry.nodes ?? {}).length).toBeGreaterThan(0);
-  });
+      await waitFor(
+        () => expect(screen.getByTestId("canvas-stub")).toBeDefined(),
+        {
+          timeout: LAYOUT_WAIT_MS,
+        },
+      );
+      const last = captured.scenes.at(-1);
+      expect(last).toBeDefined();
+      // The scene's input is exactly the pure projection of the default diagram.
+      expect(last?.input).toEqual(projectDiagram(satelliteModel, "dg.bdd"));
+      expect(Object.keys(last?.geometry.nodes ?? {}).length).toBeGreaterThan(0);
+    },
+    LAYOUT_WAIT_MS + 5_000,
+  );
 
-  it("never renders a stale scene across a diagram switch (loading until the new layout lands)", async () => {
-    render(<MbseShell onBack={() => {}} />);
-    await waitFor(
-      () => expect(screen.getByTestId("canvas-stub")).toBeDefined(),
-      {
-        timeout: 5000,
-      },
-    );
+  it(
+    "never renders a stale scene across a diagram switch (loading until the new layout lands)",
+    async () => {
+      render(<MbseShell onBack={() => {}} />);
+      await waitFor(
+        () => expect(screen.getByTestId("canvas-stub")).toBeDefined(),
+        {
+          timeout: LAYOUT_WAIT_MS,
+        },
+      );
 
-    fireEvent.click(screen.getByText("SmallSat Internal")); // dg.ibd
-    // Synchronously after the switch: the derived stale-scene guard must
-    // read as loading (the old BDD scene must not stay on the canvas).
-    expect(screen.queryByTestId("canvas-stub")).toBeNull();
-    expect(screen.getByText(/Laying out/)).toBeDefined();
+      fireEvent.click(screen.getByText("SmallSat Internal")); // dg.ibd
+      // Synchronously after the switch: the derived stale-scene guard must
+      // read as loading (the old BDD scene must not stay on the canvas).
+      expect(screen.queryByTestId("canvas-stub")).toBeNull();
+      expect(screen.getByText(/Laying out/)).toBeDefined();
 
-    await waitFor(
-      () => expect(screen.getByTestId("canvas-stub")).toBeDefined(),
-      {
-        timeout: 5000,
-      },
-    );
-    expect(captured.scenes.at(-1)?.input).toEqual(
-      projectDiagram(satelliteModel, "dg.ibd"),
-    );
-  });
+      await waitFor(
+        () => expect(screen.getByTestId("canvas-stub")).toBeDefined(),
+        {
+          timeout: LAYOUT_WAIT_MS,
+        },
+      );
+      expect(captured.scenes.at(-1)?.input).toEqual(
+        projectDiagram(satelliteModel, "dg.ibd"),
+      );
+    },
+    2 * LAYOUT_WAIT_MS + 5_000,
+  );
 
   it("carries the capability callout in the inspector", async () => {
     render(<MbseShell onBack={() => {}} />);
