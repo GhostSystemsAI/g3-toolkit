@@ -1,5 +1,191 @@
 # g3-toolkit Status
 
+**As of:** 2026-10-13 (active: **HOST GAPS ROUND 3, after 1.2.0.** The
+host from #23 moved to 1.2.0 and filed twelve gaps under #53. Four
+needed a ruling (overlay precedence, additive shrink, several parents,
+table search semantics; the table is in
+`planning/host-gaps-round-3.md`) and ten agents worked all twelve in
+isolated worktrees, merged one at a time onto this branch. CLOSED by
+this round pending Zach's live review: #54, #55, #56, #57, #58, #59,
+#60, #61, #62, #63, #64, #65, and #53 with them. Behavior changes a
+1.2.0 host reads first (the Unreleased section of the CHANGELOG): the
+`stylesheet` prop now sits BEFORE the overlay block; `additive` mode
+removes nodes in place instead of rebuilding; TableView search is
+word-AND across the row; `findShortestPath` no longer finds a node
+the graph does not report; TreeView rows are paths, so a DAG node
+renders under each parent. STAYS OPEN: #19 (the `onReady` ruling),
+#46 (the live checklist), #12 and the fork PR #3 (held by ruling), and
+the per-issue questions in the round log (notably whether
+`targetClass` becomes optional, #54). What needs eyes: overlay chrome
+on a canvas with a host stylesheet, a collapse and Reset in the Bio
+Explore view, the minimap on a filtered canvas, the TableView
+pagination bar, keyboard sorting under a screen reader, and a
+two-parent class in TreeView and SchemaView. Bundle after the round:
+react 461.3 of 465 KB (three ledger entries), core 181.5 of 184.)
+
+## PRIOR SNAPSHOT (2026-10-13 backlog round 2)
+
+**As of:** 2026-10-13 (active: **BACKLOG ROUND 2.** With #43 merged
+and 1.1.0 published, the maintainer ruled on every decision the
+remaining backlog had been waiting for (the table is in
+`planning/backlog-round-2.md`) and fourteen agents worked #5, #6, #9,
+#16, #17, #18, #20, #44, #45, #46 (demo half), #47 and #48, plus the
+#19 inventory, each in an isolated worktree, merged one at a time onto
+this branch. CLOSED by this round pending Zach's live review: #5, #6,
+#9, #16, #17, #18, #20, #44, #45, #47, #48.
+STAYS OPEN: #19 (the inventory is delivered in
+`roadmap/design/onready-inventory.md`; the ruling on `onReady`'s future
+and the stability policy is Zach's, and the record argues `canvas` for
+the handle name where this round shipped `core`), #46 (the live
+checklist), #12 and the fork PR #3 (held by ruling). What needs eyes:
+the Biomedical Labels control and Explore view, the two matrix paging
+controls, TableView virtualization scrolling, AriaCompanion under a
+real screen reader, and the `g3t-view` typography. Bundle after the
+round: react 446.4 of 450 KB (every raise has its own ledger entry),
+core 181.5 of 184. Process note recorded in the round
+log: two of the orchestrator's own merge checks piped gate output
+through grep and pushed a red commit; CLAUDE.md's piping rule applies
+to the orchestrator too.)
+
+## PRIOR SNAPSHOT (2026-10-13 host-integration round)
+
+**As of:** 2026-10-13 (active: **HOST-INTEGRATION ROUND.** Tracking
+issue #23 (seventeen sub-issues from a downstream host) plus the
+2026-08-27 backlog (#10, #13, #14, #21) were worked as eleven parallel
+agents in isolated worktrees and merged one branch at a time; the
+method and the per-issue dispositions and open questions are in
+`planning/host-integration-round.md`, the entries in the CHANGELOG
+under 2026-10-13. CLOSED by this round, pending Zach's live review:
+#10, #13, #14, #21, #24, #25, #27, #28, #29, #30, #31, #32, #33, #34,
+#35, #36, #37, #38, #39, and wave 2: #26 (`graphUpdate="additive"`,
+superset ugm grows the live instance under fcose fixedNodeConstraint)
+and #40 (`labelCollision="hide" | "shorten"`, an overlay pass over
+measured label boxes). NOT touched: #5,
+#6, #9, #12, #16 to #20 (rulings or larger scope). #41 was closed by
+the 1.1.0 release that main shipped the same day WITHOUT this round
+(the expr-eval security fix, merged from the advisory fork); this round
+is content for the release after it. What
+needs eyes rather than a gate: the dark-theme overlay tones now really
+render from the theme (#32), views with unclassed roots inherit the
+host font when only `style.css` is imported (#24), TableView fill mode
+in a dock host (#21), the TreeView keyboard model (#36), the seeded
+placement of added nodes (#26) and the real rendered label boxes (#40;
+no demo shell opts into either yet). Bundle: react about 422 of 428 KB
+after the round (ledger carries the attribution), core
+166.1 of 169. A latent defect found while fixing #13 and NOT fixed: the
+style-override, pin and overlay effects lose their applied state across
+a layout/edgeStyle rebuild until their store next changes; same shape
+as #13, needs its own issue.)
+
+## PRIOR SNAPSHOT (2026-10-13 security fix, 1.1.0)
+
+**As of:** 2026-10-13 (active: **SECURITY FIX, GHSA-mpfx-v932-r2fv.**
+`DerivedPropertyEngine` no longer evaluates through expr-eval, which
+has unpatched code-execution and prototype-pollution advisories; core
+now owns a bounded numeric expression language
+(`packages/core/src/advanced/expression.ts`, internal, public API
+unchanged) and drops the dependency. Gates green; core budget raised
+169 to 172 KB pending owner ratification (ledger entry in
+`scripts/check-bundle-size.mjs`). NEXT: merge from the advisory's
+private fork, release 1.0.1, then publish the advisory with patched
+versions `>= 1.0.1`. Details in planning/derived-expression-evaluator.md.)
+
+## PRIOR SNAPSHOT (2026-08-27 version-drift gate)
+
+**As of:** 2026-08-27 (active: **VERSION-DRIFT GATE.** Postmortem item
+3 of 4 from the 1.0.0 release is CLOSED. `scripts/check-version-sync.mjs`
+takes the root `package.json` version as the source of truth and
+asserts that every other version-bearing file agrees: seven fields
+across six files (the three publishable manifests, `pixi.toml`, and
+both `version` and `release` in `docs/source/conf.py`, the last two
+being the pair that had drifted to `1.0.0-rc.2` and `0.1.0`/`0.8.5`
+before the release). It is wired in TWO places on purpose:
+`verify:versions` is the first step of `verify`, ahead of
+`build:packages`, so drift fails in milliseconds on the PR that
+introduces it; and `check-release-preflight.mjs` imports
+`checkVersionSync` in place of its old four-manifest loop, so the
+release path does not assume `verify` ran and the two callers cannot
+disagree about the file set. A missing version field is a FAILURE
+rather than a skip, and a sweep over tracked `.toml`/`.cff`/`conf.py`/
+`.zenodo.json` files fails on any unregistered file carrying a version
+assignment, which is what keeps the registry (and RELEASE.md step 1
+beside it) from going stale. `--write` propagates a root bump to the
+other six fields, so the hand-edit that produced the original drift is
+gone from the release procedure. Self-tested red on five injected
+faults; details in planning/version-drift-gate.md. STILL OPEN from the
+postmortem: `--dry-run` never authenticates so a rehearsal cannot
+validate the token; the preflight's tag-agreement check is skipped on
+every `workflow_dispatch` and so is first executed on the one run that
+cannot be undone; and scope availability should be checked at the START
+of packaging work. Also still open, unchanged: `act()` warnings from
+unwrapped `onReady` calls in `StyleLabShell.test.tsx`, and no automated
+coverage of `CanvasAdapter`'s rasterization path.)
+
+## PRIOR SNAPSHOT (2026-08-21 late, v1.0.0 published)
+
+**As of:** 2026-08-21 late (active: **v1.0.0 IS PUBLISHED.**
+`@g3-toolkit/core`, `@g3-toolkit/react` and `@g3-toolkit/charts` are
+live on npm at 1.0.0 under tag `v1.0.0`, the debut run of
+`publish.yml`. Confirmed against the registry rather than assumed:
+`latest` resolves to 1.0.0 on all three, charts published its sibling
+peers as `^1.0.0` and react its core dependency as `^1.0.0` (so the
+`workspace:^` change reached the ARTIFACT, not just the source), and
+core carries a SLSA v1 provenance attestation. Manifests deliberately
+STAY at 1.0.0 between releases; the bump belongs in the next release
+PR, so main never claims a version absent from the registry. README
+now carries npm version badges reading the live registry and its title
+no longer hand-asserts a version; RELEASE.md step 1 updated to match,
+to name `pixi.toml` and `docs/source/conf.py` as hand-checked, and to
+forbid reintroducing a version string in the title. POSTMORTEM in the
+CHANGELOG; the four items worth carrying forward are that
+`--dry-run` never authenticates (so a rehearsal cannot validate the
+token), that the preflight's tag-agreement check is skipped on every
+`workflow_dispatch` and therefore first executed on the one run that
+cannot be undone, that drift in `pixi.toml`/`conf.py` is still ungated
+and extending the preflight is the obvious next hardening, and that
+scope availability should be checked at the START of packaging work
+rather than at release time. OPEN (backlog, non-blocking, both
+pre-existing and found while reading release-run logs): `act()`
+warnings from unwrapped `onReady` calls in `StyleLabShell.test.tsx`,
+and no automated coverage of `CanvasAdapter`'s rasterization path
+(jsdom returns a null 2D context, so `paint()` is never reached; the
+display-list layer above it IS conformance-tested).)
+
+## PRIOR SNAPSHOT (2026-08-21 release prep)
+
+**As of:** 2026-08-21 (active: **v1.0.0 RELEASE PREP.** The published
+scope is `@g3-toolkit`, NOT `@g3t`: the short org name was already
+taken on npmjs.com, so all three packages were renamed (778 references
+across 268 files, plus the publish-workflow filters, the tsconfig and
+vite aliases, `api-surface.json`, and both size ledgers). The `g3t-*`
+CSS tokens, `g3t-ov-*` overlay classes and `G3T_PERF` are NOT the
+scope and did not move. Sibling ranges went `workspace:*` ->
+`workspace:^`, because `*` publishes as an EXACT version and would
+have let an adopter resolve two core instances, which is two store
+singletons and silent selection breakage. Version drift closed in
+`pixi.toml` (was 1.0.0-rc.2) and `docs/source/conf.py` (was
+0.1.0/0.8.5). GATE STATE, stated precisely: typecheck, lint, all 15
+`verify` steps, and the three Python spec gates are GREEN under the
+new scope, including `verify:surface`, `verify:smoke` (23 subpaths),
+`verify:types` (node16 + bundler) and `verify:consumer-cost`. **The
+unit suite could NOT be run to completion in this container**: 157
+vitest worker-startup timeouts on this filesystem meant only 15 of
+~167 files ever started, and the one reported failure was a 5s
+timeout on a test that takes 172s here. The rename-sensitive files
+(`cross-package-names`, both `source-boundary`, `coverage-gaps`) were
+run separately on the threads pool: 34 passed; the single straggler
+(`no react entry point exports OKABE_ITO`) also timed out at the pool
+handshake and was verified directly against the built dist instead.
+CI on a native runner is the authority for the suite. v1.0.0 still
+UNTAGGED. REMAINING BEFORE TAG: `NPM_TOKEN` scoped to the
+`g3-toolkit` org in repository secrets; the dry-run rehearsal from
+the Actions tab, which has still never been executed against any
+version; then the tag.)
+
+## PRIOR SNAPSHOT (2026-08-16 ESM-only, e2e green)
+
+## FORK STATUS: GhostSystemsAI `work/post-rc007` (carried across the upstream 1.2.0 merge, 2026-10-30)
+
 **Round note (2026-08-20, rc010): Routing Flowcharts card.** The two
 routing-engine activity diagrams moved out of the MBSE workbench into a
 dedicated "Routing Flowcharts" capability card + `FlowchartShell`
@@ -67,7 +253,7 @@ gates re-measured rather than merged, since both branches raised caps in
 parallel off one baseline: core 209 KB (measured 206.3), react 397
 (393.9), `core-layout` 69 (66.0), `core-all` 182 (178.9). `core-ugm`
 held at 4.8 KB, so no routing code became reachable from `UGM` alone.
-The `@g3t/layout` (ARC-009) extraction stays retired.
+The `@g3-toolkit/layout` (ARC-009) extraction stays retired.
 
 v1.0.0 still UNTAGGED and deliberately held until the latent MRs land
 (owner, 2026-08-16); this merge is one of them.
@@ -101,7 +287,7 @@ from blocks that own an act diagram, and an `ACT` badge in the
 containment tree. Shapes are a general feature: documented in
 `docs/wiring-guide.md` with the executable twin
 `examples/wiring/src/flowchart-activity.test.tsx`. Gates green (1874
-tests; @g3t/react ledger raised 398 -> 399 KB for the glyph geometry).
+tests; @g3-toolkit/react ledger raised 398 -> 399 KB for the glyph geometry).
 DEFERRED: fork/join concurrent-flow nodes and a deeper escalation-ladder
 sub-diagram. AWAITS Zach's playground review (rendered activity shapes).
 
@@ -226,7 +412,7 @@ MBSE under the SVG default).)
 **As of:** 2026-07-28 late (active: G3L Round 65b executed: the
 round-6 upstream report dispositioned: containment prop
 content-keyed (the REAL snap-back gap their static suspicion
-found), multi-type promoted to @g3t/react, compound verification
+found), multi-type promoted to @g3-toolkit/react, compound verification
 matrix (headless), TreeView onSelect, inspector titleAccessory;
 two items already resolved post-round61 (legend delegation,
 subtle :active overlay). 1,387 tests exit-0; e2e 68/14. NEXT: the
@@ -604,7 +790,7 @@ full disposition in the design doc; core rebased 192; PRF-001 199 ms
 container-green). Scale freeze NAMED: React dev-build prop
 serialization (owner profile); two 10-second experiments confirm.
 Flip ratified in substance. 1,351 tests. NEXT: D3b part 2 = ARC-009
-extraction (@g3t/layout, vocabulary rename, fresh budgets). Owner:
+extraction (@g3-toolkit/layout, vocabulary rename, fresh budgets). Owner:
 scale experiments + quality-bug list when ready.)
 
 ## PRIOR SNAPSHOT (Round 44)
@@ -758,7 +944,7 @@ e2e 57/58 (selector fix landed); MBSE dropdown occlusion bug fixed;
 canvas gradient-taper fixed + conformance-pinned; label-halo
 readability default; react budget 440 (ledgered); MR-4 closed and
 de-referenced per ruling; WS-D APPROVED (route = module of
-@g3t/layout, no deprecation window): D1 UNBLOCKED. CI gains
+@g3-toolkit/layout, no deprecation window): D1 UNBLOCKED. CI gains
 workflow_dispatch. Open: MR-5 freeze awaits CI numbers; MR-11 at
 round-3 re-look. Next: WS-D D1.)
 
@@ -957,7 +1143,7 @@ into the drag path. Both round-1 expected-fail oracles FLIPPED (zero
 expected-fails remain; one fixture corrected at flip time, it was
 unsatisfiable as authored). MR-8 browser acceptance encodes the
 owner's symptoms verbatim. Core budget 176 -> 184 KB, documented;
-@g3t/layout extraction remains the WS-D plan. MR-8 at RE-REVIEW:
+@g3-toolkit/layout extraction remains the WS-D plan. MR-8 at RE-REVIEW:
 repeat the SmallSat drag after a green e2e run. Next: F1 (SVG
 adapter).)
 
@@ -1049,14 +1235,14 @@ the standing recommendation.)
 **As of:** 2026-07-09 (active: G3L Round 1 executed: sketch-mode
 layout stability (A1, criterion met at zero displacement), drag-route
 oracles (B1, 4 pass-pins + 2 expected-fail pins on the RTE-011 gap),
-and the layout-metrics module (D1, exported from @g3t/core). Governing
+and the layout-metrics module (D1, exported from @g3-toolkit/core). Governing
 documents: planning/archive/g3l/requirements-specification.md and
 planning/g3l/implementation-plan.md. G3L Round 2 executed: B2 SVG
 overlay edge layer shipped behind `structuralEdgeLayer` with the MBSE
 shell as the ruled first opt-in surface; manual/human review tasks now
 tracked procedurally in planning/g3l/manual-review-log.md (MR-1..MR-6
 OPEN). G3L Round 3 executed: C1/C2
-style-resolution core shipped in @g3t/core (VisualAttributes contract,
+style-resolution core shipped in @g3-toolkit/core (VisualAttributes contract,
 layered pure resolution, dependency-tracked incremental invalidation,
 diagnostics sink; 14 new tests including R2-scale mechanistic
 budgets). Core bundle budget raised 160 -> 176 KB per gate protocol.
@@ -1215,7 +1401,7 @@ theme, the brief export + workspace snapshot, and the interactive
 epilogue are all built and verified headlessly, with packaging
 (`examples/flagship/package.json`) that quarantines the heavy deps. The
 three toolkit components the shell needed (CoverageMeter,
-ProvenanceTrace, the camera controller) shipped in `@g3t/react`. No
+ProvenanceTrace, the camera controller) shipped in `@g3-toolkit/react`. No
 other package source changed. What remains is browser-only: the live
 visual review, then step 7 (motion/legibility polish).
 
@@ -1239,7 +1425,7 @@ current focus.
 
 
 g3t is a composable graph-visualization component library (three
-packages: @g3t/core with zero React, @g3t/react, @g3t/charts) that a
+packages: @g3-toolkit/core with zero React, @g3-toolkit/react, @g3-toolkit/charts) that a
 host application wires into its own decision-support and process
 components through three channels: exported zustand stores, props and
 callbacks, and versioned JSON documents. A custom control is usually
@@ -1308,7 +1494,7 @@ pins, theme id) with capture/apply/serialize/parse; apply order
 encoded once; storage is deliberately the host's choice.
 
 **Structural rendering (slice A1, round 31).** layoutStructural in
-@g3t/core: compartmented containers (stereotyped headers, typed
+@g3-toolkit/core: compartmented containers (stereotyped headers, typed
 compartments, rows as REAL elements with text/compartment/divider
 passthroughs) and fixed-side boundary ports, laid out by ELK per the
 spike-validated recipe and returned as a versioned StructuralGeometry
@@ -1345,7 +1531,7 @@ pnpm test (727), lint (eslint + react-compiler, warning budget),
 typecheck, and pnpm verify (build, export/treeshake/smoke/type
 checks, README-snippet compilation, typedoc validation, bundle
 budget with a written ledger in scripts/check-bundle-size.mjs;
-@g3t/react currently 278.7 of 280 KB). Spec gates:
+@g3-toolkit/react currently 278.7 of 280 KB). Spec gates:
 scripts/lint_specs.py, scripts/sync_spec_status.py (status vs
 citation drift; exits nonzero on drift), and
 scripts/check_roadmap_coverage.py (every open requirement singly
@@ -1400,7 +1586,7 @@ desktop-only):
   labeled reference edge, per-row badges).
 - VA-27 (rounds 32-36): the structural view, ports, and collapse;
   the dagre verdict rides on it.
-Bundles: @g3t/core 130 KB (129.3 used), @g3t/react 304 KB (302.4
+Bundles: @g3-toolkit/core 130 KB (129.3 used), @g3-toolkit/react 304 KB (302.4
 used).
 
 ## Roadmap by functional group (reprioritized 2026-06-12)

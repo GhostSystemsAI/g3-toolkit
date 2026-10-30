@@ -13,6 +13,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -31,8 +32,8 @@ const captured = vi.hoisted(() => ({
   edgeClickIsolate: [] as Array<boolean | undefined>,
 }));
 
-vi.mock("@g3t/react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@g3t/react")>();
+vi.mock("@g3-toolkit/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@g3-toolkit/react")>();
   return {
     ...actual,
     CytoscapeCanvas: (props: {
@@ -61,7 +62,10 @@ import { styleLabRawCyElements } from "./style-lab-fixture";
 // headless instances see the same stylesheet environment the browser
 // does (the MR-7 oracle blind spot, closed here too).
 async function canvasBaseStack(): Promise<object[]> {
-  const mod = await vi.importActual<typeof import("@g3t/react")>("@g3t/react");
+  const mod =
+    await vi.importActual<typeof import("@g3-toolkit/react")>(
+      "@g3-toolkit/react",
+    );
   const theme = mod.useThemeStore.getState().theme;
   return [...mod.DEFAULT_STYLESHEET, ...mod.themeColorRules(theme)] as object[];
 }
@@ -91,8 +95,17 @@ async function mountPanes(): Promise<void> {
     style: base as cytoscape.StylesheetJson,
   });
   instances = [legacy, engine];
-  legacyPane?.onReady?.(legacy);
-  enginePane?.onReady?.(engine);
+  // Wrapped in act (issue #10): by this point the function has awaited
+  // canvasBaseStack(), so a bare call into the captured onReady runs in
+  // a microtask outside any act scope. Each handler fires several state
+  // updates in the shell (setLegacyCy, setHonesty, setF1Scene,
+  // setF1Resolved, setEngineCy); unwrapped, React flushed them outside
+  // act, logged a warning per update, and the waitFor that follows each
+  // mountPanes() was the only thing hiding the ordering hazard.
+  await act(async () => {
+    legacyPane?.onReady?.(legacy);
+    enginePane?.onReady?.(engine);
+  });
 }
 
 beforeEach(() => {

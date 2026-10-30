@@ -11,13 +11,13 @@
  * `tripleTermToValue`.
  *
  * The two rendering projections (`projectTripleTermsAsEdges`,
- * `projectTripleTermsAsHyperarcs`) live in `@g3t/core`; this file
+ * `projectTripleTermsAsHyperarcs`) live in `@g3-toolkit/core`; this file
  * only shapes the fixture and re-exports the label helpers the
  * shell's left rail uses.
  */
-import { type TripleTermAnnotation, type RdfTerm } from "@g3t/core";
+import { type TripleTermAnnotation, type RdfTerm } from "@g3-toolkit/core";
 
-export { termLabel, tripleLabel, localName } from "@g3t/core";
+export { termLabel, tripleLabel, localName } from "@g3-toolkit/core";
 
 const EX = "http://example.org/sat#";
 const XSD = "http://www.w3.org/2001/XMLSchema#";

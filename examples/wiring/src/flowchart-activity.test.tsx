@@ -2,14 +2,14 @@
  * Executable twin for the "Flowchart / Activity shapes" section of
  * docs/wiring-guide.md.
  *
- * Imports ONLY from the public @g3t/core barrel the way an adopter would.
+ * Imports ONLY from the public @g3-toolkit/core barrel the way an adopter would.
  * If StructuralNode.shape or layoutStructural stops accepting flowchart
  * graphs, this test fails CI so the guide snippet cannot rot.
  */
 
 import { describe, it, expect } from "vitest";
-import { layoutStructural } from "@g3t/core";
-import type { StructuralGraphInput } from "@g3t/core";
+import { layoutStructural } from "@g3-toolkit/core";
+import type { StructuralGraphInput } from "@g3-toolkit/core";
 
 describe("wiring guide: flowchart / activity shapes", () => {
   // A minimal flowchart: start -> action -> decision -> (yes) end / (no) loop.

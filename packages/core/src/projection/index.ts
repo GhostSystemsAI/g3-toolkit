@@ -21,6 +21,7 @@ export {
   listCollapse,
   reificationCollapse,
 } from "./transforms";
+export { tripleEdgeKey } from "./triple-edge-key";
 
 // WITHDRAWN 2026-08-17 (merge review): filterPseudoNodes,
 // filterPseudoEdges, PSEUDO_FLAG, PSEUDO_CONNECTOR_TYPE,

@@ -14,7 +14,7 @@
  * nodes (the bus, propulsion, and thruster stay hidden) so the
  * boundary view is visibly smaller than the interior.
  */
-import type { HolonicDataset } from "@g3t/core";
+import type { HolonicDataset } from "@g3-toolkit/core";
 
 export const HOLON_FIXTURE: HolonicDataset = {
   holons: [

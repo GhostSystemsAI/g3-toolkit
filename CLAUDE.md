@@ -29,7 +29,7 @@ active plan is planning/demo-adoption-plan.md.
 ## What this is
 
 A composable graph-visualization component LIBRARY (not a framework):
-@g3t/core (zero React), @g3t/react, @g3t/charts. Hosts integrate via
+@g3-toolkit/core (zero React), @g3-toolkit/react, @g3-toolkit/charts. Hosts integrate via
 three channels only: exported zustand stores, props/callbacks, and
 versioned JSON documents (encoding spec, workspace snapshots,
 algorithm results). New capability = expose through one of these +
@@ -38,7 +38,7 @@ TypeScript, React 19, Vite 8, pnpm (enforced), Cytoscape + Graphology,
 Zustand, Vitest + RTL.
 
 THREE channels, and the count is a ruling rather than an omission:
-`@g3t/core/events` was assessed 2026-08-15 and ruled a context-action
+`@g3-toolkit/core/events` was assessed 2026-08-16 and ruled a context-action
 COMMAND BUS, not a fourth integration channel. 13 of its 21 declared
 event types were emitted by nothing and were deleted; the `eventBus`
 singleton is deprecated (it carries the cross-instance identity hazard
@@ -112,7 +112,7 @@ a written rationale in scripts/check-bundle-size.mjs (the ledger).
 - A fresh plan worktree has no node_modules. Run
   `node scripts/install-deps.mjs` first (works under a read-only pnpm
   store via an overlay). NEVER symlink node_modules from the main
-  checkout: the workspace links are relative, so `@g3t/*` would resolve
+  checkout: the workspace links are relative, so `@g3-toolkit/*` would resolve
   to the main checkout's packages and the gates would test the wrong tree.
   `pnpm run gates` starts with `install-deps.mjs --check`, which fails on
   that (realpath, not readlink: the relative links read as in-tree).
@@ -200,7 +200,7 @@ class) for body and synthetic-point-port edges, taxi as fallback when
 routeEdges is off or a route has no interior bend; declared-port edges
 keep the taxi exit on purpose (the port fixes a perpendicular the
 projection would fight).
-ALSO landed 2026-06-22: a Minimap component (@g3t/react interaction/camera;
+ALSO landed 2026-06-22: a Minimap component (@g3-toolkit/react interaction/camera;
 Molecules/Minimap) wired into the gallery. ALSO active: the Storybook
 atomic-design reshape (Atoms/Molecules titled, Minimap included; Toolbar
 moved to Compounds and Charts/Features to Reference; Coordinated Selection

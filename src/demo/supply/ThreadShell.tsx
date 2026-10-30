@@ -28,10 +28,10 @@ import {
   categoricalColorMap,
   registerIcon,
   FloatingLegend,
-} from "@g3t/react";
-import type { EncodingSpec } from "@g3t/react";
+} from "@g3-toolkit/react";
+import type { EncodingSpec } from "@g3-toolkit/react";
 import type { Core } from "cytoscape";
-import { ingestAlgorithmResults, findShortestPath } from "@g3t/core";
+import { ingestAlgorithmResults, findShortestPath } from "@g3-toolkit/core";
 import { buildDigitalThread } from "./model";
 import { supplyShapes } from "./shapes";
 import {
@@ -443,9 +443,17 @@ export function SupplyThreadShell({ onBack }: { onBack: () => void }) {
 
   // Harvested at render time (a pure read of the live instance; the
   // lint rule rightly rejected the setState-in-effect version).
+  // hiddenIds and confMode are NOT read in the body, and the lint rule
+  // therefore calls them unnecessary. They are re-run triggers it cannot
+  // see: harvestSceneFromCy reads MUTABLE live Cytoscape state, and both
+  // mutate that instance (hiddenIds arrives as the canvas `hidden` prop
+  // below; confMode drives the spec and a restyle effect above). Drop
+  // them and the SVG pane keeps a scene harvested before the filter or
+  // the confidence mode changed.
   const harvested = useMemo(
     () =>
       threadRenderer !== "cytoscape" && core ? harvestSceneFromCy(core) : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [threadRenderer, core, hiddenIds, confMode],
   );
   useEffect(() => {

@@ -1,8 +1,8 @@
 # g3-toolkit
 
 > Composable graph-visualization component LIBRARY (not a framework) for
-> RDF, labeled-property-graph (LPG), and holonic data: @g3t/core (zero
-> React), @g3t/react (views + controls), @g3t/charts (linked ECharts).
+> RDF, labeled-property-graph (LPG), and holonic data: @g3-toolkit/core (zero
+> React), @g3-toolkit/react (views + controls), @g3-toolkit/charts (linked ECharts).
 > Hosts integrate through exactly three channels: exported zustand
 > stores, props/callbacks, and versioned JSON documents. TypeScript,
 > React 19, pnpm (enforced), Cytoscape + Graphology, Zustand.
@@ -16,18 +16,18 @@ computation".
 
 ## Packages and entry points
 
-- @g3t/core (no React): subpath exports `.` (UGM, algorithms, export,
+- @g3-toolkit/core (no React): subpath exports `.` (UGM, algorithms, export,
   SHACL, structural layout), `./adapters` , `./middleware`, `./events`,
   `./projection`, `./pipeline`, `./shacl`, `./diff`, `./layout`,
   `./algorithms`, `./undo-redo`, `./theme`, `./path-analysis`.
-- @g3t/react: subpath exports `.`, `./views`, `./controls`, `./state`,
+- @g3-toolkit/react: subpath exports `.`, `./views`, `./controls`, `./state`,
   `./theme`, `./a11y`, `./icons`, `./timeline`, and `./style.css`
   (REQUIRED import, see rules below). Peer deps are NOT auto-installed:
   react, react-dom, cytoscape, cytoscape-fcose, zustand, echarts.
   vis-timeline and vis-data are OPTIONAL peers, needed only for
-  `@g3t/react/timeline`; every other entry point resolves without them.
-- @g3t/charts: `LinkedChart` (bar, scatter, line, pie), auto-links to
-  the shared selection store. Peers: @g3t/core, @g3t/react, react,
+  `@g3-toolkit/react/timeline`; every other entry point resolves without them.
+- @g3-toolkit/charts: `LinkedChart` (bar, scatter, line, pie), auto-links to
+  the shared selection store. Peers: @g3-toolkit/core, @g3-toolkit/react, react,
   echarts.
 
 ## Core API surface (the names an agent should reach for)
@@ -57,7 +57,7 @@ computation".
   onto the `curve-style: segments` polyline path; deterministic, no
   RNG; straight-line bypass past a `maxEdges` cap).
 - Export: `exportSubgraphJson`, `exportSubgraphCsv`, `exportSubgraphTurtle`;
-  raster snapshot of the live canvas via `buildImageExport` (@g3t/react
+  raster snapshot of the live canvas via `buildImageExport` (@g3-toolkit/react
   toolbar, wraps native `cy.png`; the GraphToolbar export menu exposes PNG).
 - Events: `G3tEventBus` (context-menu actions emit on it).
 
@@ -89,7 +89,7 @@ prop, a position-preserving restyle),
 `captureWorkspace` / `applyWorkspace` / `serializeWorkspace`, plus view
 components: TableView, TreeView, MapView, MatrixView,
 SankeyView, SchemaView, StatsPanel, QueryEditor, ShaclShapeBrowser,
-DiffRenderer. TimelineView is on `@g3t/react/timeline` ONLY, and that
+DiffRenderer. TimelineView is on `@g3-toolkit/react/timeline` ONLY, and that
 subpath is the only one needing the optional peers vis-timeline and
 vis-data; importing it from `.` or `./views` does not resolve. Stores: `useSelectionStore`, `usePositionPinStore`,
 `useOverlayStore`, `useThemeStore`, `useStyleOverrideStore`
@@ -99,7 +99,7 @@ vis-data; importing it from `.` or `./views` does not resolve. Stores: `useSelec
 ## Correctness rules (types cannot express these; violating them is the
 ## most common AI-generated-code failure)
 
-- Import `"@g3t/react/style.css"` FIRST. Without it every view renders
+- Import `"@g3-toolkit/react/style.css"` FIRST. Without it every view renders
   unstyled with no error.
 - `ugm` is compared by IDENTITY. Memoize it in the host; a new instance
   means "different graph" and re-runs layout. Content changes to

@@ -7,7 +7,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { UGM } from "@g3t/core";
+import { UGM } from "@g3-toolkit/core";
 import { TableView } from "./table";
 import { DetailInspector } from "./inspector";
 import { TreeView } from "./tree";
@@ -56,7 +56,7 @@ export const SidebarAndTable: Story = {
         }}
       >
         <div style={{ width: 200, borderRight: "1px solid #ddd", padding: 8 }}>
-          <SearchBar ugm={ugm} onSearchChange={() => {}} />
+          <SearchBar ugm={ugm} />
           <FacetFilter ugm={ugm} onFilterChange={() => {}} />
         </div>
         <div style={{ flex: 1 }}>

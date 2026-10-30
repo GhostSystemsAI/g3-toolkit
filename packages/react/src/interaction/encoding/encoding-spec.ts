@@ -18,12 +18,12 @@ import {
   scaleColor,
   contrastRatioOrNull,
 } from "./palette-bridge";
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
 import {
   MalformedDocumentError,
   parseJsonObject,
   requireVersion,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 
 // ── Channels ─────────────────────────────────────────────────────────
 
@@ -109,11 +109,19 @@ export interface EncodingSpec {
     size?: ChannelEncoding<SizeScale>;
     icon?: ChannelEncoding<IconScale>;
     shape?: ChannelEncoding<ShapeScale>;
+    /** OVERRIDES the label the canvas converter stamps on every node
+     *  (`properties.name`, else the id); it never creates or removes
+     *  one. Dropping the channel restores that default rather than
+     *  hiding the label; a host that wants NO label adds a stylesheet
+     *  rule (`{ selector: "node", style: { label: "" } }`). */
     label?: ChannelEncoding<FixedScale<string>> | { driver: string };
   };
   edge: {
     color?: ChannelEncoding<ColorScale>;
     width?: ChannelEncoding<SizeScale>;
+    /** Same contract as node.label: overrides the converter's default
+     *  (the edge type); dropping it restores that default, and hiding
+     *  edge labels is a stylesheet rule, not a spec change. */
     label?: { driver: string } | undefined;
   };
 }
@@ -401,7 +409,7 @@ export function serializeEncodingSpec(spec: EncodingSpec): string {
  *
  * Throws rather than degrading: there is no half an encoding spec. The
  * failure convention and its error hierarchy are documented in
- * `@g3t/core`'s `model/document-errors.ts`. This used to call
+ * `@g3-toolkit/core`'s `model/document-errors.ts`. This used to call
  * `JSON.parse` bare, so malformed text escaped as a raw `SyntaxError`
  * and the literal `"null"` escaped as a `TypeError`; both are typed
  * failures now.

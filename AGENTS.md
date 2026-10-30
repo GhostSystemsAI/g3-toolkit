@@ -14,15 +14,15 @@ A compact machine-readable orientation also exists at ./llms.txt.
 
 A composable graph-visualization component LIBRARY (not a framework):
 
-- `@g3t/core`: data model (UGM, a labeled property graph), backend
+- `@g3-toolkit/core`: data model (UGM, a labeled property graph), backend
   adapters (SPARQL/Cypher/Gremlin/REST/Holonic), RDF-to-LPG projection
   pipeline, SHACL validation/reporting, structural (UML-style) layout,
   path analysis, export, theming. Zero React imports (enforced by a
   module-boundary test).
-- `@g3t/react`: view components (graph canvas, structural SVG, table,
+- `@g3-toolkit/react`: view components (graph canvas, structural SVG, table,
   tree, matrix, map, timeline, sankey, schema, stats, provenance),
   interaction controls, and the shared zustand stores.
-- `@g3t/charts`: `LinkedChart` (bar/scatter/line/pie via ECharts),
+- `@g3-toolkit/charts`: `LinkedChart` (bar/scatter/line/pie via ECharts),
   linked to the shared selection store.
 
 Hosts integrate through three channels ONLY: exported zustand stores,
@@ -69,7 +69,7 @@ Rules that have each been paid for at least once:
 
 ## Architecture rules (do not violate)
 
-- `@g3t/core` stays React-free. Heavy graph algorithms stay EXTERNAL
+- `@g3-toolkit/core` stays React-free. Heavy graph algorithms stay EXTERNAL
   (networkx/GraphBLAS); the toolkit consumes result documents.
 - SAME INPUT GRAPH means the camera and node positions HOLD. Never
   re-init the canvas, refit, or recenter on a same-graph change (theme,
@@ -88,12 +88,12 @@ This is where generated code most often goes wrong. Follow these
 exactly; each rule is documented in docs/consuming-g3t.md and
 docs/wiring-guide.md, and every wiring snippet runs in CI.
 
-1. Install: `pnpm add @g3t/core @g3t/react` (charts optional). Peer
-   dependencies are NOT installed for you. `@g3t/react` needs react,
+1. Install: `pnpm add @g3-toolkit/core @g3-toolkit/react` (charts optional). Peer
+   dependencies are NOT installed for you. `@g3-toolkit/react` needs react,
    react-dom, cytoscape, cytoscape-fcose, zustand, echarts. Optional:
-   vis-timeline and vis-data, needed only for `@g3t/react/timeline`.
-   `@g3t/charts` takes @g3t/core and @g3t/react as peers too.
-2. Import the stylesheet first: `import "@g3t/react/style.css";`.
+   vis-timeline and vis-data, needed only for `@g3-toolkit/react/timeline`.
+   `@g3-toolkit/charts` takes @g3-toolkit/core and @g3-toolkit/react as peers too.
+2. Import the stylesheet first: `import "@g3-toolkit/react/style.css";`.
    Without it everything renders unstyled, silently.
 3. Memoize `ugm`. It is compared by identity; a fresh instance per
    render re-creates the Cytoscape instance and re-runs layout. The
@@ -142,7 +142,7 @@ docs/wiring-guide.md, and every wiring snippet runs in CI.
     survive the spec-apply pipeline. Encoding-managed keys are cleared
     when a spec drops the owning channel.
 14. Vendored tarballs: `pnpm pack` rewrites `workspace:*`; pin
-    `@g3t/core` to one instance via overrides or the theme store
+    `@g3-toolkit/core` to one instance via overrides or the theme store
     silently splits between two copies.
 15. Node labels word-wrap by default (110px). The single override knob
     is `labelWrapRule(maxWidthPx | false)` appended through the
@@ -151,7 +151,7 @@ docs/wiring-guide.md, and every wiring snippet runs in CI.
     bare `node { text-wrap }` rule; the helper is `node[label]` scoped
     to avoid per-frame mapping warnings.
 16. Dense edge fields: `bundleEdges` + `bundledPolylineToSegments`
-    (@g3t/core) apply force-directed edge bundling (FDEB) as pure
+    (@g3-toolkit/core) apply force-directed edge bundling (FDEB) as pure
     geometry onto the `curve-style: segments` path; deterministic (no
     RNG), with a straight-line bypass past a `maxEdges` cap. For
     obstacle-aware per-edge routing on ordinary (non-structural)
@@ -171,7 +171,7 @@ docs/wiring-guide.md, and every wiring snippet runs in CI.
     brief straight-bezier flash before edges snap to their routes is
     expected, not a bug; disable layout `animate` on that canvas if the
     flash is unwanted.
-17. Raster export: `buildImageExport` (@g3t/react toolbar) wraps native
+17. Raster export: `buildImageExport` (@g3-toolkit/react toolbar) wraps native
     `cy.png` for a PNG snapshot of the live canvas; the GraphToolbar
     export menu surfaces it alongside JSON/CSV/Turtle subgraph export.
 18. Live routing controls are counter-bump signals on `CytoscapeCanvas`,
@@ -188,7 +188,7 @@ docs/wiring-guide.md, and every wiring snippet runs in CI.
     Refresh + Re-layout + Isolate toolbar wiring these props lives in
     `src/demo/components/routing-controls.tsx` (`useRoutingControls` /
     `RoutingControlStrip`); copy the pattern, but note it is DEMO code,
-    not a `@g3t/react` export, so do not import it from the package.
+    not a `@g3-toolkit/react` export, so do not import it from the package.
 
 When unsure of a signature, read the shipped declaration files
 (`packages/*/dist/*.d.ts` after `pnpm run verify`, or the typedoc at

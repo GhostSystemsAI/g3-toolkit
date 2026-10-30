@@ -122,7 +122,7 @@ describe("install-deps overlay store", () => {
 });
 
 // Fence for heal 09cf2530: plan worktrees had no node_modules, and workers
-// symlinked the main checkout's, which resolves every `@g3t/*` workspace
+// symlinked the main checkout's, which resolves every `@g3-toolkit/*` workspace
 // link into the main checkout.
 describe("install-deps node_modules provisioning", () => {
   const root = path.resolve(__dirname, "../..");
@@ -176,19 +176,21 @@ describe("install-deps node_modules provisioning", () => {
     expect(nodeModulesState(root)).toBe("installed");
     expect(foreignWorkspaceLinks(root)).toEqual([]);
     expect(
-      fs.realpathSync(path.join(root, "node_modules", "@g3t", "core")),
+      fs.realpathSync(path.join(root, "node_modules", "@g3-toolkit", "core")),
     ).toBe(fs.realpathSync(path.join(root, "packages", "core")));
   });
 
-  // A pnpm-shaped checkout: packages/core plus a relative @g3t/core link.
+  // A pnpm-shaped checkout: packages/core plus a relative @g3-toolkit/core link.
   function fakeCheckout(): string {
     const d = mkTmp();
     fs.mkdirSync(path.join(d, "packages", "core"), { recursive: true });
-    fs.mkdirSync(path.join(d, "node_modules", "@g3t"), { recursive: true });
+    fs.mkdirSync(path.join(d, "node_modules", "@g3-toolkit"), {
+      recursive: true,
+    });
     fs.writeFileSync(path.join(d, "node_modules", ".modules.yaml"), "");
     fs.symlinkSync(
       path.join("..", "..", "packages", "core"),
-      path.join(d, "node_modules", "@g3t", "core"),
+      path.join(d, "node_modules", "@g3-toolkit", "core"),
     );
     return d;
   }
@@ -204,8 +206,8 @@ describe("install-deps node_modules provisioning", () => {
     fs.mkdirSync(path.join(wt, "node_modules"));
     fs.writeFileSync(path.join(wt, "node_modules", ".modules.yaml"), "");
     fs.symlinkSync(
-      path.join(main, "node_modules", "@g3t"),
-      path.join(wt, "node_modules", "@g3t"),
+      path.join(main, "node_modules", "@g3-toolkit"),
+      path.join(wt, "node_modules", "@g3-toolkit"),
     );
     expect(foreignWorkspaceLinks(wt)).toEqual(["core"]);
     expect(nodeModulesState(wt)).toBe("foreign");

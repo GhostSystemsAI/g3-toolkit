@@ -14,7 +14,7 @@
  * copy.
  *
  * Pure stages (generation, collapse, drill) are budget-tested in
- * @g3t/core (collapse-by-cluster.test.ts); this surface's contract
+ * @g3-toolkit/core (collapse-by-cluster.test.ts); this surface's contract
  * tests pin the wiring with the canvas stubbed. Rendering performance
  * at this scale remains browser-verified.
  */
@@ -25,7 +25,7 @@ import {
   GraphToolbar,
   useSelectionStore,
   type EncodingSpec,
-} from "@g3t/react";
+} from "@g3-toolkit/react";
 import type { Core } from "cytoscape";
 import {
   bundleEdges,
@@ -34,7 +34,7 @@ import {
   buildSubgraph,
   clusterBadgeText,
   UGM,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import { SurfaceFrame } from "../surfaces/DashboardSurfaces";
 import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
@@ -645,7 +645,7 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
               zIndex: 5,
             }}
           >
-            <GraphToolbar ugm={canvasUgm} cy={core} />
+            <GraphToolbar ugm={canvasUgm} core={core} />
           </div>
           <CytoscapeCanvas
             ugm={canvasUgm}

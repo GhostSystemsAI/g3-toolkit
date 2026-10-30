@@ -4,7 +4,12 @@
  * a regression in the visible panels.
  */
 import { describe, expect, it } from "vitest";
-import { busCollapse, HolonicAdapter, hubBurst, isPseudoNode } from "@g3t/core";
+import {
+  busCollapse,
+  HolonicAdapter,
+  hubBurst,
+  isPseudoNode,
+} from "@g3-toolkit/core";
 import {
   buildBusFixture,
   buildHubFixture,

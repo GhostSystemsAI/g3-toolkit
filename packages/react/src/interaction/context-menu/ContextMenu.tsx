@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import type { MenuItem, MenuTarget } from "./types";
+import { viewClass } from "../../theme/view-class";
 
 export interface ContextMenuProps {
   /** Items to display. */
@@ -52,13 +53,14 @@ export function ContextMenu({ items, target, onClose }: ContextMenuProps) {
   return (
     <div
       ref={menuRef}
+      className={viewClass()}
       role="menu"
       data-testid="context-menu"
       style={{
         position: "fixed",
         left: target.position.x,
         top: target.position.y,
-        zIndex: "var(--g3t-z-popover, 9999)" as unknown as number,
+        zIndex: "var(--g3t-z-popover, 600)" as unknown as number,
         background: "var(--g3t-bg-primary, white)",
         border: "1px solid var(--g3t-border, #ccc)",
         borderRadius: 4,

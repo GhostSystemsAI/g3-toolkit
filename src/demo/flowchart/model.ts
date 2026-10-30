@@ -43,7 +43,7 @@
  *   packages/core/src/layout/g3t-engine/g3t-nudging.ts
  */
 
-import type { StructuralGraphInput } from "@g3t/core";
+import type { StructuralGraphInput } from "@g3-toolkit/core";
 import type { SysMLModel, Diagram, Package } from "../mbse/model";
 
 // ── Interaction overview ─────────────────────────────────────────────────

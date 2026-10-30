@@ -7,12 +7,14 @@
  * @see specs/01-functional-views.md R1.8
  */
 
-import { useMemo, useCallback, useRef, useEffect } from "react";
-import * as echarts from "echarts";
+import { useMemo, useCallback, useRef, useEffect, useState } from "react";
+import type { ECharts } from "echarts";
 import { useThemeStore } from "../../theme/ThemeManager";
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
 import { useSelectionStore } from "../../state/selection-store";
 import { EmptyState } from "../../interaction/feedback";
+import { loadEcharts } from "../load-echarts";
+import { viewClass } from "../../theme/view-class";
 
 export interface StatsPanelProps {
   ugm: UGM;
@@ -20,6 +22,20 @@ export interface StatsPanelProps {
   propertyKey: string;
   /** Number of histogram bins (default 20). */
   bins?: number;
+  /** Chart title. Defaults to `Distribution: {propertyKey}`, which
+   *  names the raw key rather than anything a reader recognizes. For
+   *  a DERIVED property the key is an implementation detail
+   *  ("_shacl_maxSeverity"), so the host is the only party that can
+   *  say what it means. */
+  title?: string;
+  /** Unit for the measured value, appended to the x-axis label and
+   *  the tooltip ("ms", "kg", "%"). A bare histogram states a
+   *  magnitude with no dimension. */
+  unit?: string;
+  /** One line under the title saying what a bar COUNTS. The y axis
+   *  says "Count"; it does not say count of what, and for a derived
+   *  property that is not recoverable from the chart. */
+  description?: string;
   className?: string;
 }
 
@@ -128,12 +144,21 @@ export function StatsPanel({
   ugm,
   propertyKey,
   bins: binCount = 20,
+  title,
+  unit,
+  description,
   className,
 }: StatsPanelProps) {
   const { theme } = useThemeStore();
   const chartRef = useRef<HTMLDivElement>(null);
-  const echartsRef = useRef<echarts.ECharts | null>(null);
+  const echartsRef = useRef<ECharts | null>(null);
   const { selectNodes } = useSelectionStore();
+  // echarts loads asynchronously (see load-echarts.ts), so a failure
+  // in the load or in init would surface as an unhandled rejection
+  // instead of reaching ViewErrorBoundary. Re-throwing from render
+  // keeps the containment contract the static import had.
+  const [chartError, setChartError] = useState<Error | null>(null);
+  if (chartError) throw chartError;
 
   const histogram = useMemo(
     () => buildHistogram(ugm, propertyKey, binCount),
@@ -153,65 +178,100 @@ export function StatsPanel({
   );
 
   useEffect(() => {
-    if (!chartRef.current || histogram.length === 0) return;
+    const el = chartRef.current;
+    if (!el || histogram.length === 0) return;
 
-    const chart = echarts.init(chartRef.current);
-    echartsRef.current = chart;
+    // The chart is built once the lazy module resolves. `cancelled`
+    // covers a re-run of this effect (or an unmount) that lands before
+    // the load does: the stale callback must neither init a chart on
+    // a container another run owns nor leak an observer.
+    let cancelled = false;
+    let chart: ECharts | null = null;
+    let resizeObserver: ResizeObserver | null = null;
 
-    // Owner 2026-07-28: this chart was fully THEME-BLIND (no text
-    // colors at all), so echarts' dark-gray defaults vanished on
-    // the dark background. Every text surface now takes theme ink.
-    chart.setOption({
-      title: {
-        text: `Distribution: ${propertyKey}`,
-        textStyle: { fontSize: 13, color: theme.textPrimary },
-      },
-      tooltip: { trigger: "axis" },
-      xAxis: {
-        type: "category",
-        data: histogram.map((b) => b.label),
-        axisLabel: { rotate: 45, fontSize: 10, color: theme.textPrimary },
-        axisLine: { lineStyle: { color: theme.border } },
-      },
-      yAxis: {
-        type: "value",
-        name: "Count",
-        nameTextStyle: { color: theme.textPrimary, fontWeight: 600 },
-        axisLabel: { color: theme.textPrimary },
-        splitLine: { lineStyle: { color: theme.border, opacity: 0.5 } },
-      },
-      series: [
-        {
-          type: "bar",
-          data: histogram.map((b) => b.count),
-          itemStyle: { color: "#2563eb" },
+    const draw = (echarts: Awaited<ReturnType<typeof loadEcharts>>) => {
+      if (cancelled) return;
+      chart = echarts.init(el);
+      echartsRef.current = chart;
+
+      // Owner 2026-07-28: this chart was fully THEME-BLIND (no text
+      // colors at all), so echarts' dark-gray defaults vanished on
+      // the dark background. Every text surface now takes theme ink.
+      chart.setOption({
+        title: {
+          text: title ?? `Distribution: ${propertyKey}`,
+          subtext: description,
+          textStyle: { fontSize: 13, color: theme.textPrimary },
+          subtextStyle: { fontSize: 11, color: theme.textMuted },
         },
-      ],
-      brush: { toolbox: ["rect"], xAxisIndex: 0 },
-    });
+        tooltip: {
+          trigger: "axis",
+          valueFormatter: (v: unknown) => `${v} node${v === 1 ? "" : "s"}`,
+        },
+        // The rotated bin labels plus the new axis name need reserved
+        // room; without this the name renders under the plot edge.
+        grid: { containLabel: true, bottom: 28, top: description ? 64 : 48 },
+        xAxis: {
+          type: "category",
+          data: histogram.map((b) => b.label),
+          // The x axis previously carried bin ranges and nothing saying
+          // what they were ranges OF.
+          name: unit ? `${propertyKey} (${unit})` : propertyKey,
+          nameLocation: "middle",
+          nameGap: 42,
+          nameTextStyle: { color: theme.textPrimary, fontWeight: 600 },
+          axisLabel: { rotate: 45, fontSize: 10, color: theme.textPrimary },
+          axisLine: { lineStyle: { color: theme.border } },
+        },
+        yAxis: {
+          type: "value",
+          name: "Nodes",
+          nameTextStyle: { color: theme.textPrimary, fontWeight: 600 },
+          axisLabel: { color: theme.textPrimary },
+          splitLine: { lineStyle: { color: theme.border, opacity: 0.5 } },
+        },
+        series: [
+          {
+            type: "bar",
+            data: histogram.map((b) => b.count),
+            itemStyle: { color: "#2563eb" },
+          },
+        ],
+        brush: { toolbox: ["rect"], xAxisIndex: 0 },
+      });
 
-    chart.on("brushSelected", (params: unknown) => {
-      const p = params as {
-        batch?: Array<{ selected?: Array<{ dataIndex?: number[] }> }>;
-      };
-      const selected = p.batch?.[0]?.selected?.[0]?.dataIndex ?? [];
-      handleBrush(selected);
-    });
+      chart.on("brushSelected", (params: unknown) => {
+        const p = params as {
+          batch?: Array<{ selected?: Array<{ dataIndex?: number[] }> }>;
+        };
+        const selected = p.batch?.[0]?.selected?.[0]?.dataIndex ?? [];
+        handleBrush(selected);
+      });
 
-    const resizeObserver = new ResizeObserver(() => chart.resize());
-    resizeObserver.observe(chartRef.current);
+      const instance = chart;
+      resizeObserver = new ResizeObserver(() => instance.resize());
+      resizeObserver.observe(el);
+    };
+
+    loadEcharts()
+      .then(draw)
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setChartError(err instanceof Error ? err : new Error(String(err)));
+      });
 
     return () => {
-      resizeObserver.disconnect();
-      chart.dispose();
+      cancelled = true;
+      resizeObserver?.disconnect();
+      chart?.dispose();
       echartsRef.current = null;
     };
-  }, [histogram, propertyKey, handleBrush, theme]);
+  }, [histogram, propertyKey, handleBrush, theme, title, unit, description]);
 
   return (
     <div
       data-testid="stats-panel"
-      className={className}
+      className={viewClass(className)}
       style={{ width: "100%", height: "100%", minHeight: 200 }}
     >
       {histogram.length === 0 ? (

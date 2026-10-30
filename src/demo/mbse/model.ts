@@ -12,7 +12,7 @@
  * fields the four diagram projections need.
  */
 
-import type { StructuralGraphInput } from "@g3t/core";
+import type { StructuralGraphInput } from "@g3-toolkit/core";
 
 export type DiagramType = "bdd" | "ibd" | "par" | "req" | "act";
 

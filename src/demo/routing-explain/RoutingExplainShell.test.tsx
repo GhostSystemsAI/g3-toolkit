@@ -19,8 +19,11 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import type { CyStylesheet } from "@g3t/react";
-import type { StructuralGraphInput, StructuralGeometry } from "@g3t/core";
+import type { CyStylesheet } from "@g3-toolkit/react";
+import type {
+  StructuralGraphInput,
+  StructuralGeometry,
+} from "@g3-toolkit/core";
 
 const captured = vi.hoisted(() => ({
   canvasCalls: [] as Array<{
@@ -33,8 +36,8 @@ const captured = vi.hoisted(() => ({
   }>,
 }));
 
-vi.mock("@g3t/react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@g3t/react")>();
+vi.mock("@g3-toolkit/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@g3-toolkit/react")>();
   return {
     ...actual,
     CytoscapeCanvas: (props: {

@@ -14,7 +14,10 @@ import {
   waitFor,
   cleanup,
 } from "@testing-library/react";
-import type { StructuralGraphInput, StructuralGeometry } from "@g3t/core";
+import type {
+  StructuralGraphInput,
+  StructuralGeometry,
+} from "@g3-toolkit/core";
 
 type ClickInfo = {
   hit: { elementId: string; kind: string; zone: string } | null;
@@ -30,8 +33,8 @@ const captured = vi.hoisted(() => ({
   onElementClick: null as ((info: ClickInfo) => void) | null,
 }));
 
-vi.mock("@g3t/react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@g3t/react")>();
+vi.mock("@g3-toolkit/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@g3-toolkit/react")>();
   return {
     ...actual,
     StructuralSvgView: (props: {

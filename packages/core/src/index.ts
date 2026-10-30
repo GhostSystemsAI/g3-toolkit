@@ -1,5 +1,5 @@
 /**
- * @g3t/core public API.
+ * @g3-toolkit/core public API.
  *
  * Framework-agnostic (D6): zero React, zero Zustand, zero Cytoscape imports.
  *
@@ -19,7 +19,7 @@
 // DEMOTED FROM THE PUBLIC BARREL (2026-07-11 dead-code round):
 // twenty internal helpers (text sizing, ELK graph assembly, QLT
 // metric internals, SHACL row formatting, RDF term utilities) had no
-// consumer outside @g3t/core; their tests import relatively and
+// consumer outside @g3-toolkit/core; their tests import relatively and
 // still run. Full analysis and the T2 ruling table (tested feature
 // surface, NOT removed): planning/g3l/dead-code-analysis.md.
 export { UGM } from "./ugm";
@@ -36,6 +36,8 @@ export type {
   AttributeUpdatePayload,
   SerializedUGM,
   PropertyMap,
+  DerivationStamp,
+  DerivationRecord,
 } from "./ugm";
 
 // ── Adapters ────────────────────────────────────────────────────────
@@ -108,6 +110,7 @@ export {
 } from "./shacl";
 export type {
   ShaclShape,
+  ShaclShapeTarget,
   ShaclPropertyConstraint,
   ShaclViolation,
   ShaclValidationResult,
@@ -119,7 +122,7 @@ export type {
   ShaclResultDetail,
 } from "./shacl";
 
-// ── Style override (models only; React store is in @g3t/react/state) ──
+// ── Style override (models only; React store is in @g3-toolkit/react/state) ──
 export {
   overridesToStructuralStyles,
   STRUCTURAL_STYLE_CHANNELS,
@@ -152,6 +155,10 @@ export type {
   ProjectionStepConfig,
 } from "./projection";
 export { typeCollapse } from "./projection";
+// The id every triple-derived edge gets, from the pipeline and the
+// SPARQL adapter alike, so a host can address an edge by its triple
+// without reading the graph (issue #48).
+export { tripleEdgeKey } from "./projection";
 export { createPresetPipeline } from "./projection";
 // Brief 06: projection-level pseudo-node spreading (dense-scene
 // legibility). UGM -> UGM transforms applied after projection.
@@ -206,11 +213,14 @@ export {
   applyAlgorithmResult,
   connectedComponents,
   degreeCentrality,
+  OVERLAY_TONE_ORDER,
+  isOverlayTone,
 } from "./algorithm-adapter";
 export type {
   AlgorithmResultDocument,
   AlgorithmIngestReport,
   StructuralOverlay,
+  OverlayTone,
 } from "./algorithm-adapter";
 export { virtualizeRelationalData, parseCSV } from "./relational-virtualizer";
 export type { VirtualizeOptions } from "./relational-virtualizer";
@@ -329,14 +339,38 @@ export { ComboManager } from "./combo";
 export type { Combo } from "./combo";
 
 // ── Working set (limits per view; D6 logic) ─────────────────────────
-export { WorkingSetManager } from "./working-set-manager";
-export type { ViewType, LimitCheckResult } from "./working-set-manager";
+export {
+  WorkingSetManager,
+  DEFAULT_LIMIT_STRATEGIES,
+  parseWorkingSetConfig,
+  validateWorkingSetConfig,
+} from "./working-set-manager";
+export type {
+  ViewType,
+  LimitCheckResult,
+  LimitStrategy,
+  RaiseAllowed,
+  RaiseRefused,
+  RaiseResult,
+  WorkingSetConfig,
+  WorkingSetViewLimit,
+} from "./working-set-manager";
 
-// ── Undo/redo stack (D6 pure logic; reclassified from @g3t/react in P3.2) ──
+// ── Paging over query results (issue #6; D6 logic) ──────────────────
+export {
+  pageItems,
+  pageNodes,
+  pageCategories,
+  pageCount,
+  pageIndex,
+} from "./pagination";
+export type { PageWindow, PageRequest, PageResult } from "./pagination";
+
+// ── Undo/redo stack (D6 pure logic; reclassified from @g3-toolkit/react in P3.2) ──
 export { UndoRedoStack } from "./undo-redo";
 export type { UndoRedoOptions } from "./undo-redo";
 
-// ── Design tokens (D6 data; reclassified from @g3t/react in P3.2) ──
+// ── Design tokens (D6 data; reclassified from @g3-toolkit/react in P3.2) ──
 // `injectDesignTokens` writes CSS custom properties to documentElement and
 // thus touches the DOM, but the values themselves are pure data.
 export {
@@ -349,11 +383,21 @@ export {
   injectDesignTokens,
 } from "./theme";
 
-// ── Path analysis (D6; reclassified from @g3t/react in P3.2) ────────
-export { findShortestPath, allShortestPaths } from "./path-analysis";
+// ── Path analysis (D6; reclassified from @g3-toolkit/react in P3.2) ────────
+export {
+  findShortestPath,
+  allShortestPaths,
+  kShortestPaths,
+} from "./path-analysis";
 export { khopNeighborhood } from "./path-analysis/khop";
 export type { KhopOptions } from "./path-analysis/khop";
-export type { PathResult, PathOptions } from "./path-analysis";
+export type {
+  PathResult,
+  PathOptions,
+  PathGraph,
+  SimplePath,
+  KShortestPathsOptions,
+} from "./path-analysis";
 export * from "./export";
 export {
   collapseByCluster,

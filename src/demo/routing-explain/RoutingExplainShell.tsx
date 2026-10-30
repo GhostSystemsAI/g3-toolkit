@@ -24,14 +24,14 @@ import {
   CytoscapeCanvas,
   StructuralSvgView,
   useStructuralLayout,
-} from "@g3t/react";
-import type { CyStylesheet } from "@g3t/react";
-import { UGM } from "@g3t/core";
+} from "@g3-toolkit/react";
+import type { CyStylesheet } from "@g3-toolkit/react";
+import { UGM } from "@g3-toolkit/core";
 import type {
   StructuralGeometry,
   StructuralGraphInput,
   StructuralLayoutOptions,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import {
   useRoutingControls,
   RoutingControlStrip,

@@ -16,9 +16,12 @@ import {
   StructuralSvgView,
   useStructuralLayout,
   type StructuralSvgViewProps,
-} from "@g3t/react";
+} from "@g3-toolkit/react";
 import { publishScene } from "../testing/e2e-hooks";
-import type { StructuralGraphInput, StructuralGeometry } from "@g3t/core";
+import type {
+  StructuralGraphInput,
+  StructuralGeometry,
+} from "@g3-toolkit/core";
 import { projectDiagram } from "../mbse/diagrams";
 import { ContainmentTree } from "../mbse/ContainmentTree";
 import { MBSE_STYLES } from "../mbse/styles";

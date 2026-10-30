@@ -21,9 +21,9 @@
  */
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Core } from "cytoscape";
-import { busCollapse, HolonicAdapter, hubBurst, UGM } from "@g3t/core";
-import { CytoscapeCanvas } from "@g3t/react";
-import type { CyStylesheet } from "@g3t/react";
+import { busCollapse, HolonicAdapter, hubBurst, UGM } from "@g3-toolkit/core";
+import { CytoscapeCanvas } from "@g3-toolkit/react";
+import type { CyStylesheet } from "@g3-toolkit/react";
 import { CapabilityBubble } from "../components/CapabilityCallout";
 import {
   useRoutingControls,

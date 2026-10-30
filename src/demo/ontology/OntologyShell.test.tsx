@@ -8,7 +8,11 @@
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import type { UGM, StructuralGraphInput, StructuralGeometry } from "@g3t/core";
+import type {
+  UGM,
+  StructuralGraphInput,
+  StructuralGeometry,
+} from "@g3-toolkit/core";
 
 const captured = vi.hoisted(() => ({
   counts: [] as number[],
@@ -28,8 +32,8 @@ const captured = vi.hoisted(() => ({
   edgeClickIsolate: [] as Array<boolean | undefined>,
 }));
 
-vi.mock("@g3t/react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@g3t/react")>();
+vi.mock("@g3-toolkit/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@g3-toolkit/react")>();
   return {
     ...actual,
     CytoscapeCanvas: (props: {
@@ -73,7 +77,7 @@ vi.mock("@g3t/react", async (importOriginal) => {
 });
 
 import { OntologyShell } from "./OntologyShell";
-import { useSelectionStore } from "@g3t/react";
+import { useSelectionStore } from "@g3-toolkit/react";
 
 afterEach(() => {
   // OntologyShell subscribes to the selection store directly, so the

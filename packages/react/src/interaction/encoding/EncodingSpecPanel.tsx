@@ -11,7 +11,7 @@
  */
 
 import { useMemo, useState, type ReactElement } from "react";
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
 import { Icon } from "../../icons";
 import { listIcons } from "../../icons";
 import {
@@ -30,6 +30,7 @@ import {
   NODE_SHAPES,
   SEQUENTIAL_SCALE,
 } from "./palette-bridge";
+import { viewClass } from "../../theme/view-class";
 
 // ── Shared bits ──────────────────────────────────────────────────────
 
@@ -586,7 +587,7 @@ export function EncodingSpecPanel({
         : "theme default";
 
   return (
-    <div className={className} data-testid="encoding-spec-panel">
+    <div className={viewClass(className)} data-testid="encoding-spec-panel">
       <div className="g3t-panel-section-header" style={{ cursor: "default" }}>
         Visual Encoding
       </div>
@@ -1023,7 +1024,7 @@ export function EncodingPreview({
   }, [samples, ugm]);
 
   return (
-    <div className={className} data-testid="encoding-preview">
+    <div className={viewClass(className)} data-testid="encoding-preview">
       {items.map((attrs, i) => {
         const d = Math.round(size(attrs) ?? 18);
         const fill = color(attrs) ?? "var(--g3t-type-0)";

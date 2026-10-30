@@ -16,7 +16,7 @@ export default defineConfig({
     // barrel-parity tests dynamically import each package's TypeScript
     // source barrel (transpiled on the fly) alongside its built dist,
     // and the subpath test imports all 23 entry points. That cost
-    // scales with package size, and @g3t/react is by far the largest
+    // scales with package size, and @g3-toolkit/react is by far the largest
     // barrel, so it is the one that tips over first: it crossed
     // vitest's 5000 ms default on ordinary hardware once the
     // 2026-08-17 merge landed, while core and charts still passed.

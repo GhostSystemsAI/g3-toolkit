@@ -10,7 +10,7 @@
  * with engine tuning); only their structural floors are asserted.
  */
 import { describe, it, expect } from "vitest";
-import { layoutStructural } from "@g3t/core";
+import { layoutStructural } from "@g3-toolkit/core";
 import { ROUTING_SCENARIOS, type ScenarioSize } from "./scenarios";
 import { gradeRoutes } from "./quality";
 

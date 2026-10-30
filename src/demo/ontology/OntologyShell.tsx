@@ -41,7 +41,7 @@ import {
   useStructuralLayout,
   type EncodingSpec,
   FloatingLegend,
-} from "@g3t/react";
+} from "@g3-toolkit/react";
 import {
   type StructuralGraphInput,
   type StructuralGeometry,
@@ -51,7 +51,7 @@ import {
   shaclShapesToStructural,
   closedShapeIds,
   shaclRowSeverities,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import type { Core } from "cytoscape";
 import { executeSparql, type SparqlResult } from "../bio/sparql";
 import { SurfaceFrame } from "../surfaces/DashboardSurfaces";
@@ -727,7 +727,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                   <GraphToolbar
                     key={inferenceOn ? "force" : "hierarchy"}
                     ugm={hierUgm}
-                    cy={viewCore}
+                    core={viewCore}
                     // VR-5: the hierarchy tab mounts breadthfirst
                     // (fcose only when inferred cross-edges are on);
                     // the dropdown now says so.
@@ -807,7 +807,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                       >
                         <GraphToolbar
                           ugm={neighborhood}
-                          cy={viewCore}
+                          core={viewCore}
                           // G4 (owner 2026-07-28): the tab now mounts
                           // hierarchic; the dropdown says so.
                           initialLayout="hierarchy"
@@ -895,7 +895,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                       zIndex: 5,
                     }}
                   >
-                    <GraphToolbar ugm={instUgm} cy={viewCore} />
+                    <GraphToolbar ugm={instUgm} core={viewCore} />
                   </div>
                   <CytoscapeCanvas
                     ugm={instUgm}

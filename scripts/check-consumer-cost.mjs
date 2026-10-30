@@ -14,7 +14,7 @@
  *
  * That measurement retired a standing recommendation. The bundle
  * ledger had been proposing, across four budget raises, that layout be
- * extracted into a separate `@g3t/layout` package to "bring core back
+ * extracted into a separate `@g3-toolkit/layout` package to "bring core back
  * under its original envelope". It would have moved the publish-weight
  * number without changing any adopter's cost, while adding a fourth
  * tarball and a fourth publish to a release sequence that already has
@@ -28,11 +28,11 @@
  *
  * ## What is counted
  *
- * FIRST-PARTY bytes only. Bare specifiers other than `@g3t/*` are
+ * FIRST-PARTY bytes only. Bare specifiers other than `@g3-toolkit/*` are
  * marked external, because `graphology`, `cytoscape` and React are
  * costs the adopter has already accepted and their weight would swamp
  * the signal: a 200 KB graphology baseline makes a 3 KB first-party
- * regression invisible. `@g3t/*` is aliased to the built dist rather
+ * regression invisible. `@g3-toolkit/*` is aliased to the built dist rather
  * than externalized, so a react scenario correctly pays for the core
  * code it pulls in.
  *
@@ -81,24 +81,35 @@ const SCENARIOS = [
     // library at all, so growth here is paid by every single adopter.
     // Measured 4.8 KB. Budget 6.0 KB: tight on purpose, because every
     // adopter pays this one and it should be hard to grow quietly.
-    budget: 6 * 1024,
-    code: `import { UGM } from "@g3t/core";\nexport const g = new UGM();\n`,
+    // 2026-10-13 (issue #17): 7.4 KB, budget 8.0 KB. The derivation
+    // registry (set/get/list/clear, the clearing hooks in the mutators,
+    // and the version-2 snapshot) is part of the data model, and
+    // `fromJSON` now rejects an unreadable version or a stamp for a
+    // missing node with the typed errors of `model/document-errors.ts`,
+    // which pulls that module (about 1.3 KB) onto the floor. The typed
+    // errors are the versioned-document convention a host handles once;
+    // a plain `Error` would save that 1.3 KB at the cost of the one
+    // snapshot parser that does not answer to `DocumentParseError`.
+    budget: 8 * 1024,
+    code: `import { UGM } from "@g3-toolkit/core";\nexport const g = new UGM();\n`,
   },
   {
     id: "core-adapter",
     label: "UGM + SparqlAdapter",
     // The README quickstart's core half.
     // Measured 11.3 KB.
-    budget: 13 * 1024,
+    // 2026-10-13 (issue #17): 13.9 KB, budget 15.0 KB; the same growth
+    // as core-ugm above, nothing adapter-side changed.
+    budget: 15 * 1024,
     code:
-      `import { UGM, SparqlAdapter } from "@g3t/core";\n` +
+      `import { UGM, SparqlAdapter } from "@g3-toolkit/core";\n` +
       `export const g = new UGM();\n` +
       `export const a = new SparqlAdapter("http://x");\n`,
   },
   {
     id: "core-layout",
     label: "UGM + layout engines",
-    // The scenario that retired the @g3t/layout extraction. If this
+    // The scenario that retired the @g3-toolkit/layout extraction. If this
     // ever collapses toward core-ugm, tree-shaking broke; if core-ugm
     // ever climbs toward this, something made layout unconditionally
     // reachable and THAT is the regression the extraction was aimed at.
@@ -140,21 +151,25 @@ const SCENARIOS = [
     // 78.5: clearHintCross plus the per-layer cross-extent lookup in
     // g3tLayoutStructural, both already pulled by G3tLayeredLayout.
     // core-ugm holds at 4.8 KB (no leak). Headroom 0.9 KB.
-    budget: 80 * 1024,
+    // MERGE 2026-10-30 (upstream 1.2.0 into the fork line): both sides grew
+    // the layout path (fork routing/nudging; upstream kShortestPaths and the
+    // path-analysis additions). Measured on the merged tree: 81.8 KB against
+    // the auto-merged 80, so 85 (about 3 KB headroom).
+    budget: 85 * 1024,
     code:
-      `import { UGM, ForceLayout, G3tLayeredLayout } from "@g3t/core";\n` +
+      `import { UGM, ForceLayout, G3tLayeredLayout } from "@g3-toolkit/core";\n` +
       `export const g = new UGM();\n` +
       `export const l = [ForceLayout, G3tLayeredLayout];\n`,
   },
   {
     id: "core-all",
-    label: "@g3t/core root barrel",
+    label: "@g3-toolkit/core root barrel",
     // Worst case for core: an adopter who imports the barrel and uses
     // everything. Close to publish weight by construction.
     // Measured 141.3 KB.
     // RAISED 155 -> 182 KB, 2026-08-17 (merge of the ai-agent-guide
     // feature arc). Measured 178.9 KB. This scenario is `export * from
-    // "@g3t/core"`, so it prices the barrel with nothing shaken out,
+    // "@g3-toolkit/core"`, so it prices the barrel with nothing shaken out,
     // and the arc added routing (see core-layout above), FDEB edge
     // bundling, projection pseudo-nodes, RDF 1.2 hyperarc projection
     // and scene-edge routing. +37.6 KB, tracking the publish-weight
@@ -174,10 +189,20 @@ const SCENARIOS = [
     // `sideEffects: false` package, so an adopter who does not import
     // bundleEdges pays nothing for it; the two scenarios above are the
     // honest readings for real import shapes, and both moved far less.
-    // This line existing is the reason the @g3t/layout extraction was
+    // This line existing is the reason the @g3-toolkit/layout extraction was
     // retired rather than reinstated when the routing arc landed.
-    budget: 196 * 1024,
-    code: `export * from "@g3t/core";\n`,
+    // Round 2 (2026-10-13): 155 -> 160. Measured 156.4 KB after the
+    // working-set configuration (#5: WorkingSetConfig validator and the
+    // default/ceiling/override resolution), paging helpers and the
+    // strategy table (#6), the derivation registry and version-2
+    // snapshot (#17) and tripleEdgeKey (#48). All first-party core, all
+    // reachable from the root barrel by construction; the narrower
+    // scenarios above are the ones that measure what an adopter pays.
+    // MERGE 2026-10-30 (upstream 1.2.0 into the fork line): both ledgers
+    // above stack. Measured on the merged tree: 211.0 KB, so 214
+    // (about 3 KB headroom, the posture the entries above keep).
+    budget: 214 * 1024,
+    code: `export * from "@g3-toolkit/core";\n`,
   },
   {
     id: "react-canvas",
@@ -191,8 +216,25 @@ const SCENARIOS = [
     // landing in CytoscapeCanvas's dependency tree, and from the
     // nudging/relayout additions visible in core-layout above.
     // Headroom 3.4 KB.
-    budget: 98 * 1024,
-    code: `export { CytoscapeCanvas } from "@g3t/react";\n`,
+    // 2026-10-13 (host-integration round): 92 -> 104 KB. Measured
+    // 95.3 KB after issues #13/#14/#28 (encoding re-apply on rebuild,
+    // label restore, content-keyed stylesheet restyle), #27/#32 (preset
+    // never animates, overlay theme rules), #26 (additive graph
+    // updates: planner, seed placement, fixed-node fcose pass) and #40
+    // (label collision: resolver, measurement, apply pass). All of it
+    // is canvas code reached by this import; the two opt-in features
+    // (#26, #40) do no work unless their prop is set, so the cost to a
+    // host that never opts in is bytes only. Rejected for now: loading
+    // the #40 apply pass through a dynamic import() when the prop is
+    // set, which would hand back about 4 KB here at the price of a
+    // first-pass delay after layoutstop; worth revisiting if this
+    // scenario keeps growing. Core's share is unchanged (its scenarios
+    // above moved by well under 1 KB).
+    // MERGE 2026-10-30 (upstream 1.2.0 into the fork line): both ledgers
+    // above stack. Measured on the merged tree: 113.7 KB, so 117
+    // (about 3 KB headroom, the posture the entries above keep).
+    budget: 117 * 1024,
+    code: `export { CytoscapeCanvas } from "@g3-toolkit/react";\n`,
   },
 ];
 
@@ -241,8 +283,8 @@ try {
       publicDir: false,
       resolve: {
         alias: [
-          { find: /^@g3t\/core$/, replacement: CORE },
-          { find: /^@g3t\/react$/, replacement: REACT },
+          { find: /^@g3-toolkit\/core$/, replacement: CORE },
+          { find: /^@g3-toolkit\/react$/, replacement: REACT },
         ],
       },
       build: {
@@ -256,7 +298,9 @@ try {
           // remains is g3t's own bytes, which is the thing this repo
           // controls and the thing a regression would show up in.
           external: (id) =>
-            !id.startsWith(".") && !isAbsolute(id) && !id.startsWith("@g3t/"),
+            !id.startsWith(".") &&
+            !isAbsolute(id) &&
+            !id.startsWith("@g3-toolkit/"),
         },
       },
     });

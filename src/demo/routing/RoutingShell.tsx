@@ -33,13 +33,13 @@
  * re-add it here without revisiting that.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { StructuralSvgView, useStructuralLayout } from "@g3t/react";
-import type { StructuralSvgViewProps } from "@g3t/react";
+import { StructuralSvgView, useStructuralLayout } from "@g3-toolkit/react";
+import type { StructuralSvgViewProps } from "@g3-toolkit/react";
 import type {
   StructuralGeometry,
   StructuralGraphInput,
   StructuralLayoutOptions,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import { publishScene } from "../testing/e2e-hooks";
 import {
   DEFAULT_ROUTING_SCENARIO,
@@ -344,7 +344,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
     [
       dir,
       layerGap,
-      routeMode,
+      routeEdges,
       nudge,
       smartAttach,
       longEdge,

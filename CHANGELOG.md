@@ -1,5 +1,1474 @@
 # Changelog
 
+## Unreleased
+
+### 2026-10-30 (fork line merged: upstream 1.2.0 into GhostSystemsAI `work/post-rc007`)
+
+The GhostSystemsAI fork (routing/nudging arc, Routing Lab, RDF 1.2
+hyperarcs, Legibility Lab, Flowchart shell, the rc011-rc028 heal rounds)
+took `zwelz3/main` at `daa909a` (1.2.0 plus the host-gaps round 3).
+27 files conflicted; every resolution keeps both sides' additions.
+
+- Package scope follows upstream: `@g3t/*` is `@g3-toolkit/*` everywhere
+  in code, tests, scripts and docs (history files untouched). Version is
+  1.2.0 across the four manifests (`verify:versions` green).
+- `CytoscapeCanvas`: upstream's label collision (#40), additive graph
+  updates (#26/#64), encoding re-apply (#13) and the extracted
+  `applyStyleOverrides` helper coexist with the fork's `routeEdges`,
+  refresh/relayout signals and `edgeClickIsolate`. The fork's
+  `[field]`-scoped override bypass now lives inside the upstream helper.
+  The fork's routing listeners are wired lazily (at init when `routeEdges`
+  is on, else the first time it turns on), so a canvas that never routes
+  registers no `layoutstop`/`free` listener of its own, which is what the
+  #40 tests assert. One `layoutSettledRef`, owned by upstream's
+  per-instance settlement rule; the fork's blanket reset after init went.
+- `BioShell`: the fork's Wrap-labels toggle and `RoutingControlStrip` sit
+  in upstream's toggle row as a "Routing" group beside Labels/Explore.
+- `verify` runs upstream's new `verify:versions`, `verify:tokens` and
+  `verify:externals`, then the fork's `verify:budgets` (both bundle
+  ledgers, no short-circuit) in place of `verify:bundle && verify:consumer-cost`.
+- Budgets re-measured on the merged tree: core 242.1 KB (245), react
+  471.6 KB (475), consumer-cost layout engines 81.8 (85), core barrel
+  211.0 (214), CytoscapeCanvas 113.7 (117). API surface snapshot unchanged
+  after regeneration.
+- Upstream tests that `await import()` inside a test body preload the
+  same module at collection time (the fork's cold-mount fence).
+- Wake runtime artefacts (job specs, atoms index, logs, STATE.json) are
+  untracked and ignored; they were never upstream's.
+
+### 2026-10-13 (gaps found integrating 1.2.0 into a host, #53)
+
+Twelve sub-issues from the host that drove #23, re-checked against
+the `v1.2.0` tag, worked as ten agents in isolated worktrees and
+merged one branch at a time (`planning/host-gaps-round-3.md`). Eight
+are defects against shipped behavior and four add to the public
+surface. What an adopter on 1.2.0 should read first:
+
+- **Overlay members no longer take your stylesheet's chrome (#63).**
+  The `stylesheet` prop now lands BEFORE the overlay block, so a host
+  `node { border-width: 1 }` or `edge { width: 1.5 }` no longer strips
+  the overlay border or line width from members. Remove any restated
+  `node.g3t-ov-member` / `edge.g3t-ov-member` workaround and set the
+  theme's `overlayColor` and tone colors instead; a more specific host
+  selector cannot win, because Cytoscape resolves by order alone.
+- **Additive mode shrinks in place (#64).** `graphUpdate="additive"`
+  no longer rebuilds when a node leaves the ugm. A host that relied on
+  a removal forcing a fresh layout and fit passes that step through
+  `graphUpdate="rebuild"`.
+- **TableView search is word-AND across the row (#58).** Every
+  whitespace-separated word must match somewhere in the row, not the
+  same cell; wrap a phrase in double quotes to match it as one
+  substring.
+- **Path search never finds a node the graph does not report (#65).**
+  `findShortestPath(g, x, x)` returned a zero-hop path for a missing
+  `x`; it now returns not found, as the other two searches already did.
+- **TreeView rows are paths (#59).** A node reachable from several
+  parents renders under each; `tree-node-<id>` test ids repeat per
+  copy, and expansion is per copy.
+- **Bundle:** react 450 to 465 KB (ledger entries for #57/#58, #59 and
+  the merge-step re-measure); core unchanged.
+
+Defects against shipped behavior:
+
+- **`ShaclShapeBrowser` no longer lists an empty `targetClass` as a
+  target (#54).** `targetsOf` always put `{ kind: "class", value:
+  shape.targetClass }` first, and `targetClass` is required on
+  `ShaclShape`, so a shape targeted only by `sh:targetSubjectsOf` or a
+  SPARQL target, or with no target at all, passed `""` and rendered
+  "→ , subjects of decomposes", "→ , SPARQL target" or a bare "→". An
+  empty `targetClass` now contributes no entry, and a shape with no
+  target draws no arrow. Tests cover a subjectsOf-only shape, a
+  SPARQL-only shape and an untargeted shape. `targetClass` stays
+  required on the type; making it optional is a core type change left
+  for a ruling.
+- **`ShaclShapeBrowser` badges a shape validated with 0 focus nodes as
+  "No focus nodes", not "Not validated" (#55).** The badge treated
+  `totalNodes === 0` as not validated even when the `summary` prop
+  carried `{ focus: 0, failing: 0 }` for the shape. "Not validated" is
+  now reserved for a shape with no summary entry and no results; a
+  summary entry with zero focus nodes gets a neutral badge (minus
+  glyph, muted tone, aria-label "No focus nodes"), the summary line
+  reads "0 focus nodes", and the expanded panel no longer says "All 0
+  nodes pass validation." Every badge state exposes `data-state`
+  (`not-validated`, `no-focus-nodes`, `pass`, `fail`) alongside the
+  existing `data-severity`. The #35 test that asserted the old reading
+  now expects the new one; a new test covers all three states.
+- **`SchemaView` badges every class a shape targets, shapes flow down
+  to subclasses, and a class renders under each of its parents (#56).**
+  The view found a class's shapes with `s.targetClass === name`, so a
+  shape whose `targets` (added in 1.2.0, #35) named several classes
+  badged one of them; the host had shapes targeting 13 and 7 classes.
+  A shape now badges `targetClass` and every `targets` entry of kind
+  `class`, deduplicated; the display-only `SchemaViewShape` accepts the
+  same optional `targets`. SHACL's `sh:targetClass` selects instances
+  of subclasses, so with `subClassOf` a shape declared on a superclass
+  also appears on each subclass, after the direct shapes, marked
+  inherited: the row carries `g3t-schema-shape-inherited`,
+  `data-inherited-from` and a title naming the declaring class, and
+  the badge adds `N inherited` with `data-inherited-count`.
+  Attribution is to the nearest declaring ancestor, a shape the class
+  targets directly is never listed twice, and an inherited shape's
+  failing results count toward the subclass status. Per the
+  maintainer's ruling, a class with several superclasses renders once
+  under each instead of under the first listed only: the copies share
+  one class record, so their badges agree, and each card carries its
+  own `data-parent`, `data-depth` and a root-to-card `data-path` that
+  keys it, since `schema-class-<name>` now repeats per copy; a link
+  that closes a cycle entered from a root is cut, and a cycle with no
+  entry is still promoted to the top level. Badges without inheritance
+  render exactly as before. Tests cover the `targets` badges, direct
+  and inherited order and marks, dedupe, multi-level attribution,
+  inherited status, two-parent rendering and the cycle cut; the wiring
+  guide's class-hierarchy section and its twin state the three rules.
+- **TableView: keyboard sorting (#57).** The header sort trigger was a
+  div with an onClick, so a keyboard or screen-reader user could not
+  sort at all. It is a native button now: in the tab order with the
+  stylesheet's focus ring, Enter and Space toggle the sort, and
+  Shift+Enter adds a sort column the way Shift+click does (handled on
+  keydown with the default suppressed, so the modifier is honored
+  regardless of how a browser synthesizes the click). `aria-sort`
+  stays on the `th` and is omitted on a column that cannot sort. Click
+  behavior, classes and test ids are unchanged. Tests:
+  `table-keyboard-sort.test.tsx`.
+- **Label collision (#60).** Candidacy was decided from the data
+  `label` alone, so an element whose stylesheet blanks the label (edge
+  labels on hover only, for example) was still measured and ranked as
+  a zero-size box at the pan point. `applyLabelCollisionPass` now
+  reads the rendered label (`pstyle("label")`) when the instance
+  reports one and skips elements whose rendered label is empty or
+  whose label box has zero width or height; a headless core or a
+  minimal mock without `pstyle` falls back to the data field. The
+  canvas also subscribed the pass to every selection-store write and
+  ran a full synchronous measure per mouseover and mouseout (about 50
+  ms each on the host's 300-node graph). The listener now diffs the
+  three fields the pass reads: a selection change (by content) runs at
+  once, a hover change rides the same 120 ms debounce as zoom, and a
+  write that changes none of them runs nothing; a full pass cancels a
+  pass pending on the debounce. The pass also re-runs on a ugm change,
+  so a label hidden under a node the additive path removed (#64)
+  returns without waiting for the next zoom. Tests: blanked label not
+  measured and hiding nothing at the pan point, zero-size box not a
+  candidate, no-op store writes run no pass, a hover burst runs one
+  pass, an additive removal re-runs the pass.
+- **`Minimap` no longer draws hidden nodes or their edges (#61).** The
+  painter drew every top-level node and every edge regardless of
+  visibility, so a graph filtered through the canvas `hidden` prop
+  (the `g3t-hidden` class) showed minimap dots the canvas did not
+  render. The painter now skips elements that are not `visible()`
+  (display: none, visibility: hidden, a hidden parent), skips edges
+  that are hidden themselves or whose top-level endpoint is skipped,
+  and frames the visible elements only, so a hidden far-off node no
+  longer shrinks the overview. `nodeFilter` is unchanged and composes
+  with the default: a host predicate narrows further and need not
+  restate visibility (hosts passing `nodeFilter={(n) => n.visible()}`
+  can drop it). Note that `visible()` also treats `opacity: 0` as
+  hidden. Six regression tests cover the hidden node, hidden edge,
+  hidden compound parent, filter composition, framing and the
+  all-hidden graph.
+- **Design-token warning probes the canvas container, not `<html>`
+  (#62).** The development-only "design tokens not found" warning in
+  `CytoscapeCanvas` read `--g3t-bg-primary` from
+  `document.documentElement` and blamed a missing `style.css` import.
+  `style.css` has defined no color tokens since #24, and a theme
+  scoped through `setThemeTarget` (#33) writes them on a container, so
+  a host following the guide got a false warning naming the wrong
+  cause (hidden only when the bundler leaves `process` undefined,
+  which skips the check). The probe now reads `getComputedStyle` of
+  the canvas's own container, which inherits the tokens from whichever
+  ancestor received the theme, falling back to `<html>` only when the
+  ref is unset; the message names an unapplied or wrongly scoped theme
+  as the likely cause and still points at the `style.css` import. Test:
+  `CytoscapeCanvas.token-warning.test.tsx` (tokens on a wrapper, on
+  `<html>` only, and nowhere). The consuming guide's sentence about the
+  warning was corrected to match.
+- **Path search: one endpoint rule for all three searches (#65).**
+  `findShortestPath` answered source equals target before calling
+  `hasNode`, so a host `PathGraph` that indexes only nodes with edges
+  got a zero-hop path from it and nothing from `allShortestPaths` or
+  `kShortestPaths`. The existence check now runs first in every
+  search: a node the graph does not report is never found, not even as
+  its own path, and an existing node is its own zero-hop path in all
+  three (`length: 0`, `pathCount: 1`, a one-element array). Tests pin
+  both cases for all three functions over a plain UGM and an
+  edge-indexed `PathGraph`. The wiring guide's Path analysis section
+  states the rule, notes that `kShortestPaths` costs up to k × L
+  bounded searches, and shows how to list only the tied-shortest
+  routes by running it over the `allShortestPaths` edge union bounded
+  at the shortest length, with an executable twin.
+
+Additions to the public surface:
+
+- **Overlay rules outrank the host stylesheet (#63, follow-up to
+  #32).** `composeCanvasStylesheet` pushed the `stylesheet` prop after
+  `OVERLAY_RULES` and `overlayThemeRules`, and Cytoscape resolves rules
+  by order alone (it has no selector specificity), so a host `node {
+  border-width: 1 }` or `edge { width: 1.5 }` stripped the overlay
+  border and line width from every member, and a host attribute or
+  focus-class color beat the overlay color; the #32 theme color reached
+  a member only where the host set nothing. The host sheet now lands
+  after the theme and encoding rules (it keeps winning those ties) and
+  BEFORE the overlay block, which is the canvas precedence CLAUDE.md
+  already stated; the svg-overlay transparency, label-collision and
+  hidden rules keep following it. Headless cytoscape tests assert the
+  merged order and the computed styles through the real merge. The
+  wiring guide, the consuming doc and the overlay design record state
+  the order and that a host restyles members through the theme
+  (`overlayColor`, the tone colors) or a per-element bypass. No demo
+  or story relied on the old order.
+- **Additive graph updates shrink in place (#64).**
+  `graphUpdate="additive"` (#26) grew the live instance only while the
+  new `ugm`'s node set was a superset of the drawn one; a collapse or
+  a type filter dropped a node, the plan's `superset` went false, and
+  the instance was re-created with every position and the camera lost.
+  Maintainer ruling: "same input graph minus some nodes" is the same
+  scene under the camera/position doctrine, so additive mode itself
+  removes; no new mode value. The plan now carries `removeNodeIds`,
+  and `superset` became `sameScene`: the plan applies whenever the new
+  ugm shares at least one node with the live instance (grow, shrink,
+  or both in one step); a disjoint set, the empty ugm included, still
+  rebuilds, since an empty graph has no scene to keep (so the first
+  non-empty ugm after an empty one now rebuilds and fits instead of
+  growing an unfitted empty instance). `applyAdditiveUpdate` removes
+  the nodes with their incident edges in the same batch before adding,
+  runs no layout for a pure removal, never writes the camera, seeds
+  new nodes from survivors only and holds only survivors in
+  `fixedNodeConstraint`. A removed compound parent does not take its
+  surviving children: they are moved to the top level with
+  `eles.move({ parent: null })` first; a surviving node that changes
+  to another parent still takes the rebuild. Store entries naming a
+  removed id (pin, selection, overlay member, hidden) are the host's
+  and stay; every re-apply pass already skips ids the instance lacks.
+  Tests: the mocked canvas suite and the headless fcose suite cover
+  shrink, shrink plus grow, the disjoint and empty boundary, the
+  compound parent and host stores. Wiring guide section renamed "Grow
+  or shrink a drawn graph without rebuilding it" with a collapse step,
+  the boundary and the upgrade note; the Bio demo's Reset now shrinks
+  in place and its caption says so.
+- **TableView: adoption gaps (#58).** A host replacing its own
+  TanStack table was blocked by six gaps: sorting was internal only,
+  there was no per-column hidden-by-default or CSV value, no
+  empty-state message, no toolbar slot, and the filter kind was never
+  inferred. TableView gains `sorting` + `onSortingChange` (controlled)
+  and `initialSorting` (seed), shaped like `columnOrder`, with the
+  exported `TableSort` type; per-column `hidden`, `csv` (routed through
+  a new optional third `getCsv` argument, `{ value(row, column) }`,
+  exported as `TableCsvOptions`), `align: "num"`, `width` and `title`;
+  an `emptyMessage` prop over a `role="status"` row that the body
+  renders when nothing matches; a `toolbar` slot beside the Export CSV
+  button; filter-kind inference when `filter` is unset (range for
+  all-numeric columns, a values checklist when at most 20 distinct
+  values and at most half the rows, text otherwise; an explicit kind
+  wins; rows path only, so the UGM path's filters and e2e selectors are
+  unchanged); first/last page buttons and a rows-per-page select
+  (`pageSizeOptions`, optional `onPageSizeChange`); repeated `rowId`s
+  suffixed `#2`, `#3`; and, when the column set changes (one SPARQL
+  result replacing another), filters and the internal sort on columns
+  that left are dropped and a controlled sort is reported back pruned.
+  Search semantics changed under the maintainer's ruling: the query is
+  split on whitespace and every word must appear somewhere in the row
+  across the visible searchable columns, not the same cell, with a
+  double-quoted phrase matching as one substring; the stored filter
+  keeps its shape and each row is evaluated once. Wiring guide: a new
+  recipe with its executable twin, and the search and inference
+  sentences. Tests: `table-adoption.test.tsx` (18 tests) and the search
+  cases in `table-followups.test.tsx`. Bundle ledger: react +6.4 KB
+  measured, all TableView.
+- **TreeView adoption gaps (#59).** A host evaluating `TreeView` for
+  ontology rails could not swap in its own keyboard tree: `build` kept
+  a visited set over the open rows, so a class with two superclasses
+  showed under one of them only (and which one changed as rows
+  opened); there was no filter, no label render slot, no expand-only
+  rows, selection went only through the shared store, a selection
+  arriving from outside was neither revealed nor scrolled to,
+  expansion seeded by depth only, and the tree's accessible name was
+  hard-coded. Rows are now paths: one placement walk puts a node under
+  every parent it is reachable from (maintainer ruling), cuts a cycle
+  where a node is already on the current path, keeps a declared root
+  off the descendant level, and is capped at 100,000 rows for
+  pathological DAGs; row identity (key, expansion, focus) is the path,
+  selection is the node id so one pick highlights every copy, and the
+  working-set limit counts rows. New props: `filter` (string or
+  predicate; matches plus ancestors, ancestors held open while active,
+  the user's expansion restored on clear), `renderLabel(node, ctx)`
+  with `depth`, `expanded`, `selected`, `childCount` and `group`
+  (types `TreeRowNode` and `TreeLabelContext` exported), `isGroup(node)`
+  for expand-only rows (toggle on click, Enter and Space, no
+  `aria-selected`, `data-group`), `selected` for controlled selection
+  (the store is neither read nor written; `onSelect` is the channel),
+  `initialExpanded`, and `ariaLabel` (default "Hierarchy"). A selection
+  arriving from outside (store or `selected`, including at mount) opens
+  the branch of every copy and calls `scrollIntoView({ block: "nearest"
+  })` on the first; a pick inside the tree does neither. The breadcrumb
+  still follows the first incoming edge, so a node under several
+  parents shows one path there. Tests cover each item plus the DAG
+  placement, the cycle cut and the per-row limit; the wiring guide
+  gained an ontology-rail section with its executable twin. Bundle
+  ledger: react +4.4 KB measured, all in the tree chunk.
+
+## 1.2.0 PUBLISHED: 2026-10-13
+
+Published to npm as `@g3-toolkit/*` 1.2.0 under tag `v1.2.0`. This
+section holds everything merged between 1.1.0 and that tag: the
+host-integration round (#23), backlog round 2, and the #50 findings.
+
+A minor release under the version policy: every change to an exported
+name or prop is additive, and the two renames keep the old form as a
+deprecated alias. What an adopter on 1.1.0 should read before
+upgrading:
+
+- **Deprecated, still accepted:** `GraphToolbar`'s `cy` prop (use
+  `core`; one development warning when only `cy` is given) and
+  `useAnnounce` (use `useAnnouncer` with `AriaCompanion`'s
+  `announcement` prop). Both are removed no earlier than 2.0.0.
+- **Visible without a code change:** every view root carries
+  `g3t-view` (#45), so a host that imports only `style.css` now sees
+  the toolkit's 13px/1.5 typography where views used to inherit the
+  host's body text; and `style.css` no longer restyles the host page
+  (#24), whose page-wide rules moved to the opt-in `style.base.css`.
+- **Edge ids from the adapters change (#48).** Gremlin, Cypher and
+  triple-derived edges are keyed on the source's own id or on
+  `tripleEdgeKey`, so a host that persisted 1.1.0 edge ids (a selection,
+  a pin, a workspace snapshot) will not find them again.
+- **UGM snapshots are version 2 (#17).** 1.2.0 reads version 1 and
+  unversioned snapshots; 1.1.0 loads a version 2 snapshot without
+  checking its version and drops the derivation stamps.
+- **New regular dependency:** `@tanstack/react-virtual` in
+  `@g3-toolkit/react` (#47).
+
+### 2026-10-13 (three incidental findings from the #19 inventory, #50)
+
+- **`context:hideNodes` hides through the class only, so the `hidden`
+  prop can un-hide what it hid (#50).** The handler in
+  `wire-cytoscape-actions.ts` wrote a `display: none` style BYPASS on
+  the node and its connected edges as well as the `g3t-hidden` class.
+  A bypass outranks every stylesheet rule, so a node hidden from the
+  context menu stayed invisible after a host removed it from the
+  `hidden` set, and the two visibility paths disagreed. The bypasses
+  were also redundant: `.g3t-hidden` already sets `display: none`, and
+  Cytoscape drops an edge whose endpoint is not displayed. The handler
+  now adds the class and nothing else; the test asserts no bypass is
+  written.
+- **The context-menu story binds the command bus inside `onReady`.**
+  `CytoscapeCanvas.stories.tsx` wired `wireCytoscapeContextActions` in
+  an effect keyed on `ugm` over a stored handle, the shape the guide's
+  double-click recipe warns against: the canvas re-creates its core on
+  the rebuild props too, and the effect never re-ran for those, leaving
+  the bus wired to a destroyed core. The story now wires inside
+  `onReady` with a disposer that runs before the next wiring and on
+  unmount.
+- **The double-click recipe has an executable twin.** The guide's
+  "Double-click a node to open detail" was the one recipe without a
+  twin in `examples/wiring`, and the only one registering a gesture.
+  The twin runs the recipe's handler against a headless core, fires
+  `dbltap` on a node (selection store written, detail opened) and on the
+  background (one `animate` fit).
+
+### 2026-10-13 (backlog round 2: rulings applied to #5, #6, #9, #16 to #20, #44 to #48)
+
+Source: the backlog left after #43 (the five follow-ups it filed plus
+the 2026-08 design-level issues), worked after the maintainer ruled on
+each decision the issues had been waiting for: `core` wins the handle
+name (#18), the derivation stamp lives in a sidecar map (#17), overlay
+sequencing is library surface (#20), AriaCompanion goes into the
+Provenance Auditor (#16), working-set limits take a default and a
+ceiling per view (#5), matrix pagination and the UGM page descriptor
+go ahead (#6), virtualization uses `@tanstack/react-virtual` (#47),
+the `g3t-view` root class is a public DOM change worth making (#45),
+and triple-derived edges dedupe first-wins (#48). Held per the same
+rulings: #12 (advanced routing) and the fork PR #3. Fourteen agents in
+isolated worktrees, merged one branch at a time onto this branch with
+the affected suites re-run after each merge. Round log:
+`planning/backlog-round-2.md`.
+
+- **`CytoscapeCanvas` style overrides, position pins and algorithm
+  overlays are re-applied to a rebuilt instance (#44).** The
+  style-override, pin and overlay effects keyed only on their own store
+  data, so a layout, edgeStyle, layoutOptions, interactionOptions,
+  containment or animate rebuild produced a bare instance until the
+  store next changed, the same defect #13 fixed for the encoding spec.
+  The three passes are now module-level functions
+  (`applyStyleOverrides`, `applyPinLocks`, `applyOverlayClasses`) that
+  the init path calls right after creating the instance, in the order
+  the effects run, reading the stores directly; each effect records
+  what it applied and skips an application the init path just made, so
+  mount and every rebuild apply each layer once. Additive growth (#26)
+  is unchanged. Restyle-only. Tests:
+  `CytoscapeCanvas.rebuild-decorations.test.tsx` (fifteen cases, nine
+  red before the fix) and a once-proof in the additive suite.
+
+- **Demo opt-ins for `labelCollision` and additive updates (#46, demo
+  half).** The Biomedical Knowledge Graph shell carries both. A Labels
+  control (All / Shorten / Hide, default Shorten, `labelMaxLength` 14)
+  switches `labelCollision` on whichever canvas view is showing. A third
+  canvas view, Explore, draws the subgraph induced by a drawn id set,
+  seeded with the three diseases; Expand selected adds the selected
+  node and its depth-1 neighbors as a superset ugm whose edges are keyed
+  by endpoints and type, with `graphUpdate="additive"` passed only in
+  that view; Reset shrinks the set and rebuilds on purpose. The spec's
+  categorical scale pins its domain so the subset cannot reshuffle
+  class colors. Rendered behavior awaits the live review in #46.
+
+- **Adapters pass stable edge keys (#48, both halves).** `GremlinAdapter`
+  keys each edge on its Gremlin id through a stable stringification
+  (GraphSON typed values unwrapped, JanusGraph relation ids as their
+  string, other object ids as sorted-key JSON) and names vertices and
+  endpoints with the same function, where `String(id)` had turned every
+  typed id into "[object Object]". `RestEdgeMapping` and
+  `Holon.interiorEdges` take an optional `id`; holarchy edges are keyed
+  on `portal.id`. `CypherAdapter` keys on the Neo4j 5 `elementId` and
+  never the legacy `id`, which is a per-entity-type counter that would
+  collide with node ids in Cytoscape's single id space; a 4.x response
+  keeps generated ids, and a relationship repeated across path rows is
+  now one edge. Triple-derived edges in the SPARQL adapter and the
+  projection pipeline are keyed by one shared helper,
+  `tripleEdgeKey(subject, predicate, object, graph?)`, the triple's
+  N-Triples line without the dot, whose leading `<` keeps it disjoint
+  from every node id; the named graph joins the key only when a caller
+  passes one, since both core paths merge graphs. On a duplicate key
+  every adapter keeps the first record and skips the later one, the
+  treatment a repeated node id already got. Twenty-nine tests across
+  the six paths. Still open, filed in the round log: Cytoscape's single
+  id space is a general #31 hazard the converter does not guard.
+
+- **`TableView`: CSV export, values checklist, column reorder,
+  cross-column search and row virtualization (#47).** `exportCsv` adds
+  an "Export CSV" toolbar button that writes the filtered rows in the
+  current sort and the visible columns in their current order, from
+  cell values, as RFC 4180 text; `getCsv(rows, columns)` is the
+  exported pure half, and the browser download is a guarded no-op in
+  jsdom or replaced through `download`. The `"values"` filter is a
+  checklist popover with per-value counts, All/None shortcuts and the
+  column menu's Escape/outside-click close; several ticks are a union.
+  The column menu gains move left/right driving TanStack `columnOrder`;
+  `columnOrder` and `onColumnOrderChange` let a host control or persist
+  it. `search` adds one box over the visible columns only (the
+  searchable ids travel inside the `globalFilter` value because the
+  filtered row model memoizes on the filter value, not visibility).
+  `virtualize` (boolean or `{ overscan, threshold }`, default off)
+  windows the rows of the `fill` scroll region through
+  `@tanstack/react-virtual` (`^3.14.18`, a regular dependency beside
+  `@tanstack/react-table`); it engages per page only past `threshold`
+  rows (default 150), so a small table's DOM is unchanged, with
+  aria-hidden spacer rows holding the height, `rowHeight` as the size
+  estimate, the focused row pinned while scrolling, and the first
+  `overscan` rows rendered before the region is measured. `autoPageSize`
+  is ignored while `virtualize` is set. Guide recipes with executable
+  twins for all five.
+
+- **`onReady` reach inventory and promotion proposal (#19, design record
+  only).** `roadmap/design/onready-inventory.md` catalogues every reach
+  through the Cytoscape `Core` across the shells, examples, guide
+  snippets, the library's own handle-taking components and the tests:
+  86 rows, 63 of them operations (camera 20, position reads 9, layout
+  runs 6, lifecycle 5, class 5, reads 5, style bypasses 4, position
+  writes 3, gestures 2, four singletons; 23 plumbing). Gesture
+  registration, the issue's lead example, appears only in the guide's
+  dbltap snippet, which has no executable twin. The record proposes the
+  promoted surface concretely typed, costs the three `onReady` options
+  against the rows, recommends narrowing to a capability object staged
+  behind a stability policy, and states what that means for #18. The
+  rulings it asks for are in the round log.
+
+- **One name for the Cytoscape handle prop: `core` (#18).** `GraphToolbar`
+  took the `onReady` instance as `cy` while `Minimap` took it as
+  `core`. `core` is canonical on both; `cy` stays accepted as a
+  deprecated alias for one major, resolved as `core ?? cy` by one
+  internal helper (core wins when both are supplied), with one
+  development warning per component when only `cy` is given.
+  `SearchBar`'s `onSearchChange` is optional: the bar drives the
+  selection store on an explicit pick regardless, and `GraphToolbar`'s
+  no-op callback is gone. In-repo callers migrated; the wiring guide
+  documents the alias in place of the inconsistency.
+
+- **Overlays can be walked in order (#20).** A layer over
+  `useOverlayStore`, not a change to it: `useOverlaySequence({ ids, mode,
+  speedMs, loop, autoplay })` holds the index and transport and on every
+  step merges into `activeIds` exactly the ids it owns, leaving every
+  other overlay alone; `OverlayTransport` is its presentational face
+  (prev / play-pause / next, a live "3 of 7" readout, optional speed and
+  loop, each suppressible, token colors only); the rules are the pure
+  `computeSequenceActiveIds`, `stepSequence` and `mergeSequenceActiveIds`.
+  On unmount or an `ids` change the sequence restores the ids it owned
+  to the state they had when it took them. Playback is one
+  `setInterval` whose tick advances its own index ref so batched ticks
+  cannot collapse. Story under Molecules/OverlayTransport; guide section
+  with a twin that registers a foreign active overlay and proves it
+  survives mount, stepping, a host toggle and unmount.
+
+- **Derived property values now record which definition produced them
+  (#17).** The UGM holds a derivation registry as a SIDECAR map, never
+  on node attributes: `setDerivation`, `getDerivation`,
+  `listDerivations`, `clearDerivation`, each stamp naming the
+  definition, its version, the write time and the expression.
+  `DerivedPropertyEngine` stamps every value it writes with a monotonic
+  per-definition version (bumped when `define` changes the expression)
+  and gains `getVersion`, `recompute(ugm, name)` and `listStale(ugm)`.
+  A plain `updateNodeProperties` write to a stamped key clears the
+  stamp; `removeNode` and `clear` drop stamps. The UGM snapshot moves to
+  version 2 with an optional `derivations` field; a snapshot without a
+  version still loads, another version throws `UnsupportedVersionError`,
+  a stamp for a missing node throws `MalformedDocumentError` (new
+  `DocumentKind` "ugm"). `exportSubgraphJson` carries the stamps
+  (additive field, document version unchanged); CSV is unchanged and
+  says so. Both inspectors show "derived by <definition>" through
+  `PropertyField.derivedBy`; `TableView` marks a derived cell with
+  `data-derived` and `g3t-table-cell-derived`. The SHACL validator and
+  the encoding spec are unchanged. No PROV-O wiring. Consumer-cost
+  budgets for the two UGM-rooted scenarios raised (6.0 to 8.0 KB, 13.0
+  to 15.0 KB), about half of the UGM growth being the typed error
+  vocabulary now reachable from `fromJSON`.
+
+- **CanvasAdapter and Minimap rasterization now tested (#9).** jsdom
+  returns null from `getContext("2d")`, so `paint()` and the Minimap
+  painter never ran under the unit suite and no e2e spec referenced
+  either. No source change: the unit suite spies
+  `HTMLCanvasElement.prototype.getContext` to hand each component a
+  recording Proxy context, and `canvas-adapter.test.tsx` pins one
+  `setTransform(dpr)` per paint, gradient extents and stops, the halo's
+  0.35 alpha and its restore, opacity reset and every DrawOp kind
+  reaching its primitive; `Minimap.test.tsx` drives the painter against
+  a fake core. `tests/e2e/raster-paint.spec.ts` reads pixels back
+  through `getImageData` on the production bundle (Supply Chain's
+  canvas-adapter toggle, the Style Lab F2 pane at deviceScaleFactor 2
+  for the halo ring and gradient steps, the Supply Chain Minimap); each
+  assertion was confirmed red against a deliberately broken `paint()`.
+
+- **AriaCompanion is used by a shell, and the gaps that surfaced are
+  closed (#16).** Wiring it into the Provenance Auditor found that
+  `useAnnounce` had never reached a live region: it set component-local
+  state nothing rendered. The component gains optional props, none
+  renamed: `announcement`, `announceDebounceMs`, `muted`,
+  `summarizeNode`, `hidden`, `label` and `instructions`; new
+  `useAnnouncer` returns the message to pass as `announcement`;
+  `useAnnounce` is deprecated in place. The auditor announces the
+  selection with directed PROV-O edge counts and the SHACL count plus
+  worst severity, the lineage step when a trace opens or a hop is
+  clicked, and the time window on a move, debounced at 300 ms and muted
+  during Play; the canvas region carries an accessible name and the
+  shell's `inset: 0` rule is overridden so the companion does not shield
+  the canvas. Nine component tests, seven shell tests, a guide recipe
+  with its twin; real screen-reader behavior is listed in the shell's
+  review copy.
+
+- **Pagination is a shared capability; the matrix pages instead of
+  truncating (#6, R7.3).** Core gains a page descriptor, `PageWindow
+  { offset, size, total, totalExact }`, and the helpers `pageNodes`,
+  `pageCategories`, `pageItems`, `pageCount` and `pageIndex`, which cut
+  a page in a stable code-unit id order or a caller comparator with id
+  as the tie-break; offset form only, since the in-memory UGM has no
+  cursor layer. `checkLimit` keeps `allowed`, `limit` and `requested`
+  and adds `strategy` ("allow" within the limit, otherwise the view
+  type's row of the exported `DEFAULT_LIMIT_STRATEGIES`: canvas, tree
+  and streaming refuse, table and matrix page, sankey truncates; a third
+  argument overrides per call) and `pageSize`. `@g3-toolkit/react` gains
+  the `PaginationControl` molecule (stateless prev/next, "Page X of Y",
+  a "rows 1 to 200 of 350" summary, optional page-size select,
+  aria-labels, Arrow/Home/End). `MatrixView` renders one control per
+  axis and pages rows and columns independently past `maxSize`, so a
+  350x350 request opens at 200x200 and every cell is reachable; the
+  color scale is over the whole matrix so paging never recolors; the
+  truncation notice is gone. R7.3's criterion is restated as a passing
+  test (a static render: a jsdom commit of 40,000 inline-styled cells
+  costs about 6 s). Not in this slice: `TableView` keeps its TanStack
+  bar, canvas and tree still refuse, aggregate-into-"other" is a
+  documented non-goal.
+
+- **Working-set limits are deployment configuration (#5, R7.7).**
+  `WorkingSetManager` was exported but nothing in production
+  instantiated it; TreeView alone took one as a prop and MatrixView
+  carried its own 200 literal. A versioned `WorkingSetConfig` document
+  (`{ version: 1, limits: { canvas: { default, ceiling }, ... } }`,
+  every view and field optional) validated with the shared
+  document-error vocabulary, `WorkingSetManager.fromConfig`, and
+  explicit precedence: built-in defaults, then the deployment default
+  and ceiling, then a per-user override (`setUserOverride`) that may
+  raise the default up to the ceiling and is refused above it as a
+  typed result (`canRaise`, `getCeiling`); the ceiling bounds every
+  layer, including the admin `setLimit`. `WorkingSetProvider` carries
+  one manager and `useWorkingSetManager` resolves explicit prop, then
+  provider, then a module default, so hosts that mount nothing keep
+  today's limits; TreeView and MatrixView read their limit through it,
+  and `workingSetLimitMessage` turns an over-limit request into a
+  prompt under the ceiling or a refusal above it. Only TreeView and
+  MatrixView enforce a limit today; the guide says so. Merged with #6,
+  the matrix limit from the provider is its page size.
+
+- **Every view root carries `g3t-view`, so the scoped typography reaches
+  it (#45).** #24 scoped the toolkit typography to `g3t-` classes and
+  moved the reset and `body` rule to the opt-in `style.base.css`, which
+  left the views whose root is an unclassed, inline-styled element (the
+  `CytoscapeCanvas` wrapper, the inspectors, the encoding panel, the
+  tree and schema views, the context menu, among others) inheriting the
+  host's font, size and ink when a host imported only `style.css`.
+  Every exported view and panel root (49 roots in 48 files) now
+  composes `g3t-view` through one internal helper (`viewClass`), with
+  the host's `className` and the component's own class kept first so
+  host selectors keep working; this is a public DOM change.
+  `g3t-base.css` names `.g3t-view` in the face/smoothing/border-box
+  rule and adds a `.g3t-view` rule for `font-size`, `line-height` and
+  `color`, the values `style.base.css` puts on `body`, so the
+  playground and Storybook render the same; `.g3t-btn`, `.g3t-select`,
+  `.g3t-input` and the panel section header pin `line-height: normal`
+  so a host reset cannot stretch them. VISIBLE CHANGE for hosts
+  without `style.base.css`: views now render at 13px/1.5/text-primary
+  where they previously showed the host's body values, which is the
+  intent. Hosts style the toolkit's text through the class, documented
+  in both guides with an executable twin. Tests: a table-driven suite
+  renders every component with minimal props and pins the class and
+  its order (112 cases, red before); the dist stylesheet test asserts
+  the `.g3t-view` rule and still no bare `body`, `html` or `*`
+  selector. React publish weight 446 to 450 KB (measured +0.8 KB).
+
+- **Ledgers.** React publish weight 421.6 to 446.4 KB across the
+  round (budget 428 to 450 with per-branch attribution, each raise a
+  separate entry); core 173.0 to 181.5 KB (budget 176 to 184: the
+  derivation registry, tripleEdgeKey, the working-set config); the
+  core root barrel consumer-cost scenario 155 to 160 KB; the two
+  UGM-rooted scenarios 6 to 8 and 13 to 15 KB. `api-surface.json`
+  gains `tripleEdgeKey`, `parseWorkingSetConfig`,
+  `validateWorkingSetConfig`, `DEFAULT_LIMIT_STRATEGIES`, the five
+  paging helpers, `getCsv`, `useAnnouncer`, `PaginationControl`,
+  `WorkingSetProvider`, `useWorkingSetManager`,
+  `getDefaultWorkingSetManager`, `workingSetLimitMessage`,
+  `useOverlaySequence`, `OverlayTransport`, the three sequence rules
+  and `DEFAULT_SPEED_OPTIONS`.
+
+### 2026-10-13 (host-integration issues #23: seventeen sub-issues plus the older backlog)
+
+Source: the tracking issue #23 filed from a downstream React/Vite host
+(graph explorer, path finder, citation network, link network, ontology
+workbench) against `main` at `c6e3ae4`, plus the 2026-08-27 backlog
+(#10, #13, #14, #21). Worked as eleven parallel agents in isolated
+worktrees, grouped so no two edited the same region of a file, merged
+one branch at a time onto this round's branch, every gate re-run on the
+merged tree. Round log: `planning/host-integration-round.md`. Not in
+this round: #41 (publishing is the maintainer's), #5, #6, #9, #12,
+#16 to #20 (design rulings or larger scope, unchanged).
+
+- **`style.css` no longer restyles the host page (#24).**
+  `g3t-base.css`, bundled into `dist/style.css`, carried a Google Fonts
+  `@import`, a universal `*` box-sizing/margin reset and a `body`
+  typography rule, so the documented first import changed every page
+  of a host application and made a third-party network request on
+  load. The components share no root element, so typography is now
+  scoped to the `g3t-` classes themselves (one rule on
+  `[class^="g3t-"], [class*=" g3t-"]` for font-family, smoothing and
+  border-box; size, color and line-height stay per-component). The
+  reset and body rule ship as the opt-in
+  `@g3-toolkit/react/style.base.css` (emitted beside `style.css`,
+  exported with types), which the playground, Storybook and static
+  gallery import so they look the same. Neither file loads a font; the
+  expected IBM Plex stack and the `--g3t-font` override path are
+  documented (the token doc carries the note from its generator, since
+  the file is byte-compared). `tests/dist/public-api.test.ts` asserts
+  the built `style.css` has no bare `body`, `html` or `*` selector and
+  no remote `@import`; red against the previous dist. OPEN: views whose
+  root is an unclassed inline-styled div (CytoscapeCanvas, TableView
+  cells) now inherit the host font when only `style.css` is imported;
+  a shared `g3t-view` root class is the next step and a public DOM
+  change, so it waits for a ruling.
+
+- **Importing `CytoscapeCanvas` no longer bundles echarts (#25).**
+  `StatsPanel` and `SankeyView` imported echarts statically and rollup
+  hoisted the shared module into the chunk that exports
+  `CytoscapeCanvas`, so a canvas-only host shipped about 1.1 MB of
+  echarts (side-effectful, so unshakeable). Both views now load echarts
+  through a shared memoized `import()` (`views/load-echarts.ts`) inside
+  their effect; public import paths are unchanged, and a load failure
+  is re-thrown from render so `ViewErrorBoundary` still contains it.
+  `scripts/check-optional-peers.mjs` gains a `LAZY_PEERS` table (a
+  declared peer every entry point may reach only through `import()`),
+  red against the previous dist and green now. A rollup bundle of
+  `export { CytoscapeCanvas }` drops from 86.4 KB with an echarts
+  reference to 86.2 KB with none. `SankeyView.test.tsx` asserts the
+  chart arrives after the lazy load rather than on first render.
+
+- **`CytoscapeCanvas` dropped the encoding spec on every instance
+  rebuild (#13).** The init effect re-creates the Cytoscape instance
+  on `layout`, `edgeStyle`, `layoutOptions`, `interactionOptions`,
+  `containment` and `animate` changes, while the spec-application
+  effect depended only on `[encodingSpec, ugm, structural]`. With a
+  referentially stable spec and ugm (the documented contract) nothing
+  re-ran the patch, so a layout toggle rendered the rebuilt instance
+  with type-palette defaults: icons gone, spec colors replaced, no
+  error. `hidden` already solved exactly this by re-applying from a ref
+  at creation; the spec now does the same (`applyEncodingPatch`, called
+  from the init path for every rebuilt instance, with the spec effect
+  skipping an application the init path just made). Tests mount with a
+  spec, change `layout` to `preset` and separately `edgeStyle`, and
+  assert `_icon`/`_color`/`_ecolor` survive. OPEN, found while fixing:
+  the style-override, pin and overlay effects are keyed on their own
+  data only and lose their applied state across the same rebuild until
+  their store next changes; same shape, same fix, not in this round.
+
+- **Dropping a channel from an `EncodingSpec` left `_shape` and
+  `label` behind (#14).** `_shape` joins the VR-2 cleanup list. `label`
+  is a different defect: the converter stamps a label on every element,
+  so the channel overrode a value that is always present and could not
+  be un-set at all (a "Relations" toggle built as two specs worked in
+  one direction only). Deleting it would have blanked labels that were
+  never spec-driven, so `label` is RESTORED to the converter's value
+  when the spec stops claiming it, through one exported rule
+  (`defaultNodeLabel`/`defaultEdgeLabel`) the converter itself now
+  uses; a host that wants no label uses a stylesheet rule. Tests cover
+  shape clearing, both directions of the edge-label toggle, the
+  node-label round trip, and that a spec with no label channel renders
+  the same labels as no spec at all.
+
+- **A changed `stylesheet` prop was applied only on a theme change or
+  a rebuild (#28).** The theme restyle effect now also keys on the
+  stylesheet's CONTENT (a JSON serialization, as `layoutOptions` and
+  `structuralDecorations` already key on content), applying the same
+  `composeMergedStylesheet` path through `style().fromJson`. The init
+  path records the applied key so mount and rebuilds do not restyle
+  twice. Restyle only: no re-init, no refit. Known limit, in code: a
+  change that only swaps a function-valued style entry is invisible to
+  the serialization. Tests: a red-to-blue rule restyles once with no
+  new construction and no `fit`; a fresh literal with identical content
+  does not restyle.
+
+- **`layout="preset"` animated nodes away from positions set in
+  `onReady` (#27).** Root cause: cytoscape's preset layout captures each
+  node's target position when the layout STARTS, inside the constructor
+  and therefore before `onReady`, and an animated preset tweens every
+  node from its current position back to that captured target. The
+  canvas now forces `animate: false` on every preset layout (the
+  `layout` prop, structural scenes, and the LR-45 same-graph replay),
+  spread last so no caller option re-enables it; a preset layout means
+  the positions are decided. This also makes the existing settlement
+  claim true: a preset layout finishes inside the constructor only when
+  it does not animate. `onReady` documents the ordering guarantee
+  (preset: finished when it fires, positions hold; fcose/cose:
+  asynchronous, use `cy.one("layoutstop", ...)`). Tests pin
+  `animate: false` on the constructor's layout for `layout="preset"`
+  with the default and with an explicit `animate={true}`, that force
+  layouts keep the prop, and that `onReady` follows construction.
+
+- **Overlay member colors were literals and ignored the theme (#32).**
+  `OVERLAY_RULES` hard-coded `#2f9e44` and sat after the theme rules,
+  so the overlay colors `themeColorRules` emitted (the neutral green and
+  the 2026-08-27 tones alike) were clobbered in every theme; a dark host
+  got a fixed green that matched nothing else on the page. `G3tTheme`
+  gains an OPTIONAL `overlayColor` (the historical `#2f9e44` in all
+  three presets; a theme literal that omits it gets
+  `DEFAULT_OVERLAY_COLOR`), emitted as `--g3t-overlay-color`. The
+  overlay color rules moved into `overlayThemeRules`, pushed after the
+  static block so the theme wins the color while the static rules keep
+  supplying geometry; the user stylesheet still follows. Headless
+  cytoscape tests compute a custom theme's overlay color and tones
+  through the real rule order. VISIBLE CHANGE needing a live look: the
+  tones now really come from the theme, so the dark preset's danger
+  renders `#f87171` rather than the literal `#c62828`.
+
+- **`allShortestPaths` ignored `maxHops` (#29).** `PathOptions.maxHops`
+  documented a bound that only `findShortestPath` applied; the union
+  search's layered BFS never read the depth, so a search between
+  distant or unconnected nodes on a large graph walked it to
+  exhaustion. The loop now carries the same `depth < maxHops` guard,
+  and a target beyond the bound comes back `found: false` with
+  `pathCount: 0`. Tests pin both functions on a four-node path with
+  `maxHops: 2`, and a counting graph view proves the traversal itself
+  stops at the bound.
+
+- **Path search: directed traversal, a node filter, individual routes,
+  and a graph interface narrower than a UGM (#30).** The three searches
+  now take a `PathGraph`, a `Pick` of the four UGM read methods they
+  call, so a host with its own index passes a four-method view instead
+  of building a UGM for a read-only search (2.4 s for 100,000 edges in
+  the reporting host). `PathOptions` gains `directed` (follow edges
+  source to target only; the union's backward walk is directed too) and
+  `nodeFilter` (endpoints exempt). New `kShortestPaths(graph, s, t,
+  { k, ...PathOptions })` lists the k shortest simple paths as
+  `{ nodeIds, edgeIds }` in nondecreasing length: Yen's algorithm over
+  unit-weight BFS, deterministic in the graph's edge order, `maxHops`
+  bounding every spur search, parallel edges counted as distinct routes
+  exactly as `allShortestPaths` counts them. Twenty-two unit tests plus
+  wiring-guide snippets with executable twins.
+
+- **`UGM.addEdge` takes a stable key (#31).** Edge ids were always
+  generated, so a host rebuilding its UGM from its own data got
+  different ids for the same edge every time and anything keyed by
+  edge id (selection, overlays, a selected edge in the URL) broke
+  across rebuilds. `EdgeInput.key` is passed to graphology's
+  `addEdgeWithKey`; a duplicate key throws a clear error. `UGM.fromJSON`
+  restores edge ids as keys, so a snapshot round-trip keeps every edge
+  id, keyed or generated, which also means an undo step no longer
+  renames every edge; graphology's generator skips ids already present,
+  so restored ids cannot collide with later generated ones. Adapters
+  (cypher, gremlin, rest, sparql, projection) do not yet pass keys; the
+  sparql and projection paths need a duplicate-triple dedupe first.
+
+- **Theme target and dispose (#33).** `ThemeManager` wrote
+  `color-scheme` and every `--g3t-*` token inline on
+  `document.documentElement`, so mounting one graph view changed the
+  host page's scheme and the tokens persisted after unmount. The theme
+  store now carries a `target` (`"root"` by default, so nothing changes
+  for existing hosts) with `setThemeTarget(element)` to scope the
+  tokens and `color-scheme` to one element and `clearTheme()` to remove
+  them; `applyTheme(theme, { target })` is the store-free equivalent
+  and returns a dispose. Every write records the inline value it
+  replaces, so dispose and `clearTheme` restore the host's own inline
+  properties. `themeFromCssVariables(element, mapping, options)` derives
+  a `G3tTheme` from a host's CSS variables through `getComputedStyle`.
+  The Cytoscape canvas and Minimap read the theme OBJECT, not CSS
+  variables, so a scoped target affects the DOM chrome and
+  `color-scheme` only; documented in the module header and the guide.
+  Core's `injectDesignTokens` still writes the spatial tokens to
+  `<html>` (theme-independent apart from the dark shadow set).
+
+- **`ShaclShapeBrowser` rendering defects (#34).** Constraint rows were
+  keyed by `path`, so a shape constraining one predicate twice logged
+  React's duplicate-key warning and could render the wrong row on
+  update; rows now key by the optional `ShaclPropertyConstraint.id`,
+  else path plus position. Failing-node rows used light-theme literals;
+  every color is now a `--g3t-*` token and each row is tinted by its
+  own worst severity with a `data-severity` attribute. The badge
+  ignored severity and drew every failing shape in error red; it now
+  follows the most severe result present (violation, warning, info) in
+  both glyph and color and exposes `data-severity`. There is no
+  `--g3t-info` token; info uses `--g3t-accent-primary`, as the canvas
+  info overlay tone does.
+
+- **`ShaclShapeBrowser` surface additions, all optional (#35).**
+  `summary` (per-shape `focus`, `failing`, optional `bySeverity`) takes
+  precedence over counting results, so a host with an aggregated report
+  no longer invents a placeholder result per passing focus node;
+  `selectedShape` / `onSelectShape(id | null)` make selection
+  controlled, with the selected shape rendered expanded (deep links;
+  uncontrolled hosts keep the previous behavior and the string-only
+  callback, which is why `onSelectShape` is a method signature);
+  `ShaclShape.targets` lists every target kind (class, subjectsOf,
+  objectsOf, node, sparql) and the browser renders all of them beside
+  `targetClass`, which the validator still matches on. Core gains the
+  optional `ShaclPropertyConstraint.id`, `ShaclShape.targets` and the
+  `ShaclShapeTarget` type; react exports `ShaclShapeSummary`. Guide
+  recipe "Drive the shape browser from a deep link or an aggregated
+  report", CI-executed.
+
+- **`TreeView` could not collapse a row inside `initialDepth`, took one
+  root, always printed `[type]`, hard-coded light colors, and had no
+  keyboard model (#36).** The row test was
+  `depth < initialDepth || expandedIds.has(id)`, so the depth clause
+  re-opened every row within `initialDepth` on each render. `initialDepth`
+  now SEEDS the expanded set and a row is expanded when its seed
+  membership XOR its user-toggle membership holds; the seed is
+  recomputed on a graph, root or depth change and user toggles survive
+  it. `rootIds` renders several roots as a forest with no synthetic
+  parent row. `showType={false}` drops the `[type]` prefix. Colors come
+  from `--g3t-*` tokens with the former literals as fallbacks. The rows
+  are now a WAI-ARIA tree (tree / treeitem / group, aria-level, setsize,
+  posinset, expanded, selected) with one roving tab stop and the
+  arrow/Home/End/Enter model; focus moves only on a keyboard action.
+  Auto-detect without `rootIds` still picks the FIRST source node, as
+  before. The pre-existing `secondary-views` expand test clicked the
+  ROOT toggle and tolerated a no-op with `>=`; it now clicks a collapsed
+  row and requires growth, since the root toggle now collapses.
+
+- **`SchemaView` listed classes flat, badged only the first shape
+  targeting a class, and used `#e0f2fe` / `#0369a1` (#37).** Nothing
+  reaching the view carried subclass edges (neither `SchemaModel` nor
+  the UGM registry has them), so a new `subClassOf` prop
+  (`class -> parent(s)`, host-derived from its rdfs:subClassOf triples)
+  nests a class under its first listed parent that is itself a listed
+  class; a parent outside the list leaves the class at the top level,
+  and a cycle promotes its members to roots. The badge now covers every
+  shape targeting the class and, with the new `validationResults`
+  prop, reports the most severe status across those shapes, toned from
+  the semantic tokens; without results it stays neutral, because SHACL
+  defaults every constraint to Violation and toning by declared
+  severity would paint every constrained class red with no validation
+  run. Guide section "Class hierarchy: SchemaView nesting and TreeView
+  forests" with its CI-executed twin.
+
+- **`SpecLegend` read as a developer tool (#38).** Headings printed
+  encoding internals (`color: <code>types</code>`), one `labelFor`
+  served node and edge values alike, and edge color rows came from
+  `scale.overrides` only, so a categorical edge scale without overrides
+  painted the canvas while the legend said nothing. `sectionTitle(channel,
+  driver)` replaces the channel-word-plus-driver part of each heading
+  (default output unchanged; the size domain and ramp qualifiers stay
+  appended because they describe the scale), `labelFor` receives the
+  section channel as its second argument (one-argument functions keep
+  working), `LegendChannel` is exported, and edge color rows derive
+  from the data through `makeColorResolver` with the edge target, the
+  same resolver `applyEncodingSpec` uses, so the swatch is the color
+  the canvas paints; without a UGM the domain and override keys stand
+  in. `FloatingLegend` forwards both props. VISIBLE CHANGE: with a UGM
+  present, an override key whose value appears on no edge no longer
+  gets a row, matching the node path.
+
+- **`TableView` could not fill a sized host, and `pageSize` was read
+  once (#21).** `pageSize` reached TanStack through `initialState`,
+  read at construction only, so a dock panel could apply a computed row
+  count only by remounting, which discarded sort, filters, hidden
+  columns and page. Pagination is now controlled state; a `pageSize`
+  change re-derives the page index so the first visible row stays in
+  view. The regions carry `g3t-table-toolbar`, `g3t-table-scroll` and
+  `g3t-table-pagination` under a `g3t-table` root, and a `fill` prop
+  opts into a flex-column layout (100% of the host, scrolling body,
+  sticky header cells, pinned pagination) in the package stylesheet.
+  `rowHeight` sizes every row, and `autoPageSize` derives the page size
+  from a ResizeObserver on the scroll region in fill mode (a no-op
+  where ResizeObserver is absent). Fill mode is not visually verifiable
+  in jsdom and needs a look in a dock host.
+
+- **`TableView` had no cell renderer and accepted only UGM rows (#39).**
+  `rows` plus `columns` (`DataGridColumn<T>`: `id`, `header`, `value`,
+  optional `render`, filter kind `text`/`values`/`range`/`none`) render
+  tabular data without a UGM through the same chrome; "values" is a
+  single-select over the distinct values with counts, "range" a numeric
+  min/max. `renderCell` is a table-wide override on either path (return
+  `undefined` to defer to the column). `selection` decides where a
+  click goes: `"store"` (the default, unchanged), `"none"`, or a
+  host-owned `{ selected, onSelect }` receiving the full next set with
+  the modifier rules applied. Virtualization, CSV export, multi-select
+  value filters and column reorder are follow-ups. Guide recipes "Table
+  without a UGM" and "Fill a sized host" have executable twins.
+
+- **StyleLabShell test hygiene (#10).** The two captured `onReady`
+  calls in `mountPanes()` are wrapped in `await act(async () => ...)`;
+  the file emits zero act warnings. Worth knowing when reading gate
+  output locally: vitest 4.1.7's console interception swallowed all
+  test console output in this container, so the before/after counts
+  (15 to 0) were taken with `--disableConsoleIntercept`.
+
+- **Additive graph updates (#26).** Growing a drawn graph one
+  neighborhood at a time handed `CytoscapeCanvas` a new `ugm` identity
+  on every step, and a new identity is a different graph: the instance
+  was re-created, every node lost its position and the camera reset.
+  The host workaround (`IncrementalLayout` with the old nodes locked)
+  does not work under fcose, which ignores `locked` while computing.
+  New prop `graphUpdate?: "rebuild" | "additive"` (default `"rebuild"`,
+  unchanged). In additive mode a ugm whose node-id set is a SUPERSET of
+  the drawn one grows the live instance in place: new nodes and edges
+  join (edges the new ugm no longer has leave, since generated edge ids
+  differ per UGM instance and keeping them would draw every edge twice
+  after a step; drawn elements take the new data), new nodes are seeded
+  at the centroid of their placed neighbors with a golden-angle offset,
+  and one fcose pass runs from the current positions with every
+  existing node held by `fixedNodeConstraint`, `fit: false`, honoring
+  `animate` and `animationDuration`. A node removal, a re-parented node
+  or a structural scene falls back to the rebuild. Root cause of the
+  lost arrangement was the init effect keying on `ugm` identity alone;
+  it now keys on the identity the live instance was built from, decided
+  once per ugm in render so a rebuild still lands in the same commit as
+  before (an effect-driven epoch bump would re-order the rebuild after
+  the ugm-keyed pin, override and overlay effects). `computeIncrementalUpdate`
+  was not reused: its 40% change-ratio heuristic returns "full" for
+  the common small expansion. Tests: a mocked-cytoscape suite (superset
+  grows in place with exactly the new elements, `fixedNodeConstraint`
+  over the old nodes, no fit, no new instance; non-superset and default
+  mode rebuild; spec and hidden reach the added elements; stale edges
+  removed; re-parent falls back) and a headless real-fcose test that
+  existing nodes hold within 1e-6. Wiring guide "Grow a drawn graph
+  without rebuilding it" with an executable twin; the consuming guide
+  now states the `locked` versus `fixedNodeConstraint` mechanism
+  honestly. OPEN: the pass runs fcose over the whole instance with all
+  old nodes fixed (a subset pass would be cheaper on very large drawn
+  sets), and no demo shell opts in yet; the seeded placement needs a
+  live look.
+
+- **Labels overprinted in dense graphs with no way to thin them (#40).**
+  Cytoscape draws every label at its element and never moves one out
+  of another's way, so a layered citation network (59 publications,
+  223 relations) overprinted same-layer labels until zoomed in; density
+  caps, `text-max-width` and a minimum zoomed font size reduced but did
+  not remove the overlap. The canvas now takes `labelCollision: "none"
+  | "hide" | "shorten"` ("none" is the default and the previous
+  behavior). After layout settles, after a node drop, on zoom end (a
+  120 ms trailing debounce, since cytoscape has no zoom-end event), and
+  on every selection or hover change, it measures each visible
+  element's rendered label box, visits them by priority (selected,
+  with incident edges counting; then hovered; then a `labelPriority`
+  accessor or the `_labelPriority` data field; then node before edge;
+  then degree or edge `weight`) and hides a label whose box overlaps
+  one already placed, or in "shorten" mode first truncates it to
+  `labelMaxLength` characters with an ellipsis and hides it only if the
+  shortened box still overlaps. It is an overlay restyle: hide is the
+  `g3t-label-hidden` class (`label: ""`), shorten is a `_labelShort`
+  field read by `[_labelShort]`-scoped rules, and `label` itself is
+  never written, so the encoding spec's label restore (#14) and this
+  pass cannot fight. No re-init, refit, or node move on any trigger,
+  and no work at all in the default mode. The decision rule is a pure
+  module exported as `resolveLabelCollisions` and `composeLabelPriority`
+  for hosts with their own renderer. Tests cover the resolver (overlap,
+  priority order, permutation-stable output, shorten placement) and the
+  canvas (rules field-scoped, "none" touches nothing, "hide" applies on
+  layoutstop to the lower-priority element, selection and hover re-run
+  the pass, the accessor wins over the data field, switching back to
+  "none" restores, an instance without a bounding-box API is a no-op).
+  Wiring-guide section "Dense graphs: let labels yield to each other"
+  with an executable twin. OPEN: node bodies are not obstacles (the
+  old SVG renderer treated them as such; adding them would hide many
+  edge labels near endpoints), hover re-runs synchronously, and the
+  real rendered boxes (rotated edge labels, `min-zoomed-font-size`)
+  need a look in the playground; no demo shell opts in yet.
+
+- **Bundle ledger.** React publish weight 392.0 to about 422 KB across
+  the round (TableView rows path and fill mode, TreeView keyboard model
+  and forests, SchemaView nesting and per-shape badges, the theme
+  target recorder, legend edge rows, the encoding re-apply and
+  stylesheet key, overlay theme rules, the SHACL browser, label
+  collision, additive updates); budget 395 to 428 with the per-branch
+  attribution in `scripts/check-bundle-size.mjs`. The consumer-cost
+  scenario for a bare `CytoscapeCanvas` import went 84.2 to 95.3 KB
+  (budget 92 to 104 in `scripts/check-consumer-cost.mjs`, with the
+  per-issue attribution and the rejected lazy-load alternative). Core
+  164.3 to 166.1 KB on the round's own branch (Yen, the path options,
+  the edge key); merged onto the 1.1.0 security fix core measures 173.0
+  KB, so its budget goes 172 to 176 (ledger entry). `api-surface.json` adds `kShortestPaths`,
+  `applyTheme`, `themeFromCssVariables`, `resolveLabelCollisions`,
+  `composeLabelPriority`, `shortenLabel` and `DEFAULT_LABEL_MAX_LENGTH`;
+  everything else added is type-only.
+
+## 1.1.0 PUBLISHED: 2026-10-13
+
+Published to npm as `@g3-toolkit/*` 1.1.0 under tag `v1.1.0`. This
+section holds everything merged between 1.0.0 (2026-08-21) and that
+tag, including the `downstream-issues-reccs` round.
+
+### 2026-10-13 (security: derived-property expressions no longer use expr-eval)
+
+- **`DerivedPropertyEngine` evaluates expressions with the toolkit's own
+  numeric language instead of expr-eval (GHSA-mpfx-v932-r2fv).** expr-eval
+  2.0.2, the latest release, has three unpatched advisories
+  (GHSA-q9v2-7m5w-4693, code execution; GHSA-8gw3-rxh4-v6jx, prototype
+  pollution; GHSA-jc85-fpwf-qm7x, unrestricted functions in the scope).
+  The engine built `new Parser()` with default options, so member access,
+  assignment, and function definition were all live on any expression a
+  user typed into `DerivedPropertyPanel` or a host passed to `define()`,
+  while the class comment called the evaluation safe. The new language
+  (`packages/core/src/advanced/expression.ts`, internal) holds numbers,
+  `PI` and `E`, the node's own numeric properties (looked up in a `Map`,
+  never through a prototype), `+ - * / % ^`, comparison, `and or not`,
+  `a ? b : c`, and calls to an allow-list of Math functions. It has no
+  member access, indexing, assignment, function definition, strings, or
+  call through a variable, and it bounds input at 1,000 characters and
+  64 levels of nesting. The public API is unchanged.
+- **Behavior differences.** Expressions in the documented and tested
+  range (arithmetic over properties, `sqrt`, `min`, `max`, and the like)
+  compute as before. Removed with the dependency: `random()` (a derived
+  property should be deterministic), `!` factorial, `||` concatenation,
+  `in`, string values, and expr-eval's less common functions outside the
+  allow-list; an expression that uses them is now skipped, as an invalid
+  one always was.
+- **Dependency and budget.** `expr-eval` leaves `@g3-toolkit/core`'s
+  dependencies and the root manifest. Core's first-party bundle grows
+  164.3 to 171.2 KB, so its budget rises 169 to 172 KB with a ledger
+  entry for owner ratification; a consumer that bundles the engine drops
+  about 25 KB of minified expr-eval, a net decrease.
+- **Tests.** `expression.test.ts` covers precedence, the operators and
+  functions, and the refusals (member access, indexing, assignment,
+  function definition, strings, unknown functions, prototype names,
+  length and depth limits), plus an engine test that hostile definitions
+  write nothing and pollute no prototype.
+
+### 2026-08-28 (two defects found hiding in the lint warning list)
+
+- **`SpecLegend` stopped tracking its input on the ugm-less path.** The
+  four row memos (shape, default-shape, color, icon) read the `elements`
+  prop through `distinctValues` but omitted it from their dependencies.
+  With a UGM that is harmless, since `ugm` is listed; on the R-13.3 path
+  a structural scene has no UGM and `elements` is the ONLY data source,
+  so the legend computed once at mount and then described a scene that
+  no longer existed. `FloatingLegend` forwards `elements` untouched, so
+  both components were affected. The dependency is now declared, and the
+  prop carries an explicit referential-stability contract (hold it in a
+  `useMemo`, the same contract fixture graphs already carry). A rerender
+  test covers it; the previous test rendered once, which is exactly why
+  this shipped.
+
+- **Wheel zoom in `StructuralSvgView` composed from a stale controlled
+  view.** The wheel listener is native and non-passive (it must
+  `preventDefault`, or the page scrolls while the graph zooms), so it
+  binds once with empty dependencies and held the first render's
+  `setView`. `setView` is `useCallback([viewProp])` and resolves its base
+  as `viewProp ?? prev`, so in CONTROLLED mode the handler zoomed from a
+  view the host had already replaced, corrupting the internal transform
+  that goes live the moment the host releases control. Fixed with the ref
+  indirection this file already uses for its drag handlers, which keeps
+  the listener bound once rather than re-registering it on every
+  controlled view change.
+
+- **`react-hooks/exhaustive-deps` is now an error.** Both defects above
+  had been sitting in the warning list. Two remaining sites were
+  genuinely fine and are now explicit rather than merely quiet:
+  `StyleLabShell` lists its stable `withLabelText`, and `ThreadShell`'s
+  harvest memo keeps `hiddenIds` and `confMode` behind a disable with the
+  reason written out (they are re-run triggers for a read of mutable live
+  Cytoscape state, invisible to the rule; removing them would stale the
+  SVG pane whenever a supplier is hidden or the confidence mode changes).
+
+### 2026-08-28 (dev-mode shells opened unfitted and unlaid-out)
+
+- **Every ugm-backed shell opened under `vite dev` with its graph
+  scattered and its camera at identity.** Reported against the
+  Cytoscape shells (Provenance Auditor, Supply Chain, Biomedical);
+  measured on the live dev server as zoom 1 / pan (0,0) with the node
+  bounding box sitting inside the component's own pre-layout random
+  scatter range, so the fcose pass was not merely unfitted, it was
+  discarded. Root cause is LR-45's same-graph position replay meeting
+  React StrictMode. StrictMode mounts, unmounts, and remounts in dev,
+  so the first Cytoscape instance is destroyed while its ASYNCHRONOUS
+  fcose pass is still running. The teardown captured that instance's
+  camera and node positions unconditionally, which meant it captured
+  the identity viewport and the random scatter; the remount then
+  recognized a same-graph rebuild, ran `preset` with `fit: false` over
+  the scattered positions, and restored the identity camera. Neither
+  layout nor fit ever happened. `CytoscapeCanvas` now tracks whether
+  the current instance's initial layout SETTLED (`preset` is settled on
+  arrival, everything else at `layoutstop`) and captures the camera and
+  positions only then. An unsettled teardown captures nothing, leaving
+  the previous known-good values in place, so the remount lays out and
+  fits normally. The LR-45 fast path is unchanged once a layout has
+  settled. Production builds did not double-invoke and were not
+  affected, but the same hazard applied to any remount landing
+  mid-layout. Regression tests pin both halves: a StrictMode mount must
+  leave the remount a real fitting layout, and a settled teardown must
+  still replay positions and camera.
+
+### 2026-08-28 (toolchain pins, e2e browsers, and a sibling that stopped being external)
+
+- **The pixi environment pins the toolchain it actually runs.** `nodejs`
+  moved from an unbounded `>=20`, which resolved to nodejs 26 on a fresh
+  solve, to `>=22,<23`, matching the devcontainer image so `pixi run` and
+  a plain shell agree; `sphinx` to `>=7,<9`; `pnpm` added at
+  `>=9.0.0,<12`; the root `packageManager` corrected to `pnpm@10.33.2`;
+  and `pixi.lock` committed so the solve is reproducible rather than
+  re-derived per machine. `[project]` became `[workspace]`, the table
+  name pixi has used since 0.41.
+
+- **`@g3-toolkit/core` had stopped being an external of
+  `@g3-toolkit/react`, and was being compiled into it.** The pin commit
+  reordered `packages/react/package.json` and dropped one line,
+  `"@g3-toolkit/core": "workspace:^"`, from `dependencies`. No build file
+  names that entry, because `scripts/vite-externals.mjs` DERIVES the
+  rollup externals from the manifest, so removing it un-externalized
+  core; the `resolve.alias` pointing `@g3-toolkit/core` at `../core/src`
+  then pulled all of core into react's dist. React measured 651.7 KB
+  against a 390 KB budget. Nothing else went red: the alias resolves
+  without the workspace link, so typecheck, the unit suite, the export
+  gates and the smoke test all stayed green. Weight was the symptom. The
+  defect is that a host installing both packages would have received two
+  copies of the exported zustand store singletons, so the canvas
+  subscribes to one while the table writes to the other and selection
+  silently stops propagating, which is the two-instance hazard the
+  ESM-only ruling exists to prevent, arriving by a different route.
+  Restoring the one line returns the measurement to 388.5 KB.
+
+- **The bundle budget was NOT raised, and the ledger says why.** 390 KB
+  stands. Sourcemap attribution over the three largest chunks (StatsPanel
+  144 KB, neighbors 136 KB, ugm 84 KB) returned sources of the form
+  `../../core/src/**`, exactly one node_modules source in the whole set
+  (graphology, reached through `core/src/ugm/ugm.ts`), and no react-only
+  growth, so there was no growth to ratify. `check-bundle-size.mjs` was
+  the only gate that noticed the regression, and it noticed on the first
+  run that reached it.
+
+- **`verify:externals` makes the next occurrence loud.**
+  `scripts/check-sibling-externals.mjs` runs two checks, because they
+  fail at different times. ALIAS IMPLIES DECLARATION is static and needs
+  no build: every `@g3-toolkit/*` alias key in a package's vite config
+  must appear in that package's dependencies, peerDependencies or
+  optionalDependencies, which catches the exact edit that caused this at
+  the manifest rather than 260 KB later. NO SIBLING SOURCE IN DIST is
+  empirical: no emitted sourcemap may carry a source resolving inside
+  another workspace package, which catches inlining however it arrives
+  and covers every chunk rather than one entry. Both were verified by
+  re-breaking the manifest, rebuilding, and confirming each fires.
+  Neither can pass vacuously: a dist with no sourcemaps fails as
+  unverifiable, and an `alias` block yielding no extractable keys fails
+  as a stale extractor. `charts` carries the same alias shape as react,
+  where the same slip would have moved a much smaller number and gone
+  unnoticed; check one covers all three packages regardless of weight.
+
+- **`pixi run test-e2e` installs the browser it needs.** `pnpm install`
+  brings in the Playwright runner but never a browser, so a fresh
+  container failed with "Executable doesn't exist at
+  .../chrome-headless-shell". Downloading the browser alone is not
+  enough on linux-64 either: without the apt half the binary dies with
+  "error while loading shared libraries: libglib-2.0.so.0". A new
+  `install-browsers` pixi task runs `pnpm run e2e:install`
+  (`playwright install --with-deps chromium`) and `test-e2e` depends on
+  it. Repeat runs cost about 5 seconds once satisfied, which is why the
+  dependency is unconditional rather than guarded by a stamp file. CI
+  calls the same script instead of repeating the command inline, so the
+  runner and the local path cannot drift.
+
+- **The version-sync extractor follows pixi's table rename.**
+  `check-version-sync.mjs` registered `pixi.toml` under `[project]` and
+  failed the moment the table became `[workspace]`, which is the gate
+  behaving as designed (a field that cannot be located is a failure, not
+  a skip) firing on a rename that is not drift. It now accepts either
+  spelling, since pixi still takes both. The alternation is two known
+  table names, not a wildcard: a version under any third table still
+  fails.
+
+- **Two local/CI divergences closed.** `.pixi/` was in `.prettierignore`
+  but not in the eslint ignores, and flat config does not read
+  `.gitignore`, so `pnpm run lint` was green in CI (no `.pixi` there) and
+  produced 692 errors for anyone who had run `pixi install`. Separately,
+  `testTimeout` is now 6000 rather than vitest's 5000 default, set
+  globally rather than behind `process.env.CI`: the timeout that
+  surfaced it (ScaleSurface drill-in, which passes in isolation with the
+  whole file at 7.15s) happened on a dev box, not in CI, and a CI-only
+  value would rebuild the divergence the other two items just removed.
+
+### 2026-08-27 (downstream issue triage)
+
+Fifteen issues filed by a downstream adopter against 1.0.0
+(`planning/downstream-issues-triage.md` records the per-item verdict).
+Every claim was reproduced before any change; three items are deferred
+for a maintainer ruling rather than landed.
+
+- **Design tokens: 11 broken references fixed, and a gate so the class
+  cannot recur.** `var(--g3t-*)` on a name nothing emits falls back to
+  its literal, so the component renders, looks deliberate, and ignores
+  the theme in every mode, with typecheck, lint, and tests all green.
+  `scripts/check-design-tokens.mjs` derives the defined set from the
+  two emitters (never a hand-kept list), understands the templated
+  scale families, and treats element-scoped custom properties as real
+  definitions. It runs first in `verify`.
+
+  The report that prompted this listed eight references. It missed
+  three (`--g3t-success-muted` / `--g3t-warning-muted` /
+  `--g3t-error-muted` in `CoverageMeter`) and included one false
+  positive (`--g3t-toggle-accent`, which `PropertyField` sets inline
+  and which resolves correctly). Real figure: 11 references, 9 names.
+
+  Fixes: `zPopover` added to the z-scale between dropdown and overlay,
+  with the two drifted fallbacks (9999 and 50) normalized;
+  `--g3t-color-scheme` emitted from the theme; `successMuted` /
+  `warningMuted` / `errorMuted` added to `G3tTheme` as OPTIONAL fields
+  (required ones would break consumer theme literals at 1.0.0) and
+  defined across all three presets; four references repointed at
+  tokens that exist.
+
+- **The token vocabulary is documented, generated rather than
+  authored.** `docs/design-tokens.md` is emitted by the same script
+  and drift-checked on every run, because a hand-maintained table
+  would diverge from the emitters within a round. Linked from the
+  wiring and consuming guides.
+
+- **Overlay severity now reaches the canvas.** `severityOverlays`
+  produced one overlay per tier, but the canvas applied a single
+  `g3t-ov-member` to every member, so a violation and a warning were
+  pixel-identical. `StructuralOverlay` gains an optional `tone`
+  (`neutral` / `info` / `warning` / `danger`) — a generic tone rather
+  than a SHACL `severity`, since overlays are algorithm-neutral.
+  `computeOverlayMembership` resolves tone strongest-wins across
+  overlapping active overlays. Both stylesheets carry tone rules, and
+  every tone class is stripped alongside the member class so
+  deactivation still restores by construction.
+
+- **`FloatingLegend` forwards `collapsible` and `defaultCollapsed`.**
+  Both were hard-coded, so a floating legend could not start
+  collapsed despite covering up to 240px of canvas on arrival.
+
+- **`ugm-to-cytoscape` stamps `_type`.** `types` is an array and a
+  Cytoscape attribute selector cannot match an array element, so every
+  consumer writing a per-class style rule had to stamp a redundant
+  scalar first. `primaryType` was already computed and discarded.
+
+- **`StatsPanel` gains `title`, `unit`, and `description`**, plus an
+  x-axis name; the y axis now says "Nodes" rather than "Count",
+  which is what it counts.
+
+- **Documentation corrections.** The wiring guide's SHACL recipe
+  suggested `parseShaclReport` inside a root-import block (it is
+  subpath-only) and registered severity overlays active, contradicting
+  both shells; the executable twin now matches the corrected guide. A
+  patterns section records the six component pairings that were only
+  discoverable as comments inside individual demo shells. Added: a
+  double-click recipe, a scoped caveat that `onReady` is load-bearing
+  and renderer-coupled, the note that `GraphToolbar` ALREADY contains
+  a `SearchBar`, the `cy`-vs-`core` naming inconsistency, and that
+  `@g3-toolkit/core/internal` is private.
+
+- **`docs/consuming-g3t.md` joined the snippet gate**, and immediately
+  earned it: the incremental-layout recipe drafted for it invented a
+  `(oldUgm, nextUgm)` signature when the real functions take a
+  Cytoscape core. Now correct and typechecked.
+
+- Bundle budget for `@g3-toolkit/react` raised 390 -> 395 KB, measured
+  391.8 KB on this branch and 392.0 KB once main merged in, rationale
+  and sourcemap audit in the ledger. The raise and the same-day NO RAISE
+  entry above it are about different things: this one ratifies real
+  growth, that one refused to ratify core being inlined.
+
+### 2026-08-27 (version-drift gate)
+
+- **`scripts/check-version-sync.mjs` closes the third of the four
+  postmortem items.** The root `package.json` version is the source of
+  truth; the script asserts that every other file carrying a version
+  agrees with it. That is seven fields across six files: the three
+  publishable manifests, `pixi.toml`, and both `version` and `release`
+  in `docs/source/conf.py`. Before 1.0.0 those last two read
+  `1.0.0-rc.2` and `0.1.0`/`0.8.5`, the latter pair not even agreeing
+  with each other, which is what a field nothing reads decays to.
+
+- **It runs continuously, not only at release.** `verify:versions` is
+  the FIRST step of `verify`, ahead of `build:packages`: it needs no
+  build, so drift fails in milliseconds on the PR that introduces it
+  rather than after fifteen build-dependent steps, or at tag time.
+  `check-release-preflight.mjs` calls the same exported
+  `checkVersionSync` instead of keeping its own manifest loop, so the
+  release path stays self-contained (it does not assume `verify` ran)
+  while remaining unable to disagree with `verify` about which files
+  are in the set. The preflight's own three checks, tag agreement,
+  registry state, and a clean tree, are unchanged.
+
+- **No vacuous pass, and no vacuous sweep.** A registered file whose
+  version field cannot be located is a FAILURE, not a skip: deleting
+  the `version` line from `pixi.toml` turns the gate red rather than
+  green, because a check that silently stops checking has also
+  displaced the human check it replaced. The same reasoning applies one
+  level up, to the registry itself: a sweep over tracked `.toml`,
+  `.cff`, `conf.py` and `.zenodo.json` files fails on any that carries
+  a version assignment and is not registered, so a future `CITATION.cff`
+  cannot join the set unnoticed the way these two files drifted. If
+  `git ls-files` cannot be run, that is a failure too, for the same
+  reason the preflight treats an unanswered registry as a failure.
+
+- **`--write` removes the hand-edit that introduced the drift.** The
+  release bump is now: edit the root manifest, run
+  `node scripts/check-version-sync.mjs --write`, run
+  `pnpm install --lockfile-only`. The rewrite splices the captured value
+  only, so it cannot reformat the surrounding line, and it refuses to
+  run at all if an anchor is missing. RELEASE.md step 1 documents this
+  and no longer tells the releaser that two of the files are on them.
+
+- Verified by deliberate red: drifting `pixi.toml`, drifting
+  `conf.py`'s `release` alone, deleting the `pixi.toml` version line,
+  and adding an unregistered tracked `CITATION.cff` each fail the gate
+  with a message naming the file, the field, the found value and the
+  expected one. `--write` was exercised against a bumped root and
+  reverted.
+
+## 1.0.0 PUBLISHED: 2026-08-21 (first release to npm, with a postmortem)
+
+- **`@g3-toolkit/core`, `@g3-toolkit/react` and `@g3-toolkit/charts`
+  are live on npm at 1.0.0**, tagged `v1.0.0`. This was the debut run
+  of `publish.yml`; before it, zero tags existed in the repository and
+  no step in that workflow had ever executed.
+
+- **Verified against the registry after the fact, not assumed.** All
+  three report `1.0.0`; `latest` resolves to it; `@g3-toolkit/charts`
+  published its sibling peers as `^1.0.0` and `@g3-toolkit/react`
+  published its core dependency as `^1.0.0`, which confirms the
+  `workspace:^` change reached the artifact rather than only the
+  source; and `@g3-toolkit/core` carries a SLSA v1 provenance
+  attestation, so `--provenance` worked from the tag context.
+
+- **Postmortem: what the process got right.** Moving every failable
+  check in front of the first publish was the correct shape. Three
+  sequential publishes have two windows in which a failure strands a
+  partial version triple repairable only by a version bump, and the
+  window stayed narrow. Rehearsing before tagging was worth it for a
+  path that had never run.
+
+- **Postmortem: `--dry-run` does NOT authenticate.** The rehearsal was
+  briefly described in-session as exercising real auth. It does not:
+  `pnpm publish --dry-run` never uploads, so it never presents the
+  token. Token validity is proven only by the real publish. Worth
+  stating because the rehearsal otherwise reads as a full end-to-end
+  proof and is not one.
+
+- **Postmortem: the tag-agreement check runs for the first time on the
+  one run that cannot be undone.** `check-release-preflight.mjs` skips
+  it when `GITHUB_REF` holds no tag, which is every `workflow_dispatch`.
+  So the rehearsal structurally cannot exercise it. It passed, but it
+  passed untested.
+
+- **Postmortem: version drift outside the four manifests is still
+  ungated.** (CLOSED 2026-08-27 by `scripts/check-version-sync.mjs`;
+  see the Unreleased entry for that date. Closed, not yet released.)
+  `pixi.toml` and
+  `docs/source/conf.py` had drifted to `1.0.0-rc.2` and
+  `0.1.0`/`0.8.5` while RELEASE.md step 1 required agreement. They were
+  fixed by hand this round and RELEASE.md now names them explicitly,
+  but nothing asserts it. Extending the preflight to cover both is a
+  small change and the obvious next hardening.
+
+- **Postmortem: an npm scope is not yours until you own the org.** The
+  `g3t` org was taken, which was discovered only when the org was
+  created, after the packages had carried `@g3t` through their entire
+  development history. Checking scope availability belongs at the
+  START of packaging work, not at release time. The rename itself was
+  cheap; discovering it late was the expensive part.
+
+- **Between releases the manifests now stay equal to what is
+  published.** The bump belongs in the release PR, so `main` never
+  claims a version absent from the registry. Recorded in RELEASE.md.
+
+- **README carries npm version badges** reading the live registry, and
+  its title no longer hand-asserts a version. RELEASE.md step 1 was
+  updated to match and to say plainly not to reintroduce one: a
+  hand-maintained version in a title is a drift source nothing gates,
+  and it drifted twice before 1.0.0.
+
+- **Known gate noise, filed rather than silenced.** Two pre-existing
+  items were found while reading release-run logs and are backlog, not
+  blockers: `act()` warnings from unwrapped `onReady` calls in
+  `StyleLabShell.test.tsx` (test-only, no artifact impact), and the
+  absence of any automated coverage for `CanvasAdapter`'s
+  rasterization path, since jsdom returns a null 2D context and
+  `paint()` is never reached. The display-list layer above it IS
+  conformance-tested; the gap is the op-to-context translation.
+
+## 1.0.0 (continued): 2026-08-21 (npm scope is @g3-toolkit; sibling ranges loosened; version drift closed)
+
+- **The published scope is now `@g3-toolkit`, not `@g3t`.** The npm
+  org `g3t` was already taken, and a scope has to match an org you
+  own, so the three packages are `@g3-toolkit/core`,
+  `@g3-toolkit/react` and `@g3-toolkit/charts`. 778 references were
+  rewritten across 268 files: manifests, exports maps, every import in
+  `packages/`, `src/`, `examples/` and `tests/`, the tsconfig and
+  vite path aliases, `api-surface.json`, the bundle and consumer-cost
+  ledgers, the publish workflow filters, and every adopter-facing doc.
+  Nothing had been published under the old scope, so there is no
+  deprecation to file and no consumer to migrate. Entries below this
+  one predate the rename and still name `@g3t/`; they are the record
+  of what was true when written and were deliberately left alone.
+  The `g3t-*` CSS token namespace, the `g3t-ov-*` overlay classes,
+  `G3T_PERF` and `g3tLayoutStructural` are NOT the scope and did not
+  move. The rename anchored on `@g3t/` WITH the slash for exactly that
+  reason, which also means it could not see the two escaped regex
+  literals in `scripts/check-consumer-cost.mjs` (`/^@g3t\/core$/`);
+  those aliases are functional, and a silent miss there would have
+  measured the wrong thing rather than failing. They were fixed by
+  hand. This is the anchor-assert lesson in CLAUDE.md arriving from a
+  new direction: the assert has to match the form the string actually
+  takes in the file.
+
+- **Sibling dependency ranges are `workspace:^`, not `workspace:*`.**
+  pnpm rewrites `workspace:*` to an EXACT version at publish time, so
+  `@g3-toolkit/react@1.0.0` would have shipped demanding precisely
+  `@g3-toolkit/core@1.0.0`, and `@g3-toolkit/charts` would have
+  demanded exact peers on both siblings. An adopter who depends on
+  core directly and takes a later patch would then resolve two core
+  instances, one hoisted and one nested under react. Core exports
+  zustand store SINGLETONS, so two instances is two stores, and
+  selection silently stops propagating between views with nothing in
+  a stack trace. That is the dual-package hazard the ESM-only ruling
+  closed, reached by a different route. `workspace:^` publishes as
+  `^1.0.0` and dedupes. No upper bound is pinned yet; add one only
+  when a real incompatibility justifies it.
+
+- **Version drift closed.** `pixi.toml` read `1.0.0-rc.2` and
+  `docs/source/conf.py` read `version 0.1.0` / `release 0.8.5`
+  against manifests at `1.0.0`, which RELEASE.md step 1 requires to
+  agree before tagging. Both now read `1.0.0`. The preflight only
+  compares the four manifests, so neither would have blocked a tag.
+  `STATUS.md`'s remaining `1.0.0-rc.2` strings sit under PRIOR
+  SNAPSHOT headers and were left as history.
+
+- **RELEASE.md** gained the scope note, the `workspace:^` rationale,
+  and an `NPM_TOKEN` prerequisite: a granular token has to select all
+  packages in the org, because the three packages do not exist on the
+  registry yet and a per-package token has nothing to point at.
+## Fork line: GhostSystemsAI `work/post-rc007` (`@g3t` era). Entries below were never in an upstream release; the 2026-10-30 merge brought upstream 1.2.0 (above) into this line and renamed the scope to `@g3-toolkit`.
+
 ## 1.0.0-rc028: 2026-10-26 (git-gate refusal drops chained edits)
 
 **Doctrine: a refused git op discards the whole Bash command.** A worker

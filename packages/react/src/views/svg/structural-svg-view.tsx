@@ -19,14 +19,14 @@
  * cannot drift apart on relationship semantics.
  */
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { routeStructuralEdges, hitTestStructural } from "@g3t/core";
+import { routeStructuralEdges, hitTestStructural } from "@g3-toolkit/core";
 import type {
   StructuralGeometry,
   StructuralGraphInput,
   StructuralHit,
   GlyphSlot,
   StructuralNodeStyle,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import {
   useElementPointerEvents,
   type ElementPointerHandlers,
@@ -37,6 +37,7 @@ import {
   shortenPolyline,
   type UmlEdgeKind,
 } from "../canvas/structural-edge-overlay";
+import { viewClass } from "../../theme/view-class";
 
 export interface StructuralSvgTheme {
   background: string;
@@ -612,6 +613,19 @@ export function StructuralSvgView({
   // stands inside it: event-derived values are captured before the
   // deferred state updater runs.
   const svgRef = useRef<SVGSVGElement | null>(null);
+  // setView is useCallback([viewProp]), so in CONTROLLED mode its
+  // identity changes whenever the host supplies a new view. The native
+  // listener below binds once (deps [], deliberately: a non-passive
+  // listener must not be torn down and re-added on every controlled
+  // view change, which is what listing setView as a dependency would
+  // do), so it would otherwise hold the FIRST render's closure and
+  // resolve `const base = viewProp ?? prev` against a stale viewProp:
+  // wheel-zoom composing from a view the host had already replaced.
+  // Same ref indirection the drag handlers below use.
+  const setViewRef = useRef(setView);
+  React.useEffect(() => {
+    setViewRef.current = setView;
+  }, [setView]);
   React.useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
@@ -627,7 +641,7 @@ export function StructuralSvgView({
       const factor =
         e.deltaY < 0 ? Math.pow(1.1, magnitude) : Math.pow(1 / 1.1, magnitude);
       const rect = el.getBoundingClientRect();
-      setView((v) =>
+      setViewRef.current((v) =>
         zoomAbout(v, factor, e.clientX - rect.left, e.clientY - rect.top),
       );
     };
@@ -783,6 +797,7 @@ export function StructuralSvgView({
 
   return (
     <svg
+      className={viewClass()}
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}

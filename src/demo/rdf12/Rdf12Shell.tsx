@@ -29,14 +29,14 @@ import {
   DetailInspector,
   useSelectionStore,
   type CyStylesheet,
-} from "@g3t/react";
+} from "@g3-toolkit/react";
 import {
   projectTripleTermsAsEdges,
   projectTripleTermsAsHyperarcs,
   RDF_STATEMENT_FLAG,
   STAR_EDGE_TYPE,
   UGM,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import { publishCanvas } from "../testing/e2e-hooks";
 import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";

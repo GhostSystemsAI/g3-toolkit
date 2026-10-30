@@ -9,7 +9,7 @@
  * typecheck against the real package types.
  *
  * Resolution: snippets are written into a scratch dir inside the repo
- * so @g3t/* resolve through the pnpm workspace links (the same path
+ * so @g3-toolkit/* resolve through the pnpm workspace links (the same path
  * an external consumer exercises via the exports map). Requires
  * build:packages to have run; `verify` orders this correctly.
  *
@@ -44,6 +44,12 @@ const READMES = [
   // snippet added without one was unchecked. This gate covers the
   // fences themselves.
   "docs/wiring-guide.md",
+  // Added 2026-08-27. The consuming guide carries the import-path and
+  // re-layout rules, which is exactly where a wrong signature costs an
+  // adopter the most, and it was outside the gate: its incremental
+  // layout recipe was drafted against an invented (ugm, ugm) shape
+  // when the real functions take a Cytoscape core.
+  "docs/consuming-g3t.md",
 ];
 
 // Long tags count. `/```(tsx?)/` matched only "ts" and "tsx", so a
@@ -100,10 +106,16 @@ const PLACEHOLDERS = {
   // Everything else is the adopter's own code and has no toolkit type.
   caseId: "any",
   cy: "any",
+  // The deployment's working-set document, read from wherever the
+  // host keeps configuration (issue #5 recipe).
+  deploymentConfigText: "string",
   DossierLookup: "any",
   initialSpec: "any",
   logError: "any",
   navigate: "any",
+  neighborhood: "any",
+  nextNodeIds: "any",
+  openYourDetailPanel: "any",
   orgSettings: "any",
   processEngine: "any",
   rdfGraph: "any",
@@ -118,6 +130,12 @@ const PLACEHOLDERS = {
   shapes: "any",
   spec: "any",
   validationResults: "any",
+  // The adopter's own useReactTable instance (wiring guide, getCsv):
+  // @tanstack/react-table is a peer of @g3-toolkit/react and is not
+  // installed at the repo root, so the snippet cannot import its types.
+  hostTable: "any",
+  // The adopter's own JSON export (wiring guide, TableView toolbar slot).
+  exportJson: "any",
 };
 const dir = resolve(root, ".verify-snippets");
 rmSync(dir, { recursive: true, force: true });
@@ -167,7 +185,7 @@ if (files.length === 0) {
 writeFileSync(
   resolve(dir, "_placeholders.d.ts"),
   [
-    'import type { UGM } from "@g3t/core";',
+    'import type { UGM } from "@g3-toolkit/core";',
     "declare global {",
     ...Object.entries(PLACEHOLDERS).map(
       ([name, type]) => `  const ${name}: ${type};`,

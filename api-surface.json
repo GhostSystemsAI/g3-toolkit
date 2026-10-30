@@ -1,9 +1,10 @@
 {
-  "@g3t/core": [
+  "@g3-toolkit/core": [
     "CANVAS_STYLE_CHANNELS",
     "ComboManager",
     "CypherAdapter",
     "DARK_SHADOWS",
+    "DEFAULT_LIMIT_STRATEGIES",
     "DEFAULT_LOD_SCHEDULE",
     "DESIGN_TOKENS",
     "DIVERGING_SCALE",
@@ -22,6 +23,7 @@
     "LIGHT_TOKENS",
     "MalformedDocumentError",
     "OKABE_ITO",
+    "OVERLAY_TONE_ORDER",
     "ProjectionPipeline",
     "RDF",
     "RDF_STATEMENT_FLAG",
@@ -80,6 +82,8 @@
     "isChainEdgeId",
     "isEdgePortId",
     "isPseudoNode",
+    "isOverlayTone",
+    "kShortestPaths",
     "khopNeighborhood",
     "layoutStructural",
     "layoutStructuralWithChangeSet",
@@ -88,11 +92,17 @@
     "overlayFromPath",
     "overridesToCytoscapeStyles",
     "overridesToStructuralStyles",
+    "pageCategories",
+    "pageCount",
+    "pageIndex",
+    "pageItems",
+    "pageNodes",
     "parseAlgorithmResult",
     "parseCSV",
     "parseChangeSet",
     "parseGraphDocument",
     "parseJsonObject",
+    "parseWorkingSetConfig",
     "pinNodes",
     "polylineIntersectsBoxes",
     "polylineToCytoscapeSegments",
@@ -125,12 +135,14 @@
     "toStructuralInput",
     "tripleLabel",
     "tripleTermToValue",
+    "tripleEdgeKey",
     "typeCollapse",
     "validateGraphDocument",
     "validateShacl",
+    "validateWorkingSetConfig",
     "virtualizeRelationalData"
   ],
-  "@g3t/core/adapters": [
+  "@g3-toolkit/core/adapters": [
     "AdapterArgumentError",
     "AdapterHttpError",
     "CypherAdapter",
@@ -146,7 +158,7 @@
     "coerceDepth",
     "tripleTermToValue"
   ],
-  "@g3t/core/middleware": [
+  "@g3-toolkit/core/middleware": [
     "AdapterTimeoutError",
     "DEFAULT_TIMEOUT_MS",
     "apiKeyHeader",
@@ -154,11 +166,11 @@
     "composeMiddleware",
     "createDefaultFetch"
   ],
-  "@g3t/core/events": [
+  "@g3-toolkit/core/events": [
     "G3tEventBus",
     "eventBus"
   ],
-  "@g3t/core/projection": [
+  "@g3-toolkit/core/projection": [
     "ProjectionPipeline",
     "RDF",
     "RDF_STATEMENT_FLAG",
@@ -176,15 +188,16 @@
     "reificationCollapse",
     "termLabel",
     "tripleLabel",
+    "tripleEdgeKey",
     "typeCollapse"
   ],
-  "@g3t/core/pipeline": [
+  "@g3-toolkit/core/pipeline": [
     "createCentralityVsProperty",
     "createCountByType",
     "createDegreeDistribution",
     "createPropertyCorrelation"
   ],
-  "@g3t/core/shacl": [
+  "@g3-toolkit/core/shacl": [
     "ShaclValidator",
     "closedShapeIds",
     "parseShaclReport",
@@ -200,11 +213,11 @@
     "summarizeValidation",
     "validateShacl"
   ],
-  "@g3t/core/diff": [
+  "@g3-toolkit/core/diff": [
     "computeSchemaHash",
     "diffGraphs"
   ],
-  "@g3t/core/layout": [
+  "@g3-toolkit/core/layout": [
     "DagreLayout",
     "ForceLayout",
     "G3tLayeredLayout",
@@ -219,18 +232,20 @@
     "layoutStructural",
     "routeStructuralEdges"
   ],
-  "@g3t/core/algorithms": [
+  "@g3-toolkit/core/algorithms": [
+    "OVERLAY_TONE_ORDER",
     "applyAlgorithmResult",
     "connectedComponents",
     "degreeCentrality",
     "ingestAlgorithmResults",
+    "isOverlayTone",
     "overlayFromPath",
     "parseAlgorithmResult"
   ],
-  "@g3t/core/undo-redo": [
+  "@g3-toolkit/core/undo-redo": [
     "UndoRedoStack"
   ],
-  "@g3t/core/theme": [
+  "@g3-toolkit/core/theme": [
     "DARK_SHADOWS",
     "DESIGN_TOKENS",
     "DIVERGING_SCALE",
@@ -239,17 +254,18 @@
     "prefersReducedMotion",
     "scaleColor"
   ],
-  "@g3t/core/path-analysis": [
+  "@g3-toolkit/core/path-analysis": [
     "allShortestPaths",
-    "findShortestPath"
+    "findShortestPath",
+    "kShortestPaths"
   ],
-  "@g3t/core/internal": [
+  "@g3-toolkit/core/internal": [
     "cardinalitySuffix",
     "propertyRowText",
     "severityOverlayId",
     "valueConstraintCount"
   ],
-  "@g3t/react": [
+  "@g3-toolkit/react": [
     "AlgorithmPanel",
     "AnnotationPanel",
     "AriaCompanion",
@@ -265,8 +281,10 @@
     "DARK_THEME",
     "DEFAULT_ENCODING",
     "DEFAULT_ICON_PATHS",
+    "DEFAULT_LABEL_MAX_LENGTH",
     "DEFAULT_LAYOUT_OPTIONS",
     "DEFAULT_SPEC",
+    "DEFAULT_SPEED_OPTIONS",
     "DEFAULT_STYLESHEET",
     "DESIGN_TOKENS",
     "DIVERGING_SCALE",
@@ -309,6 +327,8 @@
     "NodePropertyInspector",
     "NodeStyleEditor",
     "OKABE_ITO_COLORS",
+    "OverlayTransport",
+    "PaginationControl",
     "PropertyEditor",
     "PropertyField",
     "ProvenanceTrace",
@@ -340,11 +360,13 @@
     "ViewErrorBoundary",
     "VisualEncodingManager",
     "WorkingSetManager",
+    "WorkingSetProvider",
     "ZoomControls",
     "applyBulkStyle",
     "applyEmphasisClasses",
     "applyEncodingSpec",
     "applyIconMappings",
+    "applyTheme",
     "applyVisualAttributes",
     "applyWorkspace",
     "buildDisplayList",
@@ -356,8 +378,10 @@
     "categoricalColorMap",
     "coerceWidgetValue",
     "colorForIndex",
+    "composeLabelPriority",
     "computeLockedIds",
     "computeOverlayMembership",
+    "computeSequenceActiveIds",
     "contrastRatio",
     "contrastRatioOrNull",
     "createCameraController",
@@ -373,6 +397,8 @@
     "expandNeighbors",
     "findShortestPath",
     "fromLegacyConfig",
+    "getCsv",
+    "getDefaultWorkingSetManager",
     "getIcon",
     "glyphStrokeFor",
     "harvestSceneFromCy",
@@ -387,6 +413,7 @@
     "makeIconResolver",
     "makeShapeResolver",
     "makeSizeResolver",
+    "mergeSequenceActiveIds",
     "nodeAttributesToCy",
     "overriddenNodeIds",
     "overrideScopeSummary",
@@ -403,25 +430,31 @@
     "relayoutAroundFixed",
     "resolveDragAttachment",
     "resolveFields",
+    "resolveLabelCollisions",
     "runGraphLayout",
     "sanitizeIconMarkup",
     "scaleColor",
     "serializeEncodingSpec",
     "serializeWorkspace",
     "shapeForIndex",
+    "shortenLabel",
     "stampMultiTypePies",
+    "stepSequence",
     "structuralThemeRules",
     "structuralToCytoscapeElements",
     "styleThemeFromG3tTheme",
     "taperPolygon",
     "themeColorRules",
+    "themeFromCssVariables",
     "tokensFromG3tTheme",
     "trimToEllipse",
     "ugmToCytoscapeElements",
     "useAnnounce",
+    "useAnnouncer",
     "useElementPointerEvents",
     "useEmphasisStore",
     "useInspectorSectionStore",
+    "useOverlaySequence",
     "useOverlayStore",
     "usePinState",
     "usePositionPinStore",
@@ -429,12 +462,15 @@
     "useStructuralLayout",
     "useStyleOverrideStore",
     "useThemeStore",
+    "useWorkingSetManager",
     "warnOnCustomPalette",
     "wireCytoscapeContextActions",
-    "wireStructuralPortDrag"
+    "wireStructuralPortDrag",
+    "workingSetLimitMessage"
   ],
-  "@g3t/react/views": [
+  "@g3-toolkit/react/views": [
     "CytoscapeCanvas",
+    "DEFAULT_LABEL_MAX_LENGTH",
     "DetailInspector",
     "DiffRenderer",
     "MAX_SLICES",
@@ -457,16 +493,20 @@
     "buildTypeVisualMap",
     "coerceWidgetValue",
     "colorForIndex",
+    "composeLabelPriority",
+    "getCsv",
     "inferWidget",
     "resolveFields",
+    "resolveLabelCollisions",
     "shapeForIndex",
+    "shortenLabel",
     "stampMultiTypePies",
     "structuralThemeRules",
     "structuralToCytoscapeElements",
     "ugmToCytoscapeElements",
     "wireStructuralPortDrag"
   ],
-  "@g3t/react/controls": [
+  "@g3-toolkit/react/controls": [
     "AlgorithmPanel",
     "AnnotationPanel",
     "CanvasLegend",
@@ -475,6 +515,7 @@
     "DEFAULT_ENCODING",
     "DEFAULT_LAYOUT_OPTIONS",
     "DEFAULT_SPEC",
+    "DEFAULT_SPEED_OPTIONS",
     "DerivedPropertyPanel",
     "EmptyState",
     "EncodingPanel",
@@ -490,6 +531,8 @@
     "LayoutManager",
     "LayoutSwitcher",
     "NodeStyleEditor",
+    "OverlayTransport",
+    "PaginationControl",
     "PropertyEditor",
     "RESERVED_CHANNELS",
     "ReservedChannelError",
@@ -513,6 +556,7 @@
     "buildNeighborhoodUGM",
     "captureWorkspace",
     "categoricalColorMap",
+    "computeSequenceActiveIds",
     "createDefaultMenuManager",
     "createLocalAnnotationStore",
     "encodingToCytoscapeStyle",
@@ -527,6 +571,7 @@
     "makeIconResolver",
     "makeShapeResolver",
     "makeSizeResolver",
+    "mergeSequenceActiveIds",
     "parseEncodingSpec",
     "parseWorkspace",
     "registerEditAppearance",
@@ -538,17 +583,21 @@
     "runGraphLayout",
     "serializeEncodingSpec",
     "serializeWorkspace",
+    "stepSequence",
+    "useOverlaySequence",
     "usePinState",
     "warnOnCustomPalette",
     "wireCytoscapeContextActions"
   ],
-  "@g3t/react/state": [
+  "@g3-toolkit/react/state": [
     "EMPHASIS_DIM_CLASS",
     "EMPHASIS_EDGE_CLASS",
     "UndoRedoStack",
+    "WorkingSetProvider",
     "applyEmphasisClasses",
     "computeLockedIds",
     "computeOverlayMembership",
+    "getDefaultWorkingSetManager",
     "overriddenNodeIds",
     "overrideScopeSummary",
     "useEmphasisStore",
@@ -556,9 +605,11 @@
     "useOverlayStore",
     "usePositionPinStore",
     "useSelectionStore",
-    "useStyleOverrideStore"
+    "useStyleOverrideStore",
+    "useWorkingSetManager",
+    "workingSetLimitMessage"
   ],
-  "@g3t/react/theme": [
+  "@g3-toolkit/react/theme": [
     "DARK_SHADOWS",
     "DARK_THEME",
     "DESIGN_TOKENS",
@@ -568,6 +619,7 @@
     "SEQUENTIAL_SCALE",
     "THEME_PRESETS",
     "ThemeSwitcher",
+    "applyTheme",
     "contrastRatio",
     "contrastRatioOrNull",
     "createTheme",
@@ -577,16 +629,18 @@
     "prefersReducedMotion",
     "scaleColor",
     "styleThemeFromG3tTheme",
+    "themeFromCssVariables",
     "tokensFromG3tTheme",
     "useThemeStore"
   ],
-  "@g3t/react/a11y": [
+  "@g3-toolkit/react/a11y": [
     "AriaCompanion",
     "HIGH_CONTRAST_DEFAULTS",
     "HIGH_CONTRAST_ON",
-    "useAnnounce"
+    "useAnnounce",
+    "useAnnouncer"
   ],
-  "@g3t/react/icons": [
+  "@g3-toolkit/react/icons": [
     "DEFAULT_ICON_PATHS",
     "Icon",
     "getIcon",
@@ -595,10 +649,10 @@
     "registerIconSet",
     "sanitizeIconMarkup"
   ],
-  "@g3t/react/timeline": [
+  "@g3-toolkit/react/timeline": [
     "TimelineView"
   ],
-  "@g3t/charts": [
+  "@g3-toolkit/charts": [
     "LinkedChart"
   ]
 }

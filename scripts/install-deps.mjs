@@ -19,14 +19,14 @@
 //
 // A git worktree carries no node_modules (gitignored). The tempting fix,
 // symlinking node_modules from the main checkout, is wrong: pnpm's
-// workspace links are relative, so every `@g3t/*` import would resolve into
+// workspace links are relative, so every `@g3-toolkit/*` import would resolve into
 // the MAIN checkout and the worktree would test code it did not change
 // (heal 09cf2530). This script removes such a symlink and does a real
 // install; it is a no-op when node_modules is already installed.
 //
 // Usage: node scripts/install-deps.mjs [extra pnpm install args]
 //        node scripts/install-deps.mjs --check   (gate preflight: exit 1
-//        unless node_modules is a real install whose @g3t links resolve
+//        unless node_modules is a real install whose @g3-toolkit links resolve
 //        inside this checkout)
 //   G3T_PNPM_OVERLAY_STORE=<dir>  overlay location (default:
 //   $WEAVER_JOB_DIR/work/pnpm-store in a pool worker, else a temp dir)
@@ -42,13 +42,13 @@ const WRITABLE_DIRS = ["projects", ".tmp"];
 const isIndexFile = (name) => /^index\.db(-wal|-shm)?$/.test(name);
 
 /**
- * Workspace packages (`node_modules/@g3t/*`) whose real path is outside
+ * Workspace packages (`node_modules/@g3-toolkit/*`) whose real path is outside
  * root. A lexical readlink check cannot see this: the links are relative,
- * so they read as in-tree even when node_modules itself (or @g3t) is a
+ * so they read as in-tree even when node_modules itself (or @g3-toolkit) is a
  * symlink into another checkout. Only realpath follows the whole chain.
  */
 export function foreignWorkspaceLinks(root) {
-  const scope = path.join(root, "node_modules", "@g3t");
+  const scope = path.join(root, "node_modules", "@g3-toolkit");
   let names;
   try {
     names = fs.readdirSync(scope);
@@ -69,7 +69,7 @@ export function foreignWorkspaceLinks(root) {
 
 /**
  * State of `<root>/node_modules`: "missing", "symlink", "foreign" (a real
- * install whose @g3t links resolve into another checkout) or "installed".
+ * install whose @g3-toolkit links resolve into another checkout) or "installed".
  */
 export function nodeModulesState(root) {
   const nm = path.join(root, "node_modules");
@@ -161,7 +161,7 @@ function main(args) {
       state === "symlink"
         ? `node_modules is a symlink -> ${fs.readlinkSync(path.join(root, "node_modules"))}`
         : state === "foreign"
-          ? `@g3t/{${foreignWorkspaceLinks(root).join(",")}} resolve outside ${root}`
+          ? `@g3-toolkit/{${foreignWorkspaceLinks(root).join(",")}} resolve outside ${root}`
           : "node_modules is not installed";
     console.error(
       `install-deps --check: ${where}; run \`pnpm run install:deps\` (never symlink node_modules from another checkout)`,

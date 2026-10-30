@@ -15,7 +15,11 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import cytoscape from "cytoscape";
-import { UGM, layoutStructural, overridesToCytoscapeStyles } from "@g3t/core";
+import {
+  UGM,
+  layoutStructural,
+  overridesToCytoscapeStyles,
+} from "@g3-toolkit/core";
 import { projectDiagram } from "../../../../../src/demo/mbse/diagrams";
 import { satelliteModel } from "../../../../../src/demo/mbse/model";
 import { THEME_PRESETS, deriveCytoscapeStyle } from "../../theme/ThemeManager";

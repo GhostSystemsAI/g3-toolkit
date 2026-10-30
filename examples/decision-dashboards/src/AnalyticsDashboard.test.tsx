@@ -13,7 +13,7 @@ import {
   fireEvent,
   act,
 } from "@testing-library/react";
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
 
 type CapturedMenu = {
   resolve: (t: {
@@ -37,8 +37,8 @@ const captured = vi.hoisted(() => ({
   edgeClickIsolate: [] as (boolean | undefined)[],
 }));
 
-vi.mock("@g3t/react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@g3t/react")>();
+vi.mock("@g3-toolkit/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@g3-toolkit/react")>();
   return {
     ...actual,
     // The popout internally composes the real CytoscapeCanvas via a
@@ -87,7 +87,7 @@ vi.mock("@g3t/react", async (importOriginal) => {
 });
 
 import { AnalyticsDashboard } from "./AnalyticsDashboard";
-import { useEmphasisStore, useSelectionStore } from "@g3t/react";
+import { useEmphasisStore, useSelectionStore } from "@g3-toolkit/react";
 import { buildSupplyNetwork, originCoverageByTier } from "./supply-data";
 
 afterEach(cleanup);
