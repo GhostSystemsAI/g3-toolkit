@@ -80,3 +80,12 @@ planning/archive/
 .devcontainer/
 .mcp.json
 audit/
+
+# === wake runtime artefacts (never source; local to the forge host) ===
+.weaver-jobs*/
+.kb-atoms-index*/
+.kb-worktrees*/
+.kb-init-progress.json
+.kb-checkpoints/
+/logs/
+/STATE.json
