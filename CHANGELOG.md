@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### 2026-10-30 (heal d455ee76: routing gauntlet immune to host load, v1.2.1-rc001)
+
+- `src/demo/routing/scenarios.test.ts` flaked under load (fan-bus,
+  prune-wall and storm-sandwich at L red in a merge-gate run at load
+  avg 42, green in isolation). Mechanism: `layoutStructural` reads
+  Date.now against its layering (80 ms), ordering (60 ms) and routing
+  (80 ms) budgets and falls back to best-so-far by design, so a single
+  host deschedule longer than a budget replaced escalated routes with
+  the documented detour/simple fallback. Each test body runs in a few
+  ms, so this was never a timeout. Reproduced with a 20 ms/read clock
+  stub (13 of 28 L flow cases violated) and with CPU hogs at load avg
+  76 (the old file failed in 3 of 3 runs, the new one in none).
+- Fix: every layout in the gauntlet passes `GAUNTLET_BUDGETS` (all
+  three budgets Infinity), so the file pins the algorithm's floor
+  rather than the host's speed. The engine's budgets and defaults are
+  unchanged. Fence: a `slow-clock immunity` block asserts identical
+  geometry and zero violations under the 20 ms/read clock; it fails on
+  all three scenarios with default budgets.
+
 ### 2026-10-30 (fork line merged: upstream 1.2.0 into GhostSystemsAI `work/post-rc007`)
 
 The GhostSystemsAI fork (routing/nudging arc, Routing Lab, RDF 1.2
