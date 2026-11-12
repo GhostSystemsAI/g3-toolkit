@@ -1,7 +1,7 @@
 {
-  "name": "@g3t/react",
-  "version": "1.0.1",
-  "description": "React components for graph visualization: canvas, table, tree, map, schema, charts. Pairs with @g3t/core.",
+  "name": "@g3-toolkit/react",
+  "version": "1.2.1-rc001",
+  "description": "React components for graph visualization: canvas, table, tree, map, schema, charts. Pairs with @g3-toolkit/core.",
   "type": "module",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -42,6 +42,10 @@
       "types": "./style.css.d.ts",
       "default": "./dist/style.css"
     },
+    "./style.base.css": {
+      "types": "./style.base.css.d.ts",
+      "default": "./dist/style.base.css"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -49,7 +53,8 @@
     "README.md",
     "LICENSE",
     "NOTICE",
-    "style.css.d.ts"
+    "style.css.d.ts",
+    "style.base.css.d.ts"
   ],
   "keywords": [
     "graph",
@@ -77,19 +82,20 @@
     "clean": "tsc --build --clean && rm -rf dist"
   },
   "dependencies": {
-    "@g3t/core": "workspace:*",
-    "fuse.js": "^7.0.0",
-    "@tanstack/react-table": "^8.0.0"
+    "@g3-toolkit/core": "workspace:^",
+    "@tanstack/react-table": "^8.0.0",
+    "@tanstack/react-virtual": "^3.14.18",
+    "fuse.js": "^7.0.0"
   },
   "peerDependencies": {
-    "react": ">=18.0.0",
-    "react-dom": ">=18.0.0",
     "cytoscape": ">=3.28.0",
     "cytoscape-fcose": ">=2.2.0",
-    "zustand": ">=4.0.0",
     "echarts": ">=5.0.0",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0",
+    "vis-data": ">=7.0.0",
     "vis-timeline": ">=7.0.0",
-    "vis-data": ">=7.0.0"
+    "zustand": ">=4.0.0"
   },
   "peerDependenciesMeta": {
     "vis-timeline": {
@@ -103,9 +109,9 @@
     "**/*.css"
   ],
   "devDependencies": {
-    "vitest": "^4.1.7",
-    "@testing-library/react": "^16.3.2",
     "@storybook/react": "^10.4.1",
-    "@storybook/react-vite": "^10.4.1"
+    "@storybook/react-vite": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "vitest": "^4.1.7"
   }
 }

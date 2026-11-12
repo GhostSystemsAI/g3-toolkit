@@ -29,18 +29,22 @@ import {
   DetailInspector,
   useSelectionStore,
   type CyStylesheet,
-} from "@g3t/react";
+} from "@g3-toolkit/react";
 import {
   projectTripleTermsAsEdges,
   projectTripleTermsAsHyperarcs,
   RDF_STATEMENT_FLAG,
   STAR_EDGE_TYPE,
   UGM,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import { publishCanvas } from "../testing/e2e-hooks";
 import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
 import { RDF12_ROWS, tripleLabel, termLabel } from "./rdf12";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 /* eslint-disable @typescript-eslint/no-explicit-any --
    Cytoscape's TS types don't accept `data(x)` strings for opacity /
@@ -136,6 +140,11 @@ const EDGE_STYLE: CyStylesheet[] = [
       "curve-style": "bezier",
       "control-point-step-size": 40,
       width: 1.5,
+    } as any,
+  },
+  {
+    selector: `edge[type = '${STAR_EDGE_TYPE}'][annP]`,
+    style: {
       label: "data(annP)",
       "font-size": 9,
       color: "#8b949e",
@@ -226,15 +235,15 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
   const selectedIsStatement =
     selection?.type === "node" &&
     displayUgm.getNode(selection.id)?.properties[RDF_STATEMENT_FLAG] === true;
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const [routeRefreshSignal, setRouteRefreshSignal] = useState(0);
-  const [relayoutSignal, setRelayoutSignal] = useState(0);
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
 
   const enterInterior = (id: string) => {
     setDrill((d) => [...d, id]);
@@ -281,48 +290,15 @@ export function Rdf12Shell({ onBack }: { onBack: () => void }) {
             annotation edges
           </span>
         </div>
-        <label
-          style={{
-            marginLeft: "auto",
-            fontSize: 12,
-            display: "flex",
-            gap: 6,
-            alignItems: "center",
-            color: "#8b949e",
-          }}
-        >
-          Routes
-          <select
-            data-testid="rdf12-route-mode"
-            value={routeMode}
-            onChange={(e) =>
-              setRouteMode(e.target.value as "direct" | "orthogonal" | "off")
-            }
-            style={{ fontSize: 12 }}
-          >
-            <option value="direct">Direct (auto-Z)</option>
-            <option value="orthogonal">Orthogonal (always)</option>
-            <option value="off">Off (bezier)</option>
-          </select>
-        </label>
-        <button
-          type="button"
-          className="g3t-btn"
-          data-testid="rdf12-refresh-routes"
-          onClick={() => setRouteRefreshSignal((n) => n + 1)}
-          style={{ fontSize: 12 }}
-        >
-          Refresh routes
-        </button>
-        <button
-          type="button"
-          className="g3t-btn"
-          data-testid="rdf12-relayout"
-          onClick={() => setRelayoutSignal((n) => n + 1)}
-          style={{ fontSize: 12 }}
-        >
-          Re-layout
-        </button>
+        <span style={{ marginLeft: "auto" }}>
+          <RoutingControlStrip
+            idPrefix="rdf12"
+            routeMode={routeMode}
+            setRouteMode={setRouteMode}
+            refreshRoutes={refreshRoutes}
+            relayout={relayout}
+          />
+        </span>
         <div
           role="tablist"
           aria-label="Render mode"

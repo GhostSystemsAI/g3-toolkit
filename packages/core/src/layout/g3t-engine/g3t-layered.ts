@@ -79,6 +79,21 @@ export interface G3tLayoutOptions {
    *  the reserved corridor by the same amount, or the router would
    *  spread into space the layout never reserved). */
   trackGap?: number;
+  /** Seed for the crossing-aware initial-order restarts. Only
+   *  consulted when `orderRestarts > 1`. When unset (or restarts is
+   *  <= 1), ordering runs the single deterministic pass and this
+   *  field is ignored, so the default is byte-identical to today. */
+  orderSeed?: number;
+  /** Number of seeded initial-order permutations to try in
+   *  `orderLayers`. Each restart runs the existing barycenter +
+   *  transpose sweep from a different seeded shuffle of the initial
+   *  layer arrays; the arrangement with the lowest crossing count
+   *  wins (ties keep the earlier candidate for stability). Default 1
+   *  (unset), meaning EXACTLY today's single deterministic pass.
+   *  Values > 1 are opt-in and require `orderSeed`. Capped at 16 so a
+   *  large scene cannot blow the frame budget; the existing per-run
+   *  `orderingBudgetMs` still bounds each restart. */
+  orderRestarts?: number;
   /** Ceiling on a corridor gap, as a multiple of `layerSpacing`.
    *  Default 3 (`CORRIDOR_MAX_GAP_FACTOR`).
    *
@@ -311,20 +326,42 @@ export function orderLayers(
   edges: readonly FlatEdge[],
   reversed: ReadonlySet<string>,
   layerOf: ReadonlyMap<string, number>,
-  options?: Pick<G3tLayoutOptions, "orderingBudgetMs" | "maxSweeps"> & {
+  options?: Pick<
+    G3tLayoutOptions,
+    "orderingBudgetMs" | "maxSweeps" | "orderSeed" | "orderRestarts"
+  > & {
     /** Warm-start seam (sketch): initial within-layer order. */
     initialOrder?: (ids: readonly string[]) => string[];
   },
 ): { layers: string[][]; crossings: number } {
   const budget = options?.orderingBudgetMs ?? 60;
   const maxSweeps = options?.maxSweeps ?? 8;
+  // Crossing-aware seeded restarts (opt-in). Unset / <= 1 keeps the
+  // single deterministic pass so every existing snapshot holds byte-
+  // identical. Capped at 16 to bound worst-case cost.
+  const restartsRequested = Math.max(
+    1,
+    Math.floor(options?.orderRestarts ?? 1),
+  );
+  const restarts = Math.min(16, restartsRequested);
+  const seed = options?.orderSeed;
   const nLayers = Math.max(0, ...[...layerOf.values()].map((l) => l + 1));
-  const layers: string[][] = Array.from({ length: nLayers }, () => []);
-  for (const n of nodes) layers[layerOf.get(n.id) ?? 0]?.push(n.id);
-  for (let i = 0; i < layers.length; i++) {
-    const l = at(layers[i], `layer ${i}`);
-    layers[i] = options?.initialOrder ? options.initialOrder(l) : l.sort();
-  }
+
+  const buildInitialLayers = (
+    orderFn: (ids: readonly string[], layerIndex: number) => string[],
+  ): string[][] => {
+    const ls: string[][] = Array.from({ length: nLayers }, () => []);
+    for (const n of nodes) ls[layerOf.get(n.id) ?? 0]?.push(n.id);
+    for (let i = 0; i < ls.length; i++) {
+      const l = at(ls[i], `layer ${i}`);
+      ls[i] = orderFn(l, i);
+    }
+    return ls;
+  };
+
+  const defaultOrder = (ids: readonly string[]): string[] =>
+    options?.initialOrder ? options.initialOrder(ids) : [...ids].sort();
+
   const down = new Map<string, string[]>();
   const up = new Map<string, string[]>();
   for (const n of nodes) {
@@ -338,71 +375,124 @@ export function orderLayers(
     down.get(s)?.push(t);
     up.get(t)?.push(s);
   }
-  const totalCrossings = (): number => {
+  const totalCrossingsOf = (ls: readonly (readonly string[])[]): number => {
     let c = 0;
-    for (let i = 0; i + 1 < layers.length; i++) {
+    for (let i = 0; i + 1 < ls.length; i++) {
       const idx = new Map(
-        at(layers[i + 1], `layer ${i + 1}`).map((id, k) => [id, k] as const),
+        at(ls[i + 1], `layer ${i + 1}`).map((id, k) => [id, k] as const),
       );
-      c += countCrossingsBetween(at(layers[i], `layer ${i}`), idx, down);
+      c += countCrossingsBetween(at(ls[i], `layer ${i}`), idx, down);
     }
     return c;
   };
-  const t0 = Date.now();
-  let best = totalCrossings();
-  // In-sweep deadline (mirror of the NS granularity fix): a full
-  // barycenter+transpose sweep is chunky at scale, so the deadline
-  // is consulted inside the per-layer loops too; layers is always a
-  // consistent (merely less-refined) ordering at any cut point.
-  const expired = (): boolean => Date.now() - t0 > budget;
-  for (let sweep = 0; sweep < maxSweeps; sweep++) {
-    if (expired()) break; // best-so-far, by design
-    // Barycenter down then up.
-    for (const dir of ["down", "up"] as const) {
-      const range =
-        dir === "down"
-          ? [...Array(layers.length).keys()].slice(1)
-          : [...Array(layers.length).keys()].slice(0, -1).reverse();
-      for (const li of range) {
-        if (expired()) break;
-        const ref = at(
-          dir === "down" ? layers[li - 1] : layers[li + 1],
-          `ref layer around ${li}`,
-        );
-        const refIdx = new Map(ref.map((id, k) => [id, k] as const));
-        const adj = dir === "down" ? up : down;
-        const keyed = at(layers[li], `layer ${li}`).map((id, k) => {
-          const ns = (adj.get(id) ?? [])
-            .map((m) => refIdx.get(m))
-            .filter((i): i is number => i !== undefined);
-          const bc =
-            ns.length === 0 ? k : ns.reduce((a, b) => a + b, 0) / ns.length;
-          return { id, bc };
-        });
-        keyed.sort((a, b) => a.bc - b.bc || (a.id < b.id ? -1 : 1));
-        layers[li] = keyed.map((x) => x.id);
+
+  const runSweep = (
+    startLayers: string[][],
+    budgetMs: number,
+  ): { layers: string[][]; crossings: number } => {
+    const ls = startLayers.map((l) => [...l]);
+    const t0 = Date.now();
+    let best = totalCrossingsOf(ls);
+    // In-sweep deadline (mirror of the NS granularity fix): a full
+    // barycenter+transpose sweep is chunky at scale, so the deadline
+    // is consulted inside the per-layer loops too; ls is always a
+    // consistent (merely less-refined) ordering at any cut point.
+    const expired = (): boolean => Date.now() - t0 > budgetMs;
+    for (let sweep = 0; sweep < maxSweeps; sweep++) {
+      if (expired()) break; // best-so-far, by design
+      // Barycenter down then up.
+      for (const dir of ["down", "up"] as const) {
+        const range =
+          dir === "down"
+            ? [...Array(ls.length).keys()].slice(1)
+            : [...Array(ls.length).keys()].slice(0, -1).reverse();
+        for (const li of range) {
+          if (expired()) break;
+          const ref = at(
+            dir === "down" ? ls[li - 1] : ls[li + 1],
+            `ref layer around ${li}`,
+          );
+          const refIdx = new Map(ref.map((id, k) => [id, k] as const));
+          const adj = dir === "down" ? up : down;
+          const keyed = at(ls[li], `layer ${li}`).map((id, k) => {
+            const ns = (adj.get(id) ?? [])
+              .map((m) => refIdx.get(m))
+              .filter((i): i is number => i !== undefined);
+            const bc =
+              ns.length === 0 ? k : ns.reduce((a, b) => a + b, 0) / ns.length;
+            return { id, bc };
+          });
+          keyed.sort((a, b) => a.bc - b.bc || (a.id < b.id ? -1 : 1));
+          ls[li] = keyed.map((x) => x.id);
+        }
       }
-    }
-    // Transpose refinement.
-    for (let li = 0; li < layers.length && !expired(); li++) {
-      const l = at(layers[li], `layer ${li}`);
-      for (let k = 0; k + 1 < l.length; k++) {
-        const swapped = [...l];
-        const a = at(swapped[k], `slot ${k}`);
-        swapped[k] = at(swapped[k + 1], `slot ${k + 1}`);
-        swapped[k + 1] = a;
-        const before = layerCrossingsAround(layers, li, down, up);
-        const trial = [...layers];
-        trial[li] = swapped;
-        const after = layerCrossingsAround(trial, li, down, up);
-        if (after < before) layers[li] = swapped;
+      // Transpose refinement.
+      for (let li = 0; li < ls.length && !expired(); li++) {
+        const l = at(ls[li], `layer ${li}`);
+        for (let k = 0; k + 1 < l.length; k++) {
+          const swapped = [...l];
+          const a = at(swapped[k], `slot ${k}`);
+          swapped[k] = at(swapped[k + 1], `slot ${k + 1}`);
+          swapped[k + 1] = a;
+          const before = layerCrossingsAround(ls, li, down, up);
+          const trial = [...ls];
+          trial[li] = swapped;
+          const after = layerCrossingsAround(trial, li, down, up);
+          if (after < before) ls[li] = swapped;
+        }
       }
+      const now = totalCrossingsOf(ls);
+      if (now >= best) break; // converged: early exit
+      best = now;
     }
-    const now = totalCrossings();
-    if (now >= best) break; // converged: early exit
-    best = now;
+    return { layers: ls, crossings: best };
+  };
+
+  // Default single-pass: byte-identical to the pre-restarts behavior.
+  // No PRNG allocated, no restart bookkeeping, so opt-out is free.
+  if (restarts <= 1) {
+    return runSweep(buildInitialLayers(defaultOrder), budget);
   }
-  return { layers, crossings: best };
+
+  // Seeded restarts. Divide the total ordering budget across restarts
+  // so raising restarts does NOT extend total wall time; a large scene
+  // still finishes inside the frame budget. First candidate is the
+  // deterministic default order so restarts can only improve, never
+  // regress, relative to a single pass with the same total budget.
+  const rng = mulberry32((seed ?? 0) >>> 0);
+  const perBudget = Math.max(1, Math.floor(budget / restarts));
+  let bestResult = runSweep(buildInitialLayers(defaultOrder), perBudget);
+  for (let r = 1; r < restarts; r++) {
+    const seeded = buildInitialLayers((ids) => shuffleSeeded([...ids], rng));
+    const candidate = runSweep(seeded, perBudget);
+    if (candidate.crossings < bestResult.crossings) bestResult = candidate;
+  }
+  return bestResult;
+}
+
+/** Deterministic 32-bit PRNG. Used by opt-in ordering restarts so
+ *  the layout stays reproducible from a caller-supplied seed. */
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return (): number => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Fisher-Yates shuffle driven by a seeded PRNG. In-place; returns
+ *  the same array so callers can chain. */
+function shuffleSeeded<T>(arr: T[], rng: () => number): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const a = at(arr[i], `shuffle slot ${i}`);
+    arr[i] = at(arr[j], `shuffle slot ${j}`);
+    arr[j] = a;
+  }
+  return arr;
 }
 
 function layerCrossingsAround(

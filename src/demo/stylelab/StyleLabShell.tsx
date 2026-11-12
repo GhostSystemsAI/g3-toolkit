@@ -28,15 +28,15 @@ import {
   resolveLod,
   StyleEngine,
   type VisualAttributes,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import {
   applyVisualAttributes,
   CanvasAdapter,
   CytoscapeCanvas,
   SvgAdapter,
-} from "@g3t/react";
-import type { SvgSceneEdge, SvgSceneNode } from "@g3t/react";
-import type { CyStylesheet } from "@g3t/react";
+} from "@g3-toolkit/react";
+import type { SvgSceneEdge, SvgSceneNode } from "@g3-toolkit/react";
+import type { CyStylesheet } from "@g3-toolkit/react";
 import {
   buildStyleLabUgm,
   MUTED_IDS,
@@ -47,6 +47,10 @@ import {
   styleLabLegacyStylesheet,
 } from "./style-lab-fixture";
 import { publishCanvas } from "../testing/e2e-hooks";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 interface ParityRow {
   element: string;
@@ -139,61 +143,68 @@ export function StyleLabShell({
     setLegacyCy(cy);
   }, []);
 
-  const onEngineReady = useCallback((cy: Core) => {
-    for (const id of MUTED_IDS) cy.$id(id).addClass("lab-muted");
-    cy.$id(SELECTED_ID).select();
-    const engine = new StyleEngine(styleLabEngineConfig());
-    const elements = styleElementsFromCy(cy).map((el) => ({
-      ...el,
-      classes: cy.$id(el.id).hasClass("lab-muted") ? ["lab-muted"] : [],
-      states: el.id === SELECTED_ID ? ["selected"] : [],
-    }));
-    const resolved = engine.load({ elements });
-    baseResolvedRef.current = resolved;
-    engineKindsRef.current = new Map(
-      elements.map((el) => [el.id, el.kind] as const),
-    );
-    const report = applyVisualAttributes(cy, resolved);
-    publishCanvas("style-lab-engine")?.(cy);
-    setHonesty(
-      [...report.entries()]
-        .filter(([, r]) => r.unsupported.length > 0)
-        .map(([element, r]) => ({
-          element,
-          unsupported: r.unsupported.join(", "),
+  const onEngineReady = useCallback(
+    (cy: Core) => {
+      for (const id of MUTED_IDS) cy.$id(id).addClass("lab-muted");
+      cy.$id(SELECTED_ID).select();
+      const engine = new StyleEngine(styleLabEngineConfig());
+      const elements = styleElementsFromCy(cy).map((el) => ({
+        ...el,
+        classes: cy.$id(el.id).hasClass("lab-muted") ? ["lab-muted"] : [],
+        states: el.id === SELECTED_ID ? ["selected"] : [],
+      }));
+      const resolved = engine.load({ elements });
+      baseResolvedRef.current = resolved;
+      engineKindsRef.current = new Map(
+        elements.map((el) => [el.id, el.kind] as const),
+      );
+      const report = applyVisualAttributes(cy, resolved);
+      publishCanvas("style-lab-engine")?.(cy);
+      setHonesty(
+        [...report.entries()]
+          .filter(([, r]) => r.unsupported.length > 0)
+          .map(([element, r]) => ({
+            element,
+            unsupported: r.unsupported.join(", "),
+          })),
+      );
+      // Label TEXT rides element data in the cy panes (label:
+      // data(label) in the base stylesheet); the engine's resolved
+      // attributes carry label STYLING channels but not text. The F1
+      // adapter renders attributes only, so the shell harvests the
+      // data-derived text here and merges it into the attribute maps
+      // (the same division of labor cytoscape's data mapping does).
+      labelTextRef.current = new Map(
+        cy
+          .nodes()
+          .map((n) => [n.id(), String(n.data("label") ?? n.id())] as const),
+      );
+      setF1Scene({
+        nodes: cy.nodes().map((n) => {
+          const p = n.position();
+          return {
+            id: n.id(),
+            x: p.x,
+            y: p.y,
+            width: n.width(),
+            height: n.height(),
+          };
+        }),
+        edges: cy.edges().map((e) => ({
+          id: e.id(),
+          source: e.source().id(),
+          target: e.target().id(),
         })),
-    );
-    // Label TEXT rides element data in the cy panes (label:
-    // data(label) in the base stylesheet); the engine's resolved
-    // attributes carry label STYLING channels but not text. The F1
-    // adapter renders attributes only, so the shell harvests the
-    // data-derived text here and merges it into the attribute maps
-    // (the same division of labor cytoscape's data mapping does).
-    labelTextRef.current = new Map(
-      cy
-        .nodes()
-        .map((n) => [n.id(), String(n.data("label") ?? n.id())] as const),
-    );
-    setF1Scene({
-      nodes: cy.nodes().map((n) => {
-        const p = n.position();
-        return {
-          id: n.id(),
-          x: p.x,
-          y: p.y,
-          width: n.width(),
-          height: n.height(),
-        };
-      }),
-      edges: cy.edges().map((e) => ({
-        id: e.id(),
-        source: e.source().id(),
-        target: e.target().id(),
-      })),
-    });
-    setF1Resolved(withLabelText(resolved));
-    setEngineCy(cy);
-  }, []);
+      });
+      setF1Resolved(withLabelText(resolved));
+      setEngineCy(cy);
+      // withLabelText is useCallback([]) reading only labelTextRef, so its
+      // identity never changes and listing it is equivalent to []. Listed
+      // rather than suppressed: if it ever gains a dependency, this
+      // callback should start tracking it.
+    },
+    [withLabelText],
+  );
 
   // The live parity table: same oracle as the headless test, computed
   // once both instances are mounted (a mount-time comparison, not a
@@ -218,13 +229,15 @@ export function StyleLabShell({
     return { rows, checks };
   }, [legacyCy, engineCy]);
 
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
 
   const lodContext = LOD_CONTEXTS[lodIndex] ?? LOD_CONTEXTS[0];
   const lod = resolveLod(DEFAULT_LOD_SCHEDULE, {
@@ -283,28 +296,13 @@ export function StyleLabShell({
           engine-plus-bypass path (right), with the parity computed live from
           cytoscape&apos;s own resolved styles.
         </p>
-        <label
-          style={{
-            fontSize: 12,
-            display: "flex",
-            gap: 4,
-            alignItems: "center",
-          }}
-        >
-          Routes
-          <select
-            data-testid="style-lab-route-mode"
-            value={routeMode}
-            onChange={(e) =>
-              setRouteMode(e.target.value as "direct" | "orthogonal" | "off")
-            }
-            style={{ fontSize: 12 }}
-          >
-            <option value="direct">Direct (auto-Z)</option>
-            <option value="orthogonal">Orthogonal (always)</option>
-            <option value="off">Off (bezier)</option>
-          </select>
-        </label>
+        <RoutingControlStrip
+          idPrefix="style-lab"
+          routeMode={routeMode}
+          setRouteMode={setRouteMode}
+          refreshRoutes={refreshRoutes}
+          relayout={relayout}
+        />
       </header>
 
       <div style={{ display: "flex", gap: 16 }}>
@@ -324,6 +322,9 @@ export function StyleLabShell({
               onReady={onLegacyReady}
               animate={false}
               routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
+              routeRefreshSignal={routeRefreshSignal}
+              relayoutSignal={relayoutSignal}
+              edgeClickIsolate
             />
           </div>
         </section>
@@ -343,6 +344,9 @@ export function StyleLabShell({
               onReady={onEngineReady}
               animate={false}
               routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
+              routeRefreshSignal={routeRefreshSignal}
+              relayoutSignal={relayoutSignal}
+              edgeClickIsolate
             />
           </div>
         </section>

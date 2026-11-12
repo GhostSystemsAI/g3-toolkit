@@ -32,7 +32,7 @@ import {
   type UGM,
   G3tEventBus,
   allShortestPaths,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import {
   makeColorResolver,
   CoverageMeter,
@@ -54,15 +54,11 @@ import {
   SankeyView,
   GraphToolbar,
   categoricalColorMap,
-} from "@g3t/react";
-import { LinkedChart } from "@g3t/charts";
+} from "@g3-toolkit/react";
+import { LinkedChart } from "@g3-toolkit/charts";
 import { buildSupplyNetwork, originCoverageByTier } from "./supply-data";
 
 type Tab = "degree" | "scatter" | "stats" | "sankey";
-
-/** Post-layout obstacle-aware routing on this dashboard's canvas.
- *  Per-shell kill-switch (D8): flip to false and re-push to revert. */
-const ROUTE_EDGES = true;
 
 export interface AnalyticsDashboardProps {
   className?: string;
@@ -329,7 +325,7 @@ export function AnalyticsDashboard({ className }: AnalyticsDashboardProps) {
             zIndex: 20,
           }}
         >
-          <GraphToolbar ugm={ugm} cy={core} />
+          <GraphToolbar ugm={ugm} core={core} />
         </div>
         <CytoscapeCanvas
           ugm={ugm}
@@ -337,7 +333,8 @@ export function AnalyticsDashboard({ className }: AnalyticsDashboardProps) {
           menuManager={menuManager}
           hidden={hiddenIds}
           onReady={setCore}
-          routeEdges={ROUTE_EDGES}
+          routeEdges={{ mode: "direct" }}
+          edgeClickIsolate
         />
         {(menuStatus !== null || hiddenIds.size > 0 || emphasisActive) && (
           <div

@@ -14,10 +14,11 @@
  */
 
 import { useEffect, useState, type ReactNode } from "react";
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
 import { NodeStyleEditor } from "../../interaction/encoding/NodeStyleEditor";
 import { NodePropertyInspector } from "./NodePropertyInspector";
 import type { PropertyInspectorSpec } from "./property-spec";
+import { viewClass } from "../../theme/view-class";
 import "./NodeEditorModal.css";
 
 export type NodeEditorTab = "properties" | "style";
@@ -76,7 +77,7 @@ export function NodeEditorModal({
 
   return (
     <div
-      className={`g3t-node-editor-backdrop${className ? ` ${className}` : ""}`}
+      className={viewClass("g3t-node-editor-backdrop", className)}
       data-testid="node-editor-modal"
       onClick={onClose}
     >

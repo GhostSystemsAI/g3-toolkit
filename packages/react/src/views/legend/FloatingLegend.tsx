@@ -7,10 +7,14 @@
  * sides) so host containers that stretch children via `inset: 0`
  * cannot deform it.
  */
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
 import { SpecLegend } from "../../interaction/encoding/SpecLegend";
 import type { EncodingSpec } from "../../interaction/encoding/encoding-spec";
-import type { LegendElement } from "../../interaction/encoding/SpecLegend";
+import type {
+  LegendChannel,
+  LegendElement,
+} from "../../interaction/encoding/SpecLegend";
+import { viewClass } from "../../theme/view-class";
 
 export function FloatingLegend({
   elements,
@@ -19,8 +23,11 @@ export function FloatingLegend({
   ugm,
   spec,
   labelFor,
+  sectionTitle,
   title = "Legend",
   corner = "bottom-left",
+  collapsible = true,
+  defaultCollapsed = false,
   testId = "g3t-floating-legend",
 }: {
   /** R-17 (register, 2026-08-06): optional, matching SpecLegend.
@@ -32,9 +39,24 @@ export function FloatingLegend({
   /** R-13: forwarded to the legend for override disclosure. */
   overrides?: readonly { scope: { nodeId: string } | { type: string } }[];
   onResetOverrides?: () => void;
-  labelFor?: (value: string) => string;
+  /** Forwarded to SpecLegend (issue #38): the channel argument lets one
+   *  function label node types and relation types differently. */
+  labelFor?: (value: string, channel: LegendChannel) => string;
+  /** Forwarded to SpecLegend (issue #38): heading wording per section,
+   *  for legends whose audience should read "Relation", not
+   *  `edge color: relation`. */
+  sectionTitle?: (channel: LegendChannel, driver: string) => string;
   title?: string;
   corner?: "bottom-left" | "bottom-right" | "top-left" | "top-right";
+  /** Forwarded to SpecLegend. Default true, which is what this
+   *  component hard-coded before 2026-08-27. */
+  collapsible?: boolean;
+  /** Forwarded to SpecLegend. A floating legend sits OVER the canvas
+   *  at up to 240px wide, so a dense scene often wants it to arrive
+   *  collapsed and open on demand. Previously unreachable: the prop
+   *  was dropped here, and the only workaround was to abandon
+   *  FloatingLegend and position a SpecLegend by hand. */
+  defaultCollapsed?: boolean;
   testId?: string;
 }) {
   // LR-26 (owner review 2026-07-22): top corners added so shells can
@@ -48,6 +70,7 @@ export function FloatingLegend({
   return (
     <div
       data-testid={testId}
+      className={viewClass()}
       style={{
         position: "absolute",
         ...vertical,
@@ -70,9 +93,11 @@ export function FloatingLegend({
         spec={spec}
         overrides={overrides}
         onResetOverrides={onResetOverrides}
-        collapsible
+        collapsible={collapsible}
+        defaultCollapsed={defaultCollapsed}
         title={title}
         labelFor={labelFor}
+        sectionTitle={sectionTitle}
       />
     </div>
   );

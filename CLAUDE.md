@@ -29,7 +29,7 @@ active plan is planning/demo-adoption-plan.md.
 ## What this is
 
 A composable graph-visualization component LIBRARY (not a framework):
-@g3t/core (zero React), @g3t/react, @g3t/charts. Hosts integrate via
+@g3-toolkit/core (zero React), @g3-toolkit/react, @g3-toolkit/charts. Hosts integrate via
 three channels only: exported zustand stores, props/callbacks, and
 versioned JSON documents (encoding spec, workspace snapshots,
 algorithm results). New capability = expose through one of these +
@@ -38,7 +38,7 @@ TypeScript, React 19, Vite 8, pnpm (enforced), Cytoscape + Graphology,
 Zustand, Vitest + RTL.
 
 THREE channels, and the count is a ruling rather than an omission:
-`@g3t/core/events` was assessed 2026-08-15 and ruled a context-action
+`@g3-toolkit/core/events` was assessed 2026-08-16 and ruled a context-action
 COMMAND BUS, not a fourth integration channel. 13 of its 21 declared
 event types were emitted by nothing and were deleted; the `eventBus`
 singleton is deprecated (it carries the cross-instance identity hazard
@@ -66,6 +66,7 @@ reading that reasoning.
     # checks; a round is not done on unit tests alone. Environment
     # self-test if typecheck seems suspiciously quiet: inject a
     # deliberate type error in src/ and confirm the gate goes red.
+    pnpm run install:deps    # worktree with no node_modules / read-only pnpm store
     pnpm run verify          # build, exports, snippets, typedoc, bundle ledger
     python3 scripts/lint_specs.py specs/
     python3 scripts/sync_spec_status.py
@@ -89,6 +90,32 @@ a written rationale in scripts/check-bundle-size.mjs (the ledger).
 - Status changes ripple: flipping a requirement to implemented
   requires removing it from its roadmap Owns header AND the
   roadmap/CLAUDE.md index row (coverage gate enforces).
+- One owner per destructive brief. Before a refactor that rewrites
+  shared engine files (routing, layout), check `git status`, `git diff`
+  and file mtimes for a parallel session already editing them, and do
+  the work in that brief's own plan worktree, not the main checkout.
+  Two sessions hand-implemented brief 05b in g3t-structural.ts and
+  g3t-routing.ts at once; one rewrote a file between the other's Read
+  and Edit. If you find a collision, back out your own footprint and
+  stand down. `engine-source-fence.test.ts` keeps experiment
+  scaffolding (`EXPERIMENT`, `expChannelPlan`) out of commits.
+- Dispatched workers DO NOT `git push`. origin is github.com, which is
+  off the forge mesh, so the export gate refuses the push. A generic
+  worker contract line saying "commit and push" does not override
+  this. Commit on the plan branch; the merge gate lands it.
+- A refused git op drops the WHOLE Bash command. The PreToolUse git
+  gate refuses `git stash` (save) in dispatched workers and `git add -A`;
+  any sed/cp/edit chained before it in the same call never ran, and the
+  refusal reads as if only the git step failed. Keep edits in their own
+  Bash call. To compare against old source, `git show HEAD:<path>` into
+  scratch instead of stashing.
+- A fresh plan worktree has no node_modules. Run
+  `node scripts/install-deps.mjs` first (works under a read-only pnpm
+  store via an overlay). NEVER symlink node_modules from the main
+  checkout: the workspace links are relative, so `@g3-toolkit/*` would resolve
+  to the main checkout's packages and the gates would test the wrong tree.
+  `pnpm run gates` starts with `install-deps.mjs --check`, which fails on
+  that (realpath, not readlink: the relative links read as in-tree).
 
 ## Architecture doctrine (do not violate casually)
 
@@ -173,7 +200,7 @@ class) for body and synthetic-point-port edges, taxi as fallback when
 routeEdges is off or a route has no interior bend; declared-port edges
 keep the taxi exit on purpose (the port fixes a perpendicular the
 projection would fight).
-ALSO landed 2026-06-22: a Minimap component (@g3t/react interaction/camera;
+ALSO landed 2026-06-22: a Minimap component (@g3-toolkit/react interaction/camera;
 Molecules/Minimap) wired into the gallery. ALSO active: the Storybook
 atomic-design reshape (Atoms/Molecules titled, Minimap included; Toolbar
 moved to Compounds and Charts/Features to Reference; Coordinated Selection

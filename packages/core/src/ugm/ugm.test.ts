@@ -566,3 +566,220 @@ describe("UGM: edge cases (audit)", () => {
     expect(ugm.edgeCount).toBe(0);
   });
 });
+
+describe("UGM: host-supplied edge keys (issue #31)", () => {
+  it("uses input.key as the edge id", () => {
+    const ugm = new UGM();
+    ugm.addNode("a", { types: ["X"] });
+    ugm.addNode("b", { types: ["X"] });
+    const id = ugm.addEdge("a", "b", { key: "a-feeds-b", type: "feeds" });
+    expect(id).toBe("a-feeds-b");
+    expect(ugm.hasEdge("a-feeds-b")).toBe(true);
+    expect(ugm.getEdge("a-feeds-b")?.type).toBe("feeds");
+    expect(ugm.getEdgeEndpoints("a-feeds-b")).toEqual({
+      source: "a",
+      target: "b",
+    });
+  });
+
+  it("emits edgeAdded with the supplied key", () => {
+    const ugm = new UGM();
+    ugm.addNode("a", { types: ["X"] });
+    ugm.addNode("b", { types: ["X"] });
+    const handler = vi.fn();
+    ugm.on("edgeAdded", handler);
+    ugm.addEdge("a", "b", { key: "k1", type: "link" });
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ edgeId: "k1", source: "a", target: "b" }),
+    );
+  });
+
+  it("throws a clear error on a duplicate key, graph-wide", () => {
+    const ugm = new UGM();
+    ugm.addNode("a", { types: ["X"] });
+    ugm.addNode("b", { types: ["X"] });
+    ugm.addNode("c", { types: ["X"] });
+    ugm.addEdge("a", "b", { key: "dup", type: "link" });
+    // Same pair and a different pair both collide: the key space is
+    // the whole graph, not one node pair.
+    expect(() => ugm.addEdge("a", "b", { key: "dup", type: "link" })).toThrow(
+      /edge key "dup" already exists/,
+    );
+    expect(() => ugm.addEdge("b", "c", { key: "dup", type: "other" })).toThrow(
+      /edge key "dup" already exists/,
+    );
+    expect(ugm.edgeCount).toBe(1);
+  });
+
+  it("rebuilding from the same host data yields the same ids", () => {
+    const build = () => {
+      const ugm = new UGM();
+      ugm.addNode("a", { types: ["X"] });
+      ugm.addNode("b", { types: ["X"] });
+      return ugm.addEdge("a", "b", { key: "host:42", type: "link" });
+    };
+    expect(build()).toBe(build());
+  });
+
+  it("keyed and generated edges coexist on the same pair", () => {
+    const ugm = new UGM();
+    ugm.addNode("a", { types: ["X"] });
+    ugm.addNode("b", { types: ["X"] });
+    const keyed = ugm.addEdge("a", "b", { key: "k", type: "link" });
+    const generated = ugm.addEdge("a", "b", { type: "link" });
+    expect(keyed).toBe("k");
+    expect(generated).not.toBe("k");
+    expect(ugm.getEdgesBetween("a", "b").sort()).toEqual(
+      [keyed, generated].sort(),
+    );
+  });
+
+  it("a snapshot restored from JSON keeps the keyed edge id", () => {
+    const ugm = new UGM();
+    ugm.addNode("a", { types: ["X"] });
+    ugm.addNode("b", { types: ["X"] });
+    ugm.addEdge("a", "b", { key: "stable-1", type: "link", confidence: 0.5 });
+    const generated = ugm.addEdge("b", "a", { type: "back" });
+
+    const restored = UGM.fromJSON(JSON.parse(JSON.stringify(ugm.toJSON())));
+    expect(restored.hasEdge("stable-1")).toBe(true);
+    expect(restored.getEdge("stable-1")?.meta.confidence).toBe(0.5);
+    // Generated ids survive the round-trip too (undo/redo relies on
+    // snapshots, and an undo step used to rename every edge).
+    expect(restored.hasEdge(generated)).toBe(true);
+    expect(restored.getEdgeEndpoints(generated)).toEqual({
+      source: "b",
+      target: "a",
+    });
+
+    // The restored graph can still generate ids without colliding
+    // with the ones it restored.
+    const fresh = restored.addEdge("a", "b", { type: "more" });
+    expect(fresh).not.toBe("stable-1");
+    expect(fresh).not.toBe(generated);
+    expect(restored.edgeCount).toBe(3);
+  });
+});
+
+// ── Derivation registry (issue #17) ─────────────────────────────────
+
+describe("UGM: derivation registry (issue #17)", () => {
+  const stamp = {
+    definitionId: "score",
+    version: 1,
+    computedAt: "2026-10-13T00:00:00.000Z",
+    expression: "risk * 100",
+  };
+
+  function stamped(): UGM {
+    const ugm = new UGM();
+    ugm.addNode("a", { types: ["X"], properties: { risk: 0.5, score: 50 } });
+    ugm.addNode("b", { types: ["X"], properties: { risk: 0.2 } });
+    ugm.setDerivation("a", "score", stamp);
+    return ugm;
+  }
+
+  it("set / get / list / clear", () => {
+    const ugm = stamped();
+    expect(ugm.getDerivation("a", "score")).toEqual(stamp);
+    expect(ugm.getDerivation("a", "risk")).toBeUndefined();
+    expect(ugm.getDerivation("b", "score")).toBeUndefined();
+    expect(ugm.listDerivations()).toEqual([
+      { nodeId: "a", property: "score", stamp },
+    ]);
+    expect(ugm.listDerivations("b")).toEqual([]);
+    ugm.clearDerivation("a", "score");
+    expect(ugm.getDerivation("a", "score")).toBeUndefined();
+    expect(ugm.listDerivations()).toEqual([]);
+    // The value itself is untouched: only its provenance is gone.
+    expect(ugm.getNode("a")?.properties.score).toBe(50);
+  });
+
+  it("the stamp is a sidecar: node attributes do not change", () => {
+    const ugm = stamped();
+    expect(ugm.getNode("a")?.properties).toEqual({ risk: 0.5, score: 50 });
+    expect(Object.keys(ugm.getNode("a") ?? {})).toEqual([
+      "types",
+      "properties",
+    ]);
+  });
+
+  it("rejects a stamp for a node that does not exist", () => {
+    const ugm = new UGM();
+    expect(() => ugm.setDerivation("ghost", "score", stamp)).toThrow(
+      /does not exist/,
+    );
+  });
+
+  it("a source write to the property clears its stamp; other keys keep theirs", () => {
+    const ugm = stamped();
+    ugm.setDerivation("a", "other", { ...stamp, definitionId: "other" });
+    ugm.updateNodeProperties("a", { score: 99 });
+    expect(ugm.getDerivation("a", "score")).toBeUndefined();
+    expect(ugm.getDerivation("a", "other")?.definitionId).toBe("other");
+    // Writing an unrelated key leaves the remaining stamp alone.
+    ugm.updateNodeProperties("a", { risk: 0.9 });
+    expect(ugm.getDerivation("a", "other")?.definitionId).toBe("other");
+  });
+
+  it("removing the node and clearing the graph drop the stamps", () => {
+    const ugm = stamped();
+    ugm.removeNode("a");
+    expect(ugm.listDerivations()).toEqual([]);
+    const again = stamped();
+    again.clear();
+    expect(again.listDerivations()).toEqual([]);
+  });
+
+  it("survives a snapshot round-trip under version 2", () => {
+    const ugm = stamped();
+    const json = ugm.toJSON();
+    expect(json.version).toBe(2);
+    expect(json.derivations).toEqual([
+      { nodeId: "a", property: "score", stamp },
+    ]);
+    const restored = UGM.fromJSON(JSON.parse(JSON.stringify(json)));
+    expect(restored.getDerivation("a", "score")).toEqual(stamp);
+    expect(restored.getNode("a")?.properties.score).toBe(50);
+  });
+
+  it("omits the field when nothing is derived", () => {
+    const ugm = new UGM();
+    ugm.addNode("a", { types: ["X"], properties: { score: 1 } });
+    expect(ugm.toJSON()).toEqual({
+      version: 2,
+      nodes: [
+        { id: "a", attributes: { types: ["X"], properties: { score: 1 } } },
+      ],
+      edges: [],
+    });
+  });
+
+  it("loads a pre-version-2 snapshot (no version field) and an explicit 1", () => {
+    const legacy = {
+      nodes: [{ id: "a", attributes: { types: ["X"], properties: { v: 1 } } }],
+      edges: [],
+    };
+    const restored = UGM.fromJSON(legacy);
+    expect(restored.getNode("a")?.properties.v).toBe(1);
+    expect(restored.listDerivations()).toEqual([]);
+    expect(UGM.fromJSON({ ...legacy, version: 1 }).nodeCount).toBe(1);
+  });
+
+  it("rejects a snapshot version this build does not read", () => {
+    expect(() =>
+      UGM.fromJSON({ version: 3, nodes: [], edges: [] } as never),
+    ).toThrow(/unsupported ugm document version 3; this build reads 1, 2/);
+  });
+
+  it("rejects a stamp naming a node the snapshot does not contain", () => {
+    expect(() =>
+      UGM.fromJSON({
+        version: 2,
+        nodes: [],
+        edges: [],
+        derivations: [{ nodeId: "ghost", property: "score", stamp }],
+      }),
+    ).toThrow(/derivation 0 names node "ghost"/);
+  });
+});

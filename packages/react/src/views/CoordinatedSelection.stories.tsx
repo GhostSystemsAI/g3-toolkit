@@ -30,8 +30,8 @@
 
 import { useEffect, useMemo } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { UGM, createCountByType } from "@g3t/core";
-import { LinkedChart } from "@g3t/charts";
+import { UGM, createCountByType } from "@g3-toolkit/core";
+import { LinkedChart } from "@g3-toolkit/charts";
 import { CytoscapeCanvas } from "./canvas/CytoscapeCanvas";
 import { TableView } from "./table";
 import { useSelectionStore } from "../state/selection-store";
@@ -103,7 +103,11 @@ function CoordinatedSelectionDemo() {
       }}
     >
       <p
-        style={{ margin: 0, fontSize: 13, color: "var(--g3t-fg-muted, #555)" }}
+        style={{
+          margin: 0,
+          fontSize: 13,
+          color: "var(--g3t-text-muted, #555)",
+        }}
       >
         Select a node in any panel. The canvas, the table, and the chart share
         one selection store, so the choice lights up in all three at once. Click

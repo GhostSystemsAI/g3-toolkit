@@ -22,9 +22,10 @@ import { DataSet } from "vis-data/standalone";
 // vis-timeline upgrade fails loudly instead of drifting.
 import "./vis-timeline-vendor.css";
 import "./TimelineView.css";
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
 import { useSelectionStore } from "../../state/selection-store";
 import { EmptyState } from "../../interaction/feedback";
+import { viewClass } from "../../theme/view-class";
 
 export interface TimelineViewProps {
   ugm: UGM;
@@ -143,7 +144,7 @@ export function TimelineView({ ugm, className }: TimelineViewProps) {
   return (
     <div
       data-testid="timeline-view"
-      className={`g3t-timeline-view${className ? ` ${className}` : ""}`}
+      className={viewClass("g3t-timeline-view", className)}
       style={{ width: "100%", height: "100%", minHeight: 200 }}
     >
       {items.length === 0 ? (

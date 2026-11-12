@@ -8,7 +8,11 @@
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import type { UGM, StructuralGraphInput, StructuralGeometry } from "@g3t/core";
+import type {
+  UGM,
+  StructuralGraphInput,
+  StructuralGeometry,
+} from "@g3-toolkit/core";
 
 const captured = vi.hoisted(() => ({
   counts: [] as number[],
@@ -23,10 +27,13 @@ const captured = vi.hoisted(() => ({
     rowSeverities?: Map<string, string>;
   }>,
   domains: [] as string[][],
+  routeRefreshSignal: [] as Array<number | undefined>,
+  relayoutSignal: [] as Array<number | undefined>,
+  edgeClickIsolate: [] as Array<boolean | undefined>,
 }));
 
-vi.mock("@g3t/react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@g3t/react")>();
+vi.mock("@g3-toolkit/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@g3-toolkit/react")>();
   return {
     ...actual,
     CytoscapeCanvas: (props: {
@@ -45,8 +52,14 @@ vi.mock("@g3t/react", async (importOriginal) => {
           color?: { scale: { kind: string; domain?: string[] } };
         };
       };
+      routeRefreshSignal?: number;
+      relayoutSignal?: number;
+      edgeClickIsolate?: boolean;
     }) => {
       captured.counts.push(props.ugm.getNodeIds().length);
+      captured.routeRefreshSignal.push(props.routeRefreshSignal);
+      captured.relayoutSignal.push(props.relayoutSignal);
+      captured.edgeClickIsolate.push(props.edgeClickIsolate);
       captured.layouts.push(props.layout);
       let pies = 0;
       props.ugm.forEachNode((_id, attrs) => {
@@ -64,7 +77,7 @@ vi.mock("@g3t/react", async (importOriginal) => {
 });
 
 import { OntologyShell } from "./OntologyShell";
-import { useSelectionStore } from "@g3t/react";
+import { useSelectionStore } from "@g3-toolkit/react";
 
 afterEach(() => {
   // OntologyShell subscribes to the selection store directly, so the
@@ -72,6 +85,9 @@ afterEach(() => {
   // still-mounted shell outside act().
   cleanup();
   useSelectionStore.getState().selectNodes([]);
+  captured.routeRefreshSignal.length = 0;
+  captured.relayoutSignal.length = 0;
+  captured.edgeClickIsolate.length = 0;
 });
 
 describe("OntologyShell", () => {
@@ -157,7 +173,8 @@ describe("OntologyShell", () => {
     const open = svg.querySelector("[data-ssv-open]");
     expect(open).not.toBeNull();
     expect(open?.getAttribute("stroke-dasharray")).toBe("6 3");
-  });
+    // The findBy budget above is dead under the 5 s default test timeout.
+  }, 15_000);
 
   it("gives instance views one stable color domain plus a shortened-label legend (4.4/4.3)", () => {
     render(<OntologyShell onBack={() => undefined} />);
@@ -263,5 +280,16 @@ describe("OntologyShell", () => {
     // Back up to the holarchy.
     fireEvent.click(screen.getByTestId("ow-holon-holarchy"));
     expect(captured.counts.at(-1)).toBe(3);
+  });
+
+  it("refresh-routes / re-layout buttons bump their signal props; edge isolate is on", () => {
+    render(<OntologyShell onBack={() => {}} />);
+    const startRoute = captured.routeRefreshSignal.at(-1) ?? 0;
+    const startRelayout = captured.relayoutSignal.at(-1) ?? 0;
+    expect(captured.edgeClickIsolate.at(-1)).toBe(true);
+    fireEvent.click(screen.getByTestId("ow-refresh-routes"));
+    expect(captured.routeRefreshSignal.at(-1)).toBe(startRoute + 1);
+    fireEvent.click(screen.getByTestId("ow-relayout"));
+    expect(captured.relayoutSignal.at(-1)).toBe(startRelayout + 1);
   });
 });

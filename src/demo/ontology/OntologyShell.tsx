@@ -41,7 +41,7 @@ import {
   useStructuralLayout,
   type EncodingSpec,
   FloatingLegend,
-} from "@g3t/react";
+} from "@g3-toolkit/react";
 import {
   type StructuralGraphInput,
   type StructuralGeometry,
@@ -51,7 +51,7 @@ import {
   shaclShapesToStructural,
   closedShapeIds,
   shaclRowSeverities,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import type { Core } from "cytoscape";
 import { executeSparql, type SparqlResult } from "../bio/sparql";
 import { SurfaceFrame } from "../surfaces/DashboardSurfaces";
@@ -75,6 +75,10 @@ import {
 } from "./project";
 import { parseRdfFile } from "./import";
 import { HOLON_FIXTURE } from "./holons";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 type LeftTab = "classes" | "properties" | "individuals";
 type CenterTab =
@@ -297,13 +301,15 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
   // 9.28: starts collapsed per Zach's pass; the header row with the
   // live count remains the affordance.
   const [dockOpen, setDockOpen] = useState(false);
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
 
   // ── Projections ──────────────────────────────────────────────────
   const hierUgm = useMemo(
@@ -648,30 +654,13 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
               />
             ))}
             <span style={{ flex: 1 }} />
-            <label
-              style={{
-                fontSize: 11,
-                display: "flex",
-                gap: 4,
-                alignItems: "center",
-              }}
-            >
-              Routes
-              <select
-                data-testid="ow-route-mode"
-                value={routeMode}
-                onChange={(e) =>
-                  setRouteMode(
-                    e.target.value as "direct" | "orthogonal" | "off",
-                  )
-                }
-                style={{ fontSize: 11 }}
-              >
-                <option value="direct">Direct (auto-Z)</option>
-                <option value="orthogonal">Orthogonal (always)</option>
-                <option value="off">Off (bezier)</option>
-              </select>
-            </label>
+            <RoutingControlStrip
+              idPrefix="ow"
+              routeMode={routeMode}
+              setRouteMode={setRouteMode}
+              refreshRoutes={refreshRoutes}
+              relayout={relayout}
+            />
             <label
               style={{
                 fontSize: 11,
@@ -738,7 +727,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                   <GraphToolbar
                     key={inferenceOn ? "force" : "hierarchy"}
                     ugm={hierUgm}
-                    cy={viewCore}
+                    core={viewCore}
                     // VR-5: the hierarchy tab mounts breadthfirst
                     // (fcose only when inferred cross-edges are on);
                     // the dropdown now says so.
@@ -766,6 +755,9 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                     onReady={setViewCore}
                     animate={!reducedMotion}
                     routeEdges={routeEdgesConfig}
+                    routeRefreshSignal={routeRefreshSignal}
+                    relayoutSignal={relayoutSignal}
+                    edgeClickIsolate
                   />
                 </div>
               </>
@@ -815,7 +807,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                       >
                         <GraphToolbar
                           ugm={neighborhood}
-                          cy={viewCore}
+                          core={viewCore}
                           // G4 (owner 2026-07-28): the tab now mounts
                           // hierarchic; the dropdown says so.
                           initialLayout="hierarchy"
@@ -839,6 +831,9 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                         onReady={setViewCore}
                         animate={!reducedMotion}
                         routeEdges={routeEdgesConfig}
+                        routeRefreshSignal={routeRefreshSignal}
+                        relayoutSignal={relayoutSignal}
+                        edgeClickIsolate
                       />
                       <FloatingLegend
                         ugm={neighborhood}
@@ -900,7 +895,7 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                       zIndex: 5,
                     }}
                   >
-                    <GraphToolbar ugm={instUgm} cy={viewCore} />
+                    <GraphToolbar ugm={instUgm} core={viewCore} />
                   </div>
                   <CytoscapeCanvas
                     ugm={instUgm}
@@ -909,6 +904,9 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                     onReady={setViewCore}
                     animate={!reducedMotion}
                     routeEdges={routeEdgesConfig}
+                    routeRefreshSignal={routeRefreshSignal}
+                    relayoutSignal={relayoutSignal}
+                    edgeClickIsolate
                   />
                   <FloatingLegend
                     ugm={instUgm}
@@ -1067,6 +1065,9 @@ export function OntologyShell({ onBack }: { onBack: () => void }) {
                     }
                     animate={!reducedMotion}
                     routeEdges={routeEdgesConfig}
+                    routeRefreshSignal={routeRefreshSignal}
+                    relayoutSignal={relayoutSignal}
+                    edgeClickIsolate
                   />
                 </div>
               </>

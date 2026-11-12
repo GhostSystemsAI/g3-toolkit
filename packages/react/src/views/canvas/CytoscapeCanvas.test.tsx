@@ -7,14 +7,27 @@
  * Playwright (tests/e2e/).
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { StrictMode } from "react";
 import { render, screen, act } from "@testing-library/react";
-import { UGM } from "@g3t/core";
+import { UGM } from "@g3-toolkit/core";
 import { useSelectionStore } from "../../state/selection-store";
+import { useEmphasisStore } from "../../state/emphasis-store";
+import { THEME_PRESETS, useThemeStore } from "../../theme/ThemeManager";
+// vi.mock below is hoisted, so this binds the mocked constructor.
+import cytoscapeMock from "cytoscape";
 
 // Mock cytoscape before importing the component
+// Layout-settlement handles (see layoutSettledRef in the component):
+// `one("layoutstop")` is how the canvas learns an asynchronous fcose/cose
+// pass finished. Tests that want a SETTLED instance call the captured
+// handlers; leaving them uncalled models a teardown mid-layout.
+const layoutStopHandlers: Array<() => void> = [];
 const mockCy = {
   on: vi.fn(),
+  one: vi.fn((evt: string, fn: () => void) => {
+    if (evt === "layoutstop") layoutStopHandlers.push(fn);
+  }),
   removeListener: vi.fn(),
   destroy: vi.fn(),
   nodes: vi.fn(() => ({ length: 2, forEach: vi.fn() })),
@@ -82,7 +95,7 @@ describe("CytoscapeCanvas component (M0.E3.T1)", () => {
   });
 
   it("merges layoutOptions into the layout object after built-in tuning (5.11)", async () => {
-    const cytoscape = (await import("cytoscape")).default as unknown as {
+    const cytoscape = cytoscapeMock as unknown as {
       mock: { calls: Array<[{ layout: Record<string, unknown> }]> };
     };
     const ugm = new UGM();
@@ -123,7 +136,6 @@ describe("CytoscapeCanvas component (M0.E3.T1)", () => {
   });
 
   it("edgeClickIsolate routes edge taps through the emphasis store, not selection (brief 23)", async () => {
-    const { useEmphasisStore } = await import("../../state/emphasis-store");
     useEmphasisStore.getState().clear();
     const ugm = new UGM();
     ugm.addNode("a", { types: ["X"] });
@@ -158,7 +170,6 @@ describe("CytoscapeCanvas component (M0.E3.T1)", () => {
   });
 
   it("edgeClickIsolate default (off) preserves click-to-select behavior", async () => {
-    const { useEmphasisStore } = await import("../../state/emphasis-store");
     useEmphasisStore.getState().clear();
     useSelectionStore.getState().clearSelection();
     const ugm = new UGM();
@@ -232,7 +243,6 @@ describe("encoding spec node glyph rule", () => {
 describe("theme -> canvas wiring (round 20)", () => {
   it("themeColorRules speaks the theme's canvas vocabulary with generic selectors", async () => {
     const { themeColorRules } = await import("./CytoscapeCanvas");
-    const { THEME_PRESETS } = await import("../../theme/ThemeManager");
     const dark = THEME_PRESETS["dark"]!;
     const rules = themeColorRules(dark);
     const bySelector = new Map(
@@ -254,8 +264,7 @@ describe("theme -> canvas wiring (round 20)", () => {
   });
 
   it("a theme switch restyles in place without re-initializing", async () => {
-    const { useThemeStore } = await import("../../theme/ThemeManager");
-    const cytoscape = (await import("cytoscape")).default as unknown as {
+    const cytoscape = cytoscapeMock as unknown as {
       mock: { calls: unknown[][] };
     };
     const ugm = new UGM();
@@ -280,8 +289,17 @@ describe("compound container rule (slice 1, round 17)", () => {
     const style = (
       COMPOUND_CONTAINER_RULE as unknown as { style: Record<string, unknown> }
     ).style;
-    expect(style["label"]).toBe("data(_compoundLabel)");
+    // The label mapper is NOT on the bare :parent rule (a parent
+    // without _compoundLabel would warn per style pass); it rides the
+    // [_compoundLabel]-scoped COMPOUND_LABEL_RULE.
+    expect(style["label"]).toBeUndefined();
     expect(style["text-valign"]).toBe("top");
+    const { COMPOUND_LABEL_RULE } = await import("./CytoscapeCanvas");
+    expect(COMPOUND_LABEL_RULE.selector).toBe(":parent[_compoundLabel]");
+    expect(
+      (COMPOUND_LABEL_RULE as unknown as { style: Record<string, unknown> })
+        .style["label"],
+    ).toBe("data(_compoundLabel)");
   });
 });
 
@@ -322,7 +340,7 @@ describe("encoding spec edge rules", () => {
 describe("structural scene rendering (slice A2, round 32)", () => {
   // @see specs/01-functional-views.md R1.18
   async function renderStructural() {
-    const { layoutStructural } = await import("@g3t/core");
+    const { layoutStructural } = await import("@g3-toolkit/core");
     const input = {
       nodes: [
         {
@@ -342,7 +360,7 @@ describe("structural scene rendering (slice A2, round 32)", () => {
     const ugm = new UGM();
     ugm.addNode("sensor.cal", { types: ["PropertyShape"] });
     render(<CytoscapeCanvas ugm={ugm} structural={{ input, geometry }} />);
-    const cytoscape = (await import("cytoscape")).default as unknown as {
+    const cytoscape = cytoscapeMock as unknown as {
       mock: { calls: Array<[Record<string, unknown>]> };
     };
     return cytoscape.mock.calls.at(-1)![0] as {
@@ -415,7 +433,7 @@ describe("structural camera preservation across rebuilds (round 56)", () => {
   });
 
   it("restores pan/zoom on a same-graph rebuild instead of refitting", async () => {
-    const { layoutStructural } = await import("@g3t/core");
+    const { layoutStructural } = await import("@g3-toolkit/core");
     const input = sensorInput();
     const ugm = new UGM();
     ugm.addNode("sensor.cal", { types: ["PropertyShape"] });
@@ -465,7 +483,7 @@ describe("structural camera preservation across rebuilds (round 56)", () => {
   });
 
   it("fits when a genuinely different graph loads", async () => {
-    const { layoutStructural } = await import("@g3t/core");
+    const { layoutStructural } = await import("@g3-toolkit/core");
     const inputA = sensorInput();
     const inputB = {
       nodes: [
@@ -512,7 +530,7 @@ describe("structural decoration churn does not recreate the instance (round 57)"
   // CONTENT (a selection or hover) must not tear down and recreate the
   // instance, which would reset the camera and any manual node positions.
   const sensorScene = async () => {
-    const { layoutStructural } = await import("@g3t/core");
+    const { layoutStructural } = await import("@g3-toolkit/core");
     const input = {
       nodes: [
         {
@@ -537,7 +555,7 @@ describe("structural decoration churn does not recreate the instance (round 57)"
   };
 
   it("a fresh decorations object with unchanged content does not re-init", async () => {
-    const cytoscape = (await import("cytoscape")).default as unknown as {
+    const cytoscape = cytoscapeMock as unknown as {
       mock: { calls: unknown[] };
     };
     const scene = await sensorScene();
@@ -564,7 +582,7 @@ describe("structural decoration churn does not recreate the instance (round 57)"
   });
 
   it("a real decoration content change does re-init", async () => {
-    const cytoscape = (await import("cytoscape")).default as unknown as {
+    const cytoscape = cytoscapeMock as unknown as {
       mock: { calls: unknown[] };
     };
     const scene = await sensorScene();
@@ -619,11 +637,24 @@ describe("multi-select drag (review 4.8)", () => {
   }
 
   function handlersByEvent() {
-    const map = new Map<string, (evt: unknown) => void>();
+    // Real cytoscape dispatches to EVERY listener registered for an
+    // event; the canvas registers both the multi-select drag handlers
+    // and the routing pass's drag-free reroute on ("free", "node").
+    // Mirror that by fanning one synthetic event out to all of them.
+    const lists = new Map<string, ((evt: unknown) => void)[]>();
     for (const call of mockCy.on.mock.calls) {
       if (call.length === 3 && call[1] === "node") {
-        map.set(call[0] as string, call[2] as (evt: unknown) => void);
+        const key = call[0] as string;
+        const list = lists.get(key) ?? [];
+        list.push(call[2] as (evt: unknown) => void);
+        lists.set(key, list);
       }
+    }
+    const map = new Map<string, (evt: unknown) => void>();
+    for (const [key, list] of lists) {
+      map.set(key, (evt: unknown) => {
+        for (const h of list) h(evt);
+      });
     }
     return map;
   }
@@ -723,5 +754,222 @@ describe("LR-37: icon overrides travel as _icon data, never a flat bypass", () =
     const { style, iconUri } = splitIconFromOverrideStyle({ shape: "hexagon" });
     expect(iconUri).toBeUndefined();
     expect(style.shape).toBe("hexagon");
+  });
+});
+
+describe("layout settlement gates the same-graph camera replay", () => {
+  type InitCall = [{ layout: { name: string; fit?: boolean } }];
+  const initCalls = async (): Promise<InitCall[]> => {
+    const cytoscape = (await import("cytoscape")).default as unknown as {
+      mock: { calls: InitCall[] };
+    };
+    return cytoscape.mock.calls;
+  };
+  const graph = (): UGM => {
+    const ugm = new UGM();
+    ugm.addNode("a", { types: ["T"], properties: {} });
+    ugm.addNode("b", { types: ["T"], properties: {} });
+    ugm.addEdge("a", "b", { type: "rel" });
+    return ugm;
+  };
+
+  // The shared mock's nodes().forEach is a no-op, so the LR-45 teardown
+  // capture always built an EMPTY position map and the preset replay path
+  // could never engage. Scope a genuinely iterable collection to this
+  // describe rather than perturbing the sixteen tests above it.
+  const iterableNodes = () => ({
+    length: 2,
+    forEach: (f: (n: Record<string, () => unknown>) => void) => {
+      for (const [id, x, y] of [
+        ["a", 10, 20],
+        ["b", 30, 40],
+      ] as Array<[string, number, number]>) {
+        f({
+          id: () => id,
+          position: () => ({ x, y }),
+          addClass: () => undefined,
+          removeClass: () => undefined,
+        });
+      }
+    },
+  });
+  const defaultNodes = mockCy.nodes.getMockImplementation()!;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    layoutStopHandlers.length = 0;
+    mockCy.nodes.mockImplementation(
+      iterableNodes as unknown as typeof defaultNodes,
+    );
+  });
+
+  afterEach(() => {
+    mockCy.nodes.mockImplementation(defaultNodes);
+  });
+
+  // The dev-mode "shells open unfitted" report: StrictMode mounts,
+  // unmounts, and remounts, so the first instance is destroyed while its
+  // asynchronous fcose pass is still running. Capturing that instance's
+  // pre-layout node positions and identity camera turned the remount into
+  // a same-graph rebuild (preset, fit:false) over the random scatter, so
+  // the graph was never laid out OR fit. An unsettled teardown must
+  // capture nothing.
+  it("a teardown before layoutstop leaves the remount a fitting fcose pass", () => {
+    const ugm = graph();
+    render(
+      <StrictMode>
+        <CytoscapeCanvas ugm={ugm} />
+      </StrictMode>,
+    );
+    // StrictMode double-invoked the init effect on the same component
+    // instance; without that the regression cannot reproduce (refs reset).
+    return initCalls().then((calls) => {
+      expect(calls.length).toBeGreaterThan(1);
+      const last = calls.at(-1)![0].layout;
+      // cose, not fcose: cytoscape-fcose is mocked here, so registration
+      // never happens and the component takes its documented fallback.
+      // What matters is that it is a real layout, not the preset replay.
+      expect(last.name).toBe("cose");
+      expect(last.fit).not.toBe(false);
+      // No camera restore: the identity viewport must not be replayed.
+      expect(mockCy.viewport).not.toHaveBeenCalled();
+    });
+  });
+
+  // The LR-45 behavior this gate must not break: once the layout HAS
+  // settled, a same-graph rebuild still replays positions and camera
+  // (that is what keeps the ontology inferred-toggle from relaying out).
+  it("a teardown after layoutstop still replays positions and camera", async () => {
+    const ugm = graph();
+    const { rerender } = render(<CytoscapeCanvas ugm={ugm} animate={false} />);
+    expect(layoutStopHandlers.length).toBe(1);
+    act(() => {
+      layoutStopHandlers.forEach((f) => f());
+    });
+    // Same graph, but a layoutOptions CONTENT change re-runs the init
+    // effect on the same component instance (the props path that models
+    // a legitimate same-graph rebuild).
+    rerender(
+      <CytoscapeCanvas
+        ugm={ugm}
+        animate={false}
+        layoutOptions={{ padding: 12 }}
+      />,
+    );
+    const calls = await initCalls();
+    const last = calls.at(-1)![0].layout;
+    expect(last.name).toBe("preset");
+    expect(last.fit).toBe(false);
+    expect(mockCy.viewport).toHaveBeenCalled();
+  });
+});
+
+describe("preset layouts never animate (issue #27)", () => {
+  type InitCall = [
+    { layout: { name: string; fit?: boolean; animate?: boolean } },
+  ];
+  const lastLayout = async () => {
+    const cytoscape = (await import("cytoscape")).default as unknown as {
+      mock: { calls: InitCall[] };
+    };
+    return cytoscape.mock.calls.at(-1)![0].layout;
+  };
+  const graph = (): UGM => {
+    const ugm = new UGM();
+    ugm.addNode("a", { types: ["T"], properties: {} });
+    ugm.addNode("b", { types: ["T"], properties: {} });
+    ugm.addEdge("a", "b", { type: "rel" });
+    return ugm;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    layoutStopHandlers.length = 0;
+  });
+
+  // The reported defect: a host places nodes in onReady from its own
+  // saved layout and watches them tween back to the initial scatter over
+  // animationDuration. cytoscape's preset captures each node's target
+  // when the layout STARTS (inside the constructor, before onReady), so
+  // any animation can only undo what onReady did. The layout call must
+  // therefore receive animate:false regardless of the prop default.
+  it('layout="preset" passes animate:false to the constructor\'s layout', async () => {
+    render(<CytoscapeCanvas ugm={graph()} layout="preset" />);
+    const layout = await lastLayout();
+    expect(layout.name).toBe("preset");
+    expect(layout.animate).toBe(false);
+    expect(layout.fit).toBe(false);
+  });
+
+  it("an explicit animate prop does not re-enable it for preset", async () => {
+    render(<CytoscapeCanvas ugm={graph()} layout="preset" animate={true} />);
+    expect((await lastLayout()).animate).toBe(false);
+  });
+
+  it("force layouts keep the animate prop (the override is preset-only)", async () => {
+    render(<CytoscapeCanvas ugm={graph()} layout="cose" animate={true} />);
+    const layout = await lastLayout();
+    expect(layout.name).toBe("cose");
+    expect(layout.animate).toBe(true);
+  });
+
+  // onReady is where the host sets positions; the layout has already
+  // been started (and, for preset, finished) by then.
+  it("onReady fires after the preset layout was passed to the constructor", async () => {
+    const order: string[] = [];
+    const cytoscape = (await import("cytoscape")).default as unknown as {
+      mockImplementation: (fn: () => typeof mockCy) => void;
+    };
+    cytoscape.mockImplementation(() => {
+      order.push("construct");
+      return mockCy;
+    });
+    render(
+      <CytoscapeCanvas
+        ugm={graph()}
+        layout="preset"
+        onReady={() => order.push("onReady")}
+      />,
+    );
+    expect(order).toEqual(["construct", "onReady"]);
+    cytoscape.mockImplementation(() => mockCy);
+  });
+
+  // The theme reaches overlay members through the composed stylesheet
+  // (issue #32): the LAST member rule the constructor receives carries
+  // the active theme's overlayColor, so the static green is not the
+  // final word.
+  it("the constructor stylesheet ends overlay members with the theme color", async () => {
+    const { useThemeStore, createTheme } =
+      await import("../../theme/ThemeManager");
+    const host = createTheme({
+      id: "host",
+      name: "Host",
+      overlayColor: "#abcdef",
+    });
+    act(() => {
+      useThemeStore.getState().setCustomTheme(host);
+    });
+    render(<CytoscapeCanvas ugm={graph()} />);
+    const cytoscape = (await import("cytoscape")).default as unknown as {
+      mock: {
+        calls: Array<
+          [
+            {
+              style: Array<{
+                selector: string;
+                style: Record<string, unknown>;
+              }>;
+            },
+          ]
+        >;
+      };
+    };
+    const style = cytoscape.mock.calls.at(-1)![0].style;
+    const members = style.filter((r) => r.selector === "edge.g3t-ov-member");
+    expect(members.at(-1)!.style["line-color"]).toBe("#abcdef");
+    act(() => {
+      useThemeStore.getState().setTheme("light");
+    });
   });
 });

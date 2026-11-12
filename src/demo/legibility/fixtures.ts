@@ -12,8 +12,8 @@
  *   exactly ONE exposed boundary node (the radio) inside the ring,
  *   with the portal transiting out through it to a stubbed neighbor.
  */
-import { UGM } from "@g3t/core";
-import type { HolonicDataset } from "@g3t/core";
+import { UGM } from "@g3-toolkit/core";
+import type { HolonicDataset } from "@g3-toolkit/core";
 
 /** One hub, 8 services it monitors, 6 teams reporting to it. */
 export function buildHubFixture(): UGM {

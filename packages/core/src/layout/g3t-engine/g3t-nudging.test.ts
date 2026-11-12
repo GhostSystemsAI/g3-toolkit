@@ -12,6 +12,24 @@ interface Pt {
   y: number;
 }
 
+/** Proper (interior, non-collinear) crossings between two polylines. */
+const properCrossings = (p: readonly Pt[], q: readonly Pt[]): number => {
+  const orient = (o: Pt, s: Pt, t: Pt) =>
+    Math.sign((s.x - o.x) * (t.y - o.y) - (s.y - o.y) * (t.x - o.x));
+  let n = 0;
+  for (let i = 1; i < p.length; i++) {
+    for (let j = 1; j < q.length; j++) {
+      const [a1, a2, b1, b2] = [p[i - 1]!, p[i]!, q[j - 1]!, q[j]!];
+      if (
+        orient(b1, b2, a1) * orient(b1, b2, a2) < 0 &&
+        orient(a1, a2, b1) * orient(a1, a2, b2) < 0
+      )
+        n++;
+    }
+  }
+  return n;
+};
+
 const twoParallelHRoutes = (): Record<string, { points: Pt[] }> => ({
   a: {
     points: [
@@ -101,6 +119,22 @@ describe("nudgeRoutes: basics", () => {
     // corrupts an anchor or produces a self-crossing polyline.
     for (const arm of arms) {
       if (arm.blocked) expect(arm.blockedReason).toBe("reverted");
+    }
+    // Crossing-no-worse (gotcha arm-jog-run-crosses-sibling-s-translated-bar):
+    // whatever the arms did, the output pair crosses no more than the input
+    // pair (zero), so no committed jog run sweeps through the sibling's bar.
+    expect(properCrossings(a, b)).toBe(0);
+    expect(properCrossings(a, a)).toBe(0);
+    expect(properCrossings(b, b)).toBe(0);
+    // A reverted arm group leaves its edges on the bar-translated Z: no
+    // half-applied jog points remain spliced into the polyline.
+    if (arms.every((arm) => arm.blocked)) {
+      expect(a).toHaveLength(4);
+      expect(b).toHaveLength(4);
+      expect(a[1]!.y).toBe(100);
+      expect(a[2]!.y).toBe(200);
+      expect(b[1]!.y).toBe(100);
+      expect(b[2]!.y).toBe(200);
     }
   });
 
@@ -215,25 +249,26 @@ describe("nudgeRoutes: basics", () => {
   });
 
   it("short arm (armAlongExtent < 2*trackGap): left fixed, no jog inserted", () => {
-    // Both arms have along-extent = 4 which is < 2*trackGap=16 so they
-    // are excluded from the movable pool. The bar (interior seg) is still
-    // eligible and would translate if it were crowded — here there is
-    // only one route so no group forms and everything passes through.
+    // Both arms have along-extent = 14 which is < 2*trackGap=16 so they
+    // are excluded from the movable pool. The bar (interior seg) forms a
+    // crowded group of n=2 and separates. The horizontal span is wide
+    // enough (-10..18) that the bar spread (0, 8) does not coincide with
+    // the route's start or anchor endpoints, so no zero-length arms form.
     const input = {
       a: {
         points: [
-          { x: 0, y: 100 },
+          { x: -10, y: 100 },
           { x: 4, y: 100 },
           { x: 4, y: 200 },
-          { x: 8, y: 200 },
+          { x: 18, y: 200 },
         ],
       },
       b: {
         points: [
-          { x: 0, y: 100 },
+          { x: -10, y: 100 },
           { x: 4, y: 100 },
           { x: 4, y: 200 },
-          { x: 8, y: 200 },
+          { x: 18, y: 200 },
         ],
       },
     };
@@ -243,8 +278,8 @@ describe("nudgeRoutes: basics", () => {
     expect(routes.a!.points).toHaveLength(4);
     expect(routes.b!.points).toHaveLength(4);
     // Anchors preserved.
-    expect(routes.a!.points[0]).toEqual({ x: 0, y: 100 });
-    expect(routes.a!.points[3]).toEqual({ x: 8, y: 200 });
+    expect(routes.a!.points[0]).toEqual({ x: -10, y: 100 });
+    expect(routes.a!.points[3]).toEqual({ x: 18, y: 200 });
   });
 });
 
@@ -265,7 +300,7 @@ describe("nudgeRoutes: only moves what is actually crowded", () => {
     // transitive grouping swept all three into one corridor and
     // re-spaced them. They are already >= trackGap apart, so there is
     // nothing to separate and they must not move.
-    const input = { a: vRun(0), b: vRun(12), c: vRun(24) };
+    const input = { a: vRun(4), b: vRun(12), c: vRun(24) };
     const { routes } = nudgeRoutes(input, [], { trackGap: 8, clearance: 0 });
     expect(routes.a?.points).toEqual(input.a.points);
     expect(routes.b?.points).toEqual(input.b.points);
@@ -276,7 +311,7 @@ describe("nudgeRoutes: only moves what is actually crowded", () => {
     // a/b are coincident and must separate. c sits a comfortable 40px
     // off, chained in only by transitivity through nothing at all: it
     // must be left exactly where it was.
-    const input = { a: vRun(0), b: vRun(0), c: vRun(40) };
+    const input = { a: vRun(4), b: vRun(4), c: vRun(40) };
     const { routes } = nudgeRoutes(input, [], { trackGap: 8, clearance: 0 });
     expect(routes.c?.points).toEqual(input.c.points);
     const ax = routes.a?.points[1]?.x ?? 0;
@@ -291,8 +326,8 @@ describe("nudgeRoutes: only moves what is actually crowded", () => {
     // centre of mass keeps them at 100 and just splits them.
     const input = { a: vRun(100), b: vRun(100) };
     const boxes = [
-      { x: -400, y: -50, width: 300, height: 400 },
-      { x: 300, y: -50, width: 100, height: 400 },
+      { x: -400, y: -50, width: 300, height: 249 },
+      { x: 300, y: -50, width: 100, height: 249 },
     ];
     const { routes } = nudgeRoutes(input, boxes, {
       trackGap: 8,
@@ -477,6 +512,90 @@ describe("nudgeRoutes: contracts", () => {
         expect(d.blockedReason).toBeUndefined();
       }
     }
+  });
+});
+
+// RF-C: self-intersection guard + corner-cost gate (kill Wide-separation loop).
+function polylineSelfCrossesOracle(pts: readonly Pt[]): boolean {
+  const eps = 1e-9;
+  const orient = (a: Pt, b: Pt, c: Pt) =>
+    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const samePt = (a: Pt, b: Pt) =>
+    Math.abs(a.x - b.x) < eps && Math.abs(a.y - b.y) < eps;
+  for (let i = 1; i < pts.length; i++) {
+    for (let j = i + 2; j < pts.length; j++) {
+      const a1 = pts[i - 1]!;
+      const a2 = pts[i]!;
+      const b1 = pts[j - 1]!;
+      const b2 = pts[j]!;
+      if (samePt(a1, b1) || samePt(a1, b2) || samePt(a2, b1) || samePt(a2, b2))
+        continue;
+      const d1 = orient(b1, b2, a1);
+      const d2 = orient(b1, b2, a2);
+      const d3 = orient(a1, a2, b1);
+      const d4 = orient(a1, a2, b2);
+      if (
+        ((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) &&
+        ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps))
+      )
+        return true;
+    }
+  }
+  return false;
+}
+
+describe("nudgeRoutes: RF-C self-intersection guard + corner-cost gate", () => {
+  it("no rewritten polyline self-intersects at wide corridor separation", () => {
+    // Two coincident-arm 4-point Zs (arm-arm on y=100, bar-bar at x=30,
+    // arm-arm on y=200). Wide trackGap (32) pushes the arm-jog stubs far
+    // enough that a naive rewrite can double back across the bar,
+    // producing the reported loop/square. The self-intersection guard
+    // must either accept a clean rewrite or revert; no output polyline
+    // may self-cross regardless.
+    const input: Record<string, { points: Pt[] }> = twoParallelHRoutes();
+    const { routes } = nudgeRoutes(input, [], {
+      trackGap: 32,
+      clearance: 0,
+    });
+    for (const [id, r] of Object.entries(routes)) {
+      expect(
+        polylineSelfCrossesOracle(r.points),
+        `route ${id} self-crosses: ${JSON.stringify(r.points)}`,
+      ).toBe(false);
+    }
+  });
+
+  it("guard does not over-revert: coincident-arm jog that removes overlap still commits", () => {
+    // Exact fixture from "both arms jog to distinct tracks..." — two Zs
+    // whose top arms share y=100 (real collinear overlap) and whose
+    // second segments diverge (no bar conflict). The corner-cost gate
+    // must recognize the collinear overlap as a real overlap being fixed
+    // and let the arm-jog commit even though it adds bends.
+    const input: Record<string, { points: Pt[] }> = {
+      a: {
+        points: [
+          { x: 0, y: 100 },
+          { x: 50, y: 100 },
+          { x: 50, y: 50 },
+        ],
+      },
+      b: {
+        points: [
+          { x: 0, y: 100 },
+          { x: 50, y: 100 },
+          { x: 50, y: 150 },
+        ],
+      },
+    };
+    const { routes, corridorDemand } = nudgeRoutes(input, [], {
+      trackGap: 8,
+      clearance: 0,
+    });
+    const a = routes.a!.points;
+    const b = routes.b!.points;
+    expect(a[2]!.y).not.toEqual(b[2]!.y); // arms separated
+    const armCorridor = corridorDemand.find((d) => d.axis === "h");
+    expect(armCorridor?.blocked).toBe(false);
   });
 });
 

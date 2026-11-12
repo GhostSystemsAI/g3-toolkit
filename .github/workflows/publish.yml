@@ -30,8 +30,9 @@ jobs:
       # a tag build is a detached HEAD, where pnpm's branch check cannot
       # pass on any input. scripts/check-release-preflight.mjs replaces
       # it with a stricter set that also covers version agreement across
-      # the four manifests and the registry state, neither of which pnpm
-      # ever looked at.
+      # every version-bearing file (the four manifests plus pixi.toml and
+      # docs/source/conf.py) and the registry state, neither of which
+      # pnpm ever looked at.
       PUBLISH_FLAGS: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run --access public --no-git-checks' || '--provenance --access public --no-git-checks' }}
     steps:
       - name: Refuse a real publish from a manual dispatch
@@ -80,14 +81,14 @@ jobs:
       # rewritten to actual versions automatically. Each package's
       # `prepack` runs scripts/check-dist-fresh.mjs, so a missing or
       # stale dist fails at the tarball rather than shipping hollow.
-      - run: pnpm --filter @g3t/core publish $PUBLISH_FLAGS
+      - run: pnpm --filter @g3-toolkit/core publish $PUBLISH_FLAGS
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - run: pnpm --filter @g3t/react publish $PUBLISH_FLAGS
+      - run: pnpm --filter @g3-toolkit/react publish $PUBLISH_FLAGS
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - run: pnpm --filter @g3t/charts publish $PUBLISH_FLAGS
+      - run: pnpm --filter @g3-toolkit/charts publish $PUBLISH_FLAGS
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

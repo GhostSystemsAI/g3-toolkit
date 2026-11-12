@@ -7,17 +7,17 @@ rounds to each item below.
 ## Install
 
 ```bash
-pnpm add @g3t/core @g3t/react
+pnpm add @g3-toolkit/core @g3-toolkit/react
 # charts are optional
-pnpm add @g3t/charts
+pnpm add @g3-toolkit/charts
 ```
 
-Peer dependencies are NOT installed for you. `@g3t/react` peers:
+Peer dependencies are NOT installed for you. `@g3-toolkit/react` peers:
 `react`, `react-dom`, `cytoscape`, `cytoscape-fcose`, `zustand`,
-`echarts`. `@g3t/charts` peers: `react`, `echarts`. `@g3t/core`
+`echarts`. `@g3-toolkit/charts` peers: `react`, `echarts`. `@g3-toolkit/core`
 peers: `graphology`.
 
-`@g3t/react` also declares two OPTIONAL peers, `vis-timeline` and
+`@g3-toolkit/react` also declares two OPTIONAL peers, `vis-timeline` and
 `vis-data`. Install them only if you use `TimelineView`, which is
 the sole consumer:
 
@@ -25,16 +25,16 @@ the sole consumer:
 pnpm add vis-timeline vis-data
 ```
 
-`TimelineView` is reachable exclusively from `@g3t/react/timeline`
+`TimelineView` is reachable exclusively from `@g3-toolkit/react/timeline`
 for this reason. Importing it from the root barrel or from
-`@g3t/react/views` will not work, by design: those barrels are
+`@g3-toolkit/react/views` will not work, by design: those barrels are
 resolvable without the optional peers installed, and they can only
 stay that way by not referencing the component that needs them.
 
 ## Import the stylesheet, first
 
 ```ts
-import "@g3t/react/style.css";
+import "@g3-toolkit/react/style.css";
 ```
 
 The packages ship CSS as a separate file (standard Vite
@@ -42,9 +42,44 @@ library-mode output) and the bundle does not import it for you:
 auto-injection breaks strict CSP setups and server rendering, so
 the decision stays with your bundler. Without this line every view
 renders unstyled, with no error and no warning. In development the
-canvas logs a one-time warning when the design tokens are absent
-from the document, which is the fastest way to spot a missing
-import.
+canvas logs a one-time warning when the `--g3t-*` design tokens are
+absent from its own container (they inherit from wherever the theme
+was applied, `<html>` or a `setThemeTarget` container). The tokens
+come from the theme, not from `style.css`, so the warning names an
+unapplied or wrongly scoped theme first and the import second.
+
+`style.css` styles the toolkit's own elements only: every rule is
+scoped to a `g3t-` class, it sets nothing on `html`, `body` or `*`,
+and it loads no font. A second, OPT-IN file carries the page-level
+reset (`box-sizing: border-box` and zero margins everywhere) and the
+`body` typography (IBM Plex Sans, 13px, theme ink and background)
+that the playground and Storybook use. Add it when the toolkit IS the
+page; leave it out when g3 views sit inside a product with its own
+styles:
+
+```ts
+import "@g3-toolkit/react/style.css"; // always
+import "@g3-toolkit/react/style.base.css"; // opt-in page reset + body type
+```
+
+Fonts are yours to load. The `--g3t-font` and `--g3t-font-mono`
+tokens name IBM Plex Sans and IBM Plex Mono with system fallbacks;
+self-host them or load them in your document, or override the tokens.
+[design-tokens.md](./design-tokens.md#typography) has the stack.
+
+Every view root carries `g3t-view` (after your `className` and the
+component's own class), and `style.css` sets the toolkit face, size,
+line-height and ink on that class, so a view reads in the toolkit face
+without `style.base.css` while your own elements stay yours. Style the
+toolkit's text through it: `.g3t-view { font-size: 14px }` resizes
+every view, `.sidebar .g3t-view { ... }` one region.
+
+To style your own chrome against ours, read the tokens the
+stylesheet defines. [design-tokens.md](./design-tokens.md) is the
+complete list, generated from the two emitters. Do not guess names:
+CSS custom properties fail silently, so `var(--g3t-color-bg, #fff)`
+against a token that does not exist renders your fallback in every
+theme and looks entirely deliberate.
 
 ## Which props re-run layout
 
@@ -60,14 +95,76 @@ preserve positions.
 `ugm` is compared by IDENTITY: a new instance means "different
 graph". Memoize it in the host; do not rebuild it per render. The
 object-valued props above are content-keyed internally, so an
-inline literal rebuilt each render is safe.
+inline literal rebuilt each render is safe. With
+`graphUpdate="additive"` a new identity whose node set only GREW is
+applied in place instead (next section).
 
 For scene switches (a different diagram, a different subject),
 prefer a keyed remount over mutating props:
 
-```tsx
+```tsx no-check
 <CytoscapeCanvas key={sceneId} ugm={ugm} />
 ```
+
+### Adding nodes without discarding the arrangement
+
+The rule above means an ADDITIVE change (streaming in ten new nodes,
+expanding a neighborhood) costs you the whole arrangement, because a
+new `ugm` identity is a different graph. That is often not what you
+want.
+
+The supported answer is the canvas's own additive mode (issues #26 and
+#64): `<CytoscapeCanvas ugm={graph} graphUpdate="additive" />`. When
+the new ugm shares at least one node with the drawn one, the instance
+is kept: nodes the new ugm lacks leave in place with their edges, the
+new elements join, every surviving node holds, and ONLY the new nodes
+are laid out: one fcose pass with every existing node held by
+`fixedNodeConstraint`, seeded next to their drawn neighbors, no fit. A
+ugm sharing no node with the drawn one (an empty one included) or a
+re-parented surviving node falls back to the rebuild. The recipe, with
+the edge-id rule that makes the diff minimal, is in the wiring guide
+under "Grow or shrink a drawn graph without rebuilding it".
+
+`@g3-toolkit/core/layout` still exports the lower-level pieces for a
+host that drives the core directly: `capturePositions`,
+`computeIncrementalUpdate` (which partitions a change into added,
+removed, and locked ids), `applyIncrementalLayout`, and an
+`IncrementalLayout` class that holds the previous snapshot for you.
+
+These work on the LIVE Cytoscape core, not on a `UGM`: you capture
+positions off the core, then apply a layout that places only the added
+nodes and leaves the rest LOCKED. Note the mechanism: the built-in
+`cose` honors `locked`, fcose does not (it ignores locks while
+computing, which is what issue #26 reported), so under fcose prefer
+the canvas's additive mode, which holds nodes by `fixedNodeConstraint`.
+
+```tsx
+import { IncrementalLayout } from "@g3-toolkit/core/layout";
+
+// Keep one instance alongside your graph state.
+const layout = new IncrementalLayout({ animationDuration: 300 });
+
+// Before the graph changes, snapshot where everything sits:
+layout.captureFrom(cy);
+
+// After you add nodes to the core, place only the new ones:
+layout.apply(cy, new Set(nextNodeIds));
+
+// apply() does NOT refresh the snapshot; captureFrom(cy) again
+// before the next round.
+```
+
+The three functions underneath are available if you want to own the
+state yourself: `capturePositions(cy)` returns a
+`Map<string, Position>`, `computeIncrementalUpdate(previousPositions,
+currentIds, previousIds)` returns the partition plus a `mode` of
+`"full" | "incremental" | "none"`, and `applyIncrementalLayout(cy,
+update, options)` performs it.
+
+Note the subpath: these are not on the `@g3-toolkit/core` root.
+
+Because this path mutates the core directly, it is subject to the
+`onReady` caveat in the wiring guide.
 
 ## Interaction contracts
 
@@ -107,7 +204,7 @@ on touch devices without configuration. To drive it from the host,
 persist a viewport, or implement a custom gesture, pass `view` with
 `onViewChange`:
 
-```tsx
+```tsx no-check
 const [view, setView] = useState<SvgViewTransform | undefined>(saved);
 
 <StructuralSvgView
@@ -192,8 +289,16 @@ so leaving a mode reverts cleanly.
 
 Stylesheet merge order (later rules win the property): defaults,
 curve style, chrome, theme colors, structural theme colors,
-ENCODING rules, overlay/dim, YOUR stylesheet, hidden filter. Your
-rules beat everything except the visibility filter.
+ENCODING rules, YOUR stylesheet, overlay/dim (`g3t-ov-*`), label
+collision outcomes, hidden filter. Your rules beat the theme and the
+encoding; they do not beat an active overlay on its members (issue
+#63; before that fix an ordinary `node { border-width: 1 }` or `edge
+{ width: 1.5 }` stripped the overlay emphasis, because Cytoscape has
+no selector specificity and the later rule wins). To restyle overlay
+members, set the theme's `overlayColor` and semantic tone colors; a
+more specific selector in your sheet does not help, since order alone
+decides, while a per-element bypass (`ele.style(...)`) outranks every
+rule.
 
 ## Structural scenes
 
@@ -210,15 +315,15 @@ If you are consuming tarballs rather than the registry:
 pnpm pack   # in each package directory
 ```
 
-`pnpm pack` rewrites `workspace:*` ranges. Because `@g3t/react`
-depends on `@g3t/core`, pin both to the same instance in the host's
+`pnpm pack` rewrites `workspace:*` ranges. Because `@g3-toolkit/react`
+depends on `@g3-toolkit/core`, pin both to the same instance in the host's
 manifest, or the two packages resolve to different copies and the
 theme store silently splits:
 
 ```json
 {
   "overrides": {
-    "@g3t/core": "file:./vendor/g3t-core-1.0.0.tgz"
+    "@g3-toolkit/core": "file:./vendor/g3t-core-1.0.0.tgz"
   }
 }
 ```
@@ -228,7 +333,7 @@ theme store silently splits:
 - **The packages are ESM only** as of 2026-08-16. There is no `require`
   condition and no `.cjs` in `dist`. `import` works from every bundler
   (Vite, webpack 5, Rollup, esbuild, Next) and from Node with ESM. A
-  Node script using `require("@g3t/core")` must switch to `import` or
+  Node script using `require("@g3-toolkit/core")` must switch to `import` or
   a dynamic `import()`, and Jest running in default CommonJS mode
   needs transform configuration.
 
@@ -243,6 +348,19 @@ theme store silently splits:
   to, selection stops propagating, and nothing appears in a stack
   trace. It cannot be fixed from inside the library while both formats
   ship.
-- `TimelineView` is only importable from `@g3t/react/timeline`, and
+
+- `TimelineView` is only importable from `@g3-toolkit/react/timeline`, and
   that subpath requires the optional peers `vis-timeline` and
   `vis-data`. Every other entry point resolves without them.
+- **Some symbols live on a subpath for reasons unrelated to optional
+  peers.** The rule above is about peers; this one is about surface
+  size. `GremlinAdapter`, `parseShaclReport`, `computeIncrementalUpdate`,
+  and `applyIncrementalLayout` are NOT on the package root. Reach them
+  at `@g3-toolkit/core/gremlin`, `@g3-toolkit/core/shacl`, and
+  `@g3-toolkit/core/layout` respectively. `api-surface.json` is the
+  authority on which entry point exports what; a symbol absent from a
+  root import is usually one subpath away, not missing.
+- **`@g3-toolkit/core/internal` is private. Do not import it.** It is a
+  real `exports` entry because the packages consume it across the
+  workspace build, not because it is for you. Nothing in it is covered
+  by semver, and it will change in a patch release without a note.

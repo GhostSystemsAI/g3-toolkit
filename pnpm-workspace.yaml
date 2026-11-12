@@ -17,3 +17,11 @@ allowBuilds:
   # boolean; false is the value that matches what the repo actually does.
   canvas: false
 
+
+# pnpm 11 defaults this to "install": every `pnpm run` first installs when
+# node_modules looks stale, which writes the shared store. Where that store
+# is read-only (sandboxed worker pools, heal worktrees whose node_modules
+# link to a main checkout) every script died EROFS before it started. A run
+# must not mutate the store as a side effect; "warn" reports drift and runs
+# the script. Install explicitly with `pnpm install` (CI already does).
+verifyDepsBeforeRun: warn

@@ -10,8 +10,15 @@
  *
  * Rendering and interaction are browser-verified; the report, events, and
  * range-to-hidden set all come from tested pure functions.
+ *
+ * Issue #16: the canvas is opaque to a screen reader, so the shell narrates
+ * it through the toolkit's AriaCompanion (a hidden, focusable node list
+ * plus one polite live region): the selection with its PROV-O edge counts
+ * and SHACL standing, the lineage step when a trace advances, and the time
+ * window when the slider moves. Rapid changes are debounced on the
+ * component and the region is muted while the sweep plays.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CytoscapeCanvas,
   ProvenanceTrace,
@@ -20,9 +27,11 @@ import {
   NodePropertyInspector,
   FloatingPanel,
   categoricalColorMap,
-} from "@g3t/react";
-import type { EncodingSpec } from "@g3t/react";
-import type { StructuralOverlay } from "@g3t/core";
+  AriaCompanion,
+  useAnnouncer,
+} from "@g3-toolkit/react";
+import type { EncodingSpec } from "@g3-toolkit/react";
+import type { StructuralOverlay } from "@g3-toolkit/core";
 import { buildProvenance } from "./model";
 import { provenanceShapes } from "./shapes";
 import {
@@ -37,7 +46,12 @@ import { AUDIT_STYLES } from "./audit-styles";
 import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
 import { provenanceChainFor } from "./chain";
-import { createDefaultMenuManager } from "@g3t/react";
+import { describeSelection, describeStep, describeWindow } from "./announce";
+import { createDefaultMenuManager } from "@g3-toolkit/react";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 /** Post-layout obstacle-aware routing on this shell's canvas. Per-shell
  *  kill-switch (D8): flip to false and re-push to revert. */
@@ -77,6 +91,15 @@ export function AuditShell({ onBack }: { onBack: () => void }) {
   // EXPLICIT trace root instead of riding selection, which is what
   // caused the tree to re-root (and visually collapse) whenever a
   // hop was clicked.
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
   const [inspectId, setInspectId] = useState<string | null>(null);
   // LR-11 (owner review 2026-07-22): once the inspector is open, it
   // FOLLOWS the canvas selection instead of pinning its opening
@@ -171,6 +194,28 @@ export function AuditShell({ onBack }: { onBack: () => void }) {
   );
   const inRange = (t: number) => t >= start && t <= end;
 
+  // Screen-reader narration (#16). One message source, the latest
+  // wins: a selection (with the lineage step when the selected node is
+  // a hop of the open trace, so a hop click or an arrow key reads as
+  // "step n of m") and a window move. The selection effect also runs
+  // when the chain opens or closes, which is what announces step 1.
+  // The window effect skips the mount value (nothing moved yet); the
+  // ref makes that robust to StrictMode's double invocation.
+  const { announcement, announce } = useAnnouncer();
+  useEffect(() => {
+    if (followedId === null) return;
+    const step = describeStep(traceChain, followedId);
+    const selection = describeSelection(ugm, followedId, report);
+    announce(step !== null ? `${step}. ${selection}` : selection);
+  }, [followedId, traceChain, ugm, report, announce]);
+  const lastWindow = useRef({ start: bounds.min, end: bounds.max });
+  useEffect(() => {
+    if (lastWindow.current.start === start && lastWindow.current.end === end)
+      return;
+    lastWindow.current = { start, end };
+    announce(describeWindow(start, end, events, hidden.size, fmt));
+  }, [start, end, events, hidden, announce]);
+
   const overlays = useMemo<StructuralOverlay[]>(() => {
     const v = [...new Set(report.violations.map((f) => f.nodeId))];
     const w = [...new Set(report.warnings.map((f) => f.nodeId))].filter(
@@ -245,6 +290,13 @@ export function AuditShell({ onBack }: { onBack: () => void }) {
             warnings
           </span>
         </div>
+        <RoutingControlStrip
+          idPrefix="au"
+          routeMode={routeMode}
+          setRouteMode={setRouteMode}
+          refreshRoutes={refreshRoutes}
+          relayout={relayout}
+        />
       </header>
 
       <div className="au-body">
@@ -308,11 +360,41 @@ export function AuditShell({ onBack }: { onBack: () => void }) {
                 anchor: "select-and-focus-a-node-of-interest",
                 how: "clicking a finding or a timeline event selects the node on the canvas.",
               },
+              {
+                mechanism: "AriaCompanion",
+                anchor: "announce-graph-state-to-a-screen-reader",
+                how: "narrates the canvas for a screen reader. To review with VoiceOver or NVDA: Tab into the Provenance nodes list and hear each node's PROV-O edge counts and SHACL standing; arrow right to follow an edge; click a report finding and hear its severity; open Inspect lineage and click hops to hear step n of m; drag the time window and hear the event and hidden counts once, not per pixel; press Play and hear nothing until it stops.",
+              },
             ]}
           />
         </aside>
 
-        <main className="au-canvas-wrap">
+        <main
+          className="au-canvas-wrap"
+          aria-label="Provenance graph"
+          aria-describedby="au-canvas-instructions"
+        >
+          {/* #16: the canvas itself is decorative for assistive
+              technology; the companion's node list is the accessible
+              view of the same graph, and its live region narrates
+              selection, lineage steps, and the time window. The list
+              mirrors the canvas `hidden` set so both agree. */}
+          <p id="au-canvas-instructions" className="au-sr-only">
+            The graph canvas is decorative for assistive technology. Press
+            Tab to reach the Provenance nodes list, which is the accessible
+            view of the same graph.
+          </p>
+          <AriaCompanion
+            className="au-a11y"
+            ugm={ugm}
+            hidden={hidden}
+            label="Provenance nodes"
+            instructions="Focusing a node selects it on the canvas. Arrow right or down follows a provenance edge to a neighbor; arrow left or up moves to the previous node."
+            summarizeNode={(g, id) => describeSelection(g, id, report)}
+            announcement={announcement}
+            announceDebounceMs={300}
+            muted={playing}
+          />
           {/* 9.23 (fold of the retired FloatingInspector pattern into
               the toolkit): both panels FLOAT over the graph on
               FloatingPanel; lineage bottom-left, inspector top-right,
@@ -380,7 +462,10 @@ export function AuditShell({ onBack }: { onBack: () => void }) {
             hidden={hidden}
             animate={!reducedMotion}
             menuManager={menuManager}
-            routeEdges={ROUTE_EDGES}
+            routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
+            routeRefreshSignal={routeRefreshSignal}
+            relayoutSignal={relayoutSignal}
+            edgeClickIsolate
           />
         </main>
 

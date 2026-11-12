@@ -1,12 +1,12 @@
 /**
  * ScaleSurface contract test (canvas stubbed; the pure stages carry
- * their own budgets in @g3t/core). Pins: the canvas receives the
+ * their own budgets in @g3-toolkit/core). Pins: the canvas receives the
  * supernode graph first (small), drilling via the rail swaps it for
  * the induced member subgraph (exactly the community size), selecting
  * a supernode on the canvas drills the same way, and back restores
  * the cluster view. Rendering at scale stays browser-verified.
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import {
   render,
   screen,
@@ -14,7 +14,7 @@ import {
   act,
   cleanup,
 } from "@testing-library/react";
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
 
 type CapturedMenu = {
   resolve: (t: {
@@ -39,10 +39,24 @@ const captured = vi.hoisted(() => ({
   routeRefreshSignal: [] as Array<number | undefined>,
   relayoutSignal: [] as Array<number | undefined>,
   edgeClickIsolate: [] as Array<boolean | undefined>,
+  generateCalls: 0,
 }));
 
-vi.mock("@g3t/react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@g3t/react")>();
+// Counts model builds: the 8,000-node generation (plus Louvain) must
+// run once per page, not once per mount.
+vi.mock("./generate", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./generate")>();
+  return {
+    ...actual,
+    generateScaleGraph: () => {
+      captured.generateCalls += 1;
+      return actual.generateScaleGraph();
+    },
+  };
+});
+
+vi.mock("@g3-toolkit/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@g3-toolkit/react")>();
   return {
     ...actual,
     CytoscapeCanvas: (props: {
@@ -70,7 +84,7 @@ vi.mock("@g3t/react", async (importOriginal) => {
 
 import { ScaleSurface } from "./ScaleSurface";
 import { COMMUNITIES, COMMUNITY_SIZE } from "./generate";
-import { useSelectionStore } from "@g3t/react";
+import { useSelectionStore } from "@g3-toolkit/react";
 
 afterEach(() => {
   useSelectionStore.getState().selectNodes([]);
@@ -78,6 +92,16 @@ afterEach(() => {
 });
 
 describe("ScaleSurface", () => {
+  // The seeded model (8,000-node generation plus Louvain) is built once
+  // per page. Pay that one-time cost here under its own budget: cold, on
+  // a saturated host, it alone can exceed the 5 s test timeout, and it
+  // would land on whichever test mounts first. Every test below keeps
+  // the default timeout and exercises mounts against the built model.
+  beforeAll(() => {
+    render(<ScaleSurface onBack={() => {}} />);
+    cleanup();
+  }, 30_000);
+
   it("renders supernodes, not the 8,000-node graph", () => {
     render(<ScaleSurface onBack={() => {}} />);
     expect(screen.getByTestId("g3t-graph-toolbar")).toBeTruthy();
@@ -90,6 +114,15 @@ describe("ScaleSurface", () => {
     expect(screen.getByTestId("scale-status").textContent).toContain(
       "measured live",
     );
+  });
+
+  it("remounting reuses the seeded model instead of regenerating 8,000 nodes", () => {
+    render(<ScaleSurface onBack={() => {}} />);
+    const afterFirst = captured.generateCalls;
+    expect(afterFirst).toBeGreaterThan(0);
+    cleanup();
+    render(<ScaleSurface onBack={() => {}} />);
+    expect(captured.generateCalls).toBe(afterFirst);
   });
 
   it("drills into a cluster from the rail and returns", () => {

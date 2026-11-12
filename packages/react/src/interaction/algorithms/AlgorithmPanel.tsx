@@ -14,7 +14,7 @@
  */
 
 import { useState } from "react";
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
 import {
   parseAlgorithmResult,
   applyAlgorithmResult,
@@ -23,8 +23,9 @@ import {
   findShortestPath,
   connectedComponents,
   degreeCentrality,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import { useOverlayStore } from "../../state/overlay-store";
+import { viewClass } from "../../theme/view-class";
 
 export interface AlgorithmPanelProps {
   ugm: UGM;
@@ -65,7 +66,7 @@ export function AlgorithmPanel({
   };
 
   return (
-    <div className={className} data-testid="g3t-algorithm-panel">
+    <div className={viewClass(className)} data-testid="g3t-algorithm-panel">
       <div className="g3t-panel-section-header">run (reference built-ins)</div>
       <div className="va-row" style={{ flexWrap: "wrap", gap: 6 }}>
         <button

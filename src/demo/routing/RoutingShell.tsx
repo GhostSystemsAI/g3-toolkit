@@ -33,12 +33,13 @@
  * re-add it here without revisiting that.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { StructuralSvgView, useStructuralLayout } from "@g3t/react";
+import { StructuralSvgView, useStructuralLayout } from "@g3-toolkit/react";
+import type { StructuralSvgViewProps } from "@g3-toolkit/react";
 import type {
   StructuralGeometry,
   StructuralGraphInput,
   StructuralLayoutOptions,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import { publishScene } from "../testing/e2e-hooks";
 import {
   DEFAULT_ROUTING_SCENARIO,
@@ -105,6 +106,17 @@ const NUDGE_SPACING = {
 } as const;
 type NudgeSpacing = keyof typeof NUDGE_SPACING;
 
+/** A* bend-penalty presets. Higher values make the router prefer straighter
+ *  (fewer-corner) routes at the cost of longer total path length. Default 30
+ *  matches the router's built-in default; 80 and 160 give progressively
+ *  straighter results. Exposed so the Wide-separation setting is legible. */
+const BEND_PENALTIES = {
+  default: undefined, // routeOrthogonal default (30)
+  high: 80,
+  max: 160,
+} as const;
+type BendPenaltyPreset = keyof typeof BEND_PENALTIES;
+
 /** Effort presets over the engine's anytime phase budgets (PRF-001
  *  allocation is the default; high trades latency for quality). */
 const EFFORTS = {
@@ -155,10 +167,14 @@ type ColorMode = "rainbow" | "mono";
 function SizedStructuralSvg({
   scene,
   direction,
+  dragRouteOptions,
   onEdgeClick,
 }: {
   scene: { input: StructuralGraphInput; geometry: StructuralGeometry };
   direction: "RIGHT" | "DOWN";
+  /** The Lab's routing knobs, so a drag re-routes the way the
+   *  layout did instead of with the library defaults. */
+  dragRouteOptions: StructuralSvgViewProps["dragRouteOptions"];
   /** An edge click reports its id; any other click reports null so
    *  the shell can clear a pinned trace. */
   onEdgeClick: (edgeId: string | null) => void;
@@ -185,6 +201,7 @@ function SizedStructuralSvg({
     <div ref={hostRef} style={{ width: "100%", height: "100%" }}>
       <StructuralSvgView
         direction={direction}
+        dragRouteOptions={dragRouteOptions}
         input={scene.input}
         geometry={scene.geometry}
         width={size.w}
@@ -242,6 +259,11 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   // though the library default is still false: the bench exists to
   // evaluate separation, so the post-pass must be visible by default.
   const [nudge, setNudge] = useState(true);
+  // RF-B (owner Jake, 2026-08-21): crossing-aware attachment refinement
+  // (within-side reorder + side flip). Library default is false; the
+  // lab exposes it default ON so reviewers see the refined attachment
+  // without a knob hunt.
+  const [smartAttach, setSmartAttach] = useState(true);
   const [longEdge, setLongEdge] = useState<LongEdge>("default");
   const [anchor, setAnchor] = useState<"source" | "target">("source");
   // Minimum separation between anchors on one side, with overflow
@@ -256,21 +278,33 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   const [placement, setPlacement] = useState<Placement>("brandes-koepf");
   const [layering, setLayering] = useState<Layering>("network-simplex");
   const [effort, setEffort] = useState<Effort>("default");
+  const [bendPreset, setBendPreset] = useState<BendPenaltyPreset>("default");
   const [colorMode, setColorMode] = useState<ColorMode>("rainbow");
   // A9 (owner: "line crossovers are hard to tail"): a clicked edge
   // pins a trace (everything else dims); clicking anything that is
   // not an edge clears it. Hover tracing is pure CSS (ROUTING_STYLES).
   const [tracedEdge, setTracedEdge] = useState<string | null>(null);
 
-  // A54: bump to force a fresh layout pass without changing the scenario;
-  // included in the input useMemo deps so useStructuralLayout sees a new
-  // input object identity and re-runs (same-input skip is bypassed).
-  const [relayoutNonce, setRelayoutNonce] = useState(0);
-  const input: StructuralGraphInput = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    relayoutNonce;
-    return scenario.build(size);
-  }, [scenario, size, relayoutNonce]);
+  // A54 / brief 25: Re-layout is REAL work, not a nonce. The
+  // structural engine's `orderLayers` is deterministic barycenter +
+  // transpose from a canonical initial permutation, so a bare rebuild
+  // lands byte-identical positions. Instead we drive the opt-in
+  // seeded crossing-aware restarts. A FIXED seed with an INCREASING
+  // restart count means each press adds a deterministic batch of
+  // new candidate initial permutations to the already-tried set (the
+  // first candidate is always the deterministic default order), so
+  // best-crossings monotonically DECREASES or holds. Repeated presses
+  // converge to the best seen, they do not oscillate worse.
+  const RELAYOUT_SEED = 0xc0ded;
+  const RELAYOUT_STEP = 6;
+  const RELAYOUT_CAP = 16;
+  const [orderRestarts, setOrderRestarts] = useState<number | undefined>(
+    undefined,
+  );
+  const input: StructuralGraphInput = useMemo(
+    () => scenario.build(size),
+    [scenario, size],
+  );
   // A new graph invalidates a pinned edge id; drop the trace (the
   // documented adjust-state-during-render pattern, as in the SVG
   // view's fit reset).
@@ -278,6 +312,10 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
   if (lastInput !== input) {
     setLastInput(input);
     setTracedEdge(null);
+    // A new scenario resets the Re-layout accumulator so the fresh
+    // scene lays out with the byte-identical default pass first; the
+    // reviewer starts from the same baseline every scenario.
+    setOrderRestarts(undefined);
   }
   const dir = direction === "auto" ? scenario.direction : direction;
   const options: Omit<StructuralLayoutOptions, "sketch"> = useMemo(
@@ -286,33 +324,57 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
       layerSpacing: LAYER_GAPS[layerGap],
       routeEdges,
       nudge,
+      smartAttach,
       longEdgeNear: LONG_EDGE[longEdge],
       anchor,
       // undefined for "off", which is exactly the library default.
       anchorPitch: ANCHOR_PITCH[pitch],
       trackGap: NUDGE_SPACING[spacing].trackGap,
       corridorMaxGapFactor: NUDGE_SPACING[spacing].factor,
+      bendPenalty: BEND_PENALTIES[bendPreset],
       placement,
       layering,
       ...EFFORTS[effort],
+      // Only set when the user has pressed Re-layout at least once.
+      // Unset (undefined) preserves the byte-identical default pass.
+      ...(orderRestarts !== undefined
+        ? { orderSeed: RELAYOUT_SEED, orderRestarts }
+        : {}),
     }),
     [
       dir,
       layerGap,
-      routeMode,
+      routeEdges,
       nudge,
+      smartAttach,
       longEdge,
       anchor,
       pitch,
       spacing,
+      bendPreset,
       placement,
       layering,
       effort,
+      orderRestarts,
     ],
   );
 
   const { structural: scene } = useStructuralLayout(input, options);
   publishScene("routing", scene);
+  // The routing subset of `options`, so a node drag re-routes with
+  // the knobs the layout used (nudge in particular).
+  const dragRouteOptions = useMemo(
+    () => ({
+      nudge: options.nudge ?? false,
+      smartAttach: options.smartAttach,
+      longEdgeNear: options.longEdgeNear,
+      anchor: options.anchor,
+      anchorPitch: options.anchorPitch,
+      trackGap: options.trackGap,
+      bendPenalty: options.bendPenalty,
+    }),
+    [options],
+  );
 
   const quality: RouteQuality | null = useMemo(
     () => (scene ? gradeRoutes(scene.input, scene.geometry) : null),
@@ -385,10 +447,24 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
           type="button"
           className="rlab-back"
           data-testid="rlab-relayout"
-          onClick={() => setRelayoutNonce((n) => n + 1)}
+          onClick={() =>
+            setOrderRestarts((r) =>
+              Math.min(RELAYOUT_CAP, (r ?? 1) + RELAYOUT_STEP),
+            )
+          }
+          title="Add more seeded initial-order candidates and keep the arrangement with the lowest crossing count."
         >
           Re-layout
         </button>
+        {quality && (
+          <span
+            className="rlab-mono"
+            data-testid="rlab-crossings"
+            style={{ marginLeft: 8, fontSize: 12, opacity: 0.85 }}
+          >
+            crossings: {quality.crossings}
+          </span>
+        )}
         <div className="rlab-wordmark">
           <b>Routing Lab</b>
           <span>edge-routing stress bench</span>
@@ -495,6 +571,16 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
                 onChange={(e) => setNudge(e.target.checked)}
               />
             </span>
+            <span title="RF-B: crossing-aware attachment refinement. Within-side reorder + per-edge side flip, accepted only on a strict crossing reduction (countCrossings oracle). Library default off; the lab exposes it default on so the refined attachment is visible.">
+              <label htmlFor="rlab-smart-attach">Smart attach</label>
+              <input
+                id="rlab-smart-attach"
+                type="checkbox"
+                data-testid="rlab-smart-attach-toggle"
+                checked={smartAttach}
+                onChange={(e) => setSmartAttach(e.target.checked)}
+              />
+            </span>
             <span title="Track gap the nudge post-pass spreads parallel runs to, paired with the ceiling on how wide a corridor may grow to hold them. They move together on purpose: the corridor gap is min(factor * layerSpacing, demand * trackGap + 2 * clearance), so past roughly 28 edges per corridor the cap binds and a wider track gap alone changes nothing. Effective gap on a 40-edge corridor: Default 6px, Roomy 8px, Wide 10px.">
               <label htmlFor="rlab-spacing">Separation</label>
               <select
@@ -506,6 +592,21 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
                 <option value="default">Default (8 / 3x)</option>
                 <option value="roomy">Roomy (12 / 4x)</option>
                 <option value="wide">Wide (16 / 5x)</option>
+              </select>
+            </span>
+            <span title="A* bend penalty: higher values make the router prefer straighter (fewer-corner) routes. Default 30; High 80; Max 160. Particularly useful at Wide separation where loose penalty allows unnecessary corners.">
+              <label htmlFor="rlab-bend-penalty">Straightness</label>
+              <select
+                id="rlab-bend-penalty"
+                data-testid="rlab-bend-penalty-select"
+                value={bendPreset}
+                onChange={(e) =>
+                  setBendPreset(e.target.value as BendPenaltyPreset)
+                }
+              >
+                <option value="default">Default (30)</option>
+                <option value="high">High (80)</option>
+                <option value="max">Max (160)</option>
               </select>
             </span>
             <span>
@@ -594,6 +695,7 @@ export function RoutingShell({ onBack }: { onBack: () => void }) {
               <SizedStructuralSvg
                 scene={scene}
                 direction={dir}
+                dragRouteOptions={dragRouteOptions}
                 onEdgeClick={handleEdgeClick}
               />
             ) : (

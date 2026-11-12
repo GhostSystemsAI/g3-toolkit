@@ -10,7 +10,7 @@ import {
   projectTripleTermsAsHyperarcs,
   STAR_EDGE_TYPE,
   RDF_STATEMENT_FLAG,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import { RDF12_ROWS, tripleLabel } from "./rdf12";
 
 describe("constellation fixture", () => {

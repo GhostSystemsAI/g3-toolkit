@@ -98,6 +98,7 @@ button.mbse-tree-row { cursor: pointer; }
 .mbse-badge-ibd { background: var(--mb-teal); }
 .mbse-badge-par { background: var(--mb-violet); color: #140c25; }
 .mbse-badge-req { background: var(--mb-amber); }
+.mbse-badge-act { background: var(--mb-teal); color: #05121c; }
 
 /* Canvas (blueprint grid backdrop) */
 .mbse-canvas-wrap {

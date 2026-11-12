@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { layoutStructural } from "@g3t/core";
+import { layoutStructural } from "@g3-toolkit/core";
 import { satelliteModel } from "./model";
 import { projectDiagram } from "./diagrams";
 
@@ -114,11 +114,12 @@ describe("SysML diagram projections", () => {
   });
 
   // Integration: every projected diagram must be a valid layout input.
+  const DOWN_DIAGRAMS = new Set(["dg.req"]);
   for (const id of ["dg.bdd", "dg.ibd", "dg.par", "dg.req"]) {
     it(`layout smoke: ${id} lays out without error and places every node`, async () => {
       const g = projectDiagram(satelliteModel, id);
       const geometry = await layoutStructural(g, {
-        direction: id === "dg.req" ? "DOWN" : "RIGHT",
+        direction: DOWN_DIAGRAMS.has(id) ? "DOWN" : "RIGHT",
       });
       for (const n of g.nodes) {
         expect(

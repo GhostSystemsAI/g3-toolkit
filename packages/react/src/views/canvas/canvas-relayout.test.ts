@@ -2,7 +2,7 @@
  * Unit tests for `runCanvasRelayout` (brief 23 relayoutSignal helper).
  * Mirrors the fake-cy pattern used by canvas-edge-routing.test.ts: the
  * pass reads visible node boxes + visible edge endpoint pairs, calls the
- * pure `optimizePlacement` from @g3t/core, and writes CENTER positions
+ * pure `optimizePlacement` from @g3-toolkit/core, and writes CENTER positions
  * back through `cy.getElementById(id).position(...)`. Structural scenes
  * are skipped by contract.
  */

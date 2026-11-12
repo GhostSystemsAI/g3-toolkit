@@ -29,12 +29,13 @@
  * one definition.
  */
 import React, { useCallback, useMemo } from "react";
-import { hitTestScene } from "@g3t/core";
-import type { SceneHit, VisualAttributes } from "@g3t/core";
+import { hitTestScene } from "@g3-toolkit/core";
+import type { SceneHit, VisualAttributes } from "@g3-toolkit/core";
 import {
   useElementPointerEvents,
   type ElementPointerHandlers,
 } from "../../interaction/element-pointer-events";
+import { viewClass } from "../../theme/view-class";
 
 export interface SvgSceneNode {
   id: string;
@@ -256,6 +257,7 @@ export function SvgAdapter({
   return (
     <svg
       {...pointerProps}
+      className={viewClass()}
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}

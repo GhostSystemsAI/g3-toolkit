@@ -15,7 +15,7 @@ import {
   cleanup,
   act,
 } from "@testing-library/react";
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
 
 const canvasCalls = vi.hoisted(() => ({
   ugms: [] as UGM[],
@@ -24,8 +24,8 @@ const canvasCalls = vi.hoisted(() => ({
   edgeClickIsolate: [] as Array<boolean | undefined>,
 }));
 
-vi.mock("@g3t/react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@g3t/react")>();
+vi.mock("@g3-toolkit/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@g3-toolkit/react")>();
   return {
     ...actual,
     CytoscapeCanvas: (props: {
@@ -44,8 +44,11 @@ vi.mock("@g3t/react", async (importOriginal) => {
 });
 
 import { Rdf12Shell, buildStatementInterior } from "./Rdf12Shell";
-import { useSelectionStore } from "@g3t/react";
-import { projectTripleTermsAsHyperarcs, RDF_STATEMENT_FLAG } from "@g3t/core";
+import { useSelectionStore } from "@g3-toolkit/react";
+import {
+  projectTripleTermsAsHyperarcs,
+  RDF_STATEMENT_FLAG,
+} from "@g3-toolkit/core";
 import { RDF12_ROWS } from "./rdf12";
 
 function firstStatementId(ugm: UGM): string {

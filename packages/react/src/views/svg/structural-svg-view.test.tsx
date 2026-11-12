@@ -8,7 +8,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render } from "@testing-library/react";
 import React from "react";
-import type { StructuralGeometry, StructuralGraphInput } from "@g3t/core";
+import type {
+  StructuralGeometry,
+  StructuralGraphInput,
+} from "@g3-toolkit/core";
 import { StructuralSvgView } from "./structural-svg-view";
 
 const INPUT: StructuralGraphInput = {
@@ -578,6 +581,37 @@ describe("R-9/R-10: touch zoom, controlled view, affordance presses", () => {
     expect(onViewChange).toHaveBeenCalled();
   });
 
+  // The wheel listener is NATIVE and non-passive (MR-11 round-4), so it
+  // binds once with [] deps and must not be re-bound per controlled view
+  // change. That made it hold the first render's `setView`, which is
+  // useCallback([viewProp]) and resolves its base as `viewProp ?? prev`:
+  // a zoom composed against a viewProp the host had already replaced.
+  // Invisible while the host keeps control (the rendered view is
+  // viewProp), so this asserts on the internal transform the moment the
+  // host RELEASES control, which is when the corrupted state goes live.
+  it("wheel zoom composes from the latest controlled view, not the first", () => {
+    const props = {
+      input: inp,
+      geometry: geo as never,
+      width: 400,
+      height: 300,
+    };
+    const { container, rerender } = render(
+      <StructuralSvgView {...props} view={{ k: 1, tx: 0, ty: 0 }} />,
+    );
+    // k=2, not 4: zoomAbout clamps k to 4, and a base already at the
+    // ceiling makes the stale and fresh results identical.
+    rerender(<StructuralSvgView {...props} view={{ k: 2, tx: 0, ty: 0 }} />);
+    const svg = container.querySelector("svg")!;
+    fireEvent.wheel(svg, { deltaY: -100, clientX: 0, clientY: 0 });
+    // Releasing control surfaces the internal transform the gesture built.
+    rerender(<StructuralSvgView {...props} />);
+    const k = Number(/scale\(([\d.]+)\)/.exec(sceneTransform(container))?.[1]);
+    // deltaY -100 is one 1.1x step, so k=2 composes to 2.2 and the stale
+    // k=1 base would land at 1.1.
+    expect(k).toBeCloseTo(2.2, 5);
+  });
+
   it("R-10: pressing a glyph does not pan the scene", () => {
     const { container } = render(
       <StructuralSvgView
@@ -775,5 +809,97 @@ describe("R-12 (round 21): structural style overrides and arrangement", () => {
       .querySelector("[data-ssv-node='n2'] rect")!
       .getAttribute("x");
     expect(Number(x)).toBe(250);
+  });
+});
+
+describe("drag re-route separates parallel runs (gotcha a4356315)", () => {
+  // Two stacked sources, two stacked targets, both targets dragged
+  // 200px down. Each edge's jog targets the corridor midline, so
+  // without the nudge pass both vertical runs land on x=180 and
+  // overlap over y 75..215: two edges drawn as one line.
+  const inp: StructuralGraphInput = {
+    nodes: ["S1", "S2", "T1", "T2"].map((id) => ({
+      id,
+      header: { name: id },
+      width: 60,
+      height: 30,
+    })),
+    edges: [
+      { id: "e1", source: "S1", target: "T1" },
+      { id: "e2", source: "S2", target: "T2" },
+    ],
+  };
+  const box = (x: number, y: number) => ({
+    x,
+    y,
+    width: 60,
+    height: 30,
+    kind: "container" as const,
+  });
+  const geo: StructuralGeometry = {
+    version: 1,
+    headerHeight: 24,
+    nodes: { S1: box(0, 0), S2: box(0, 60), T1: box(300, 0), T2: box(300, 60) },
+    ports: {},
+    edges: {
+      e1: {
+        points: [
+          { x: 60, y: 15 },
+          { x: 300, y: 15 },
+        ],
+      },
+      e2: {
+        points: [
+          { x: 60, y: 75 },
+          { x: 300, y: 75 },
+        ],
+      },
+    },
+  };
+  const offsets = { T1: { dx: 0, dy: 200 }, T2: { dx: 0, dy: 200 } };
+  const verticalRunX = (d: string): number[] => {
+    const pts = [...d.matchAll(/[ML]\s*([-\d.]+)[ ,]([-\d.]+)/g)].map((m) => ({
+      x: Number(m[1]),
+      y: Number(m[2]),
+    }));
+    const xs: number[] = [];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1]!;
+      const b = pts[i]!;
+      if (Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) > 1) xs.push(a.x);
+    }
+    return xs;
+  };
+  const runsOf = (props: Record<string, unknown> = {}) => {
+    const { container } = render(
+      <StructuralSvgView
+        input={inp}
+        geometry={geo}
+        width={400}
+        height={320}
+        view={{ k: 1, tx: 0, ty: 0 }}
+        dragOffsets={offsets}
+        {...props}
+      />,
+    );
+    const d = (id: string) =>
+      container
+        .querySelector(`[data-ssv-edge-path='${id}']`)!
+        .getAttribute("d") ?? "";
+    expect(container.querySelector("[data-ssv-edge-fallback]")).toBeNull();
+    return { e1: verticalRunX(d("e1")), e2: verticalRunX(d("e2")) };
+  };
+
+  it("nudges by default: the two dragged edges take distinct tracks", () => {
+    const { e1, e2 } = runsOf();
+    expect(e1).toHaveLength(1);
+    expect(e2).toHaveLength(1);
+    expect(Math.abs(e1[0]! - e2[0]!)).toBeGreaterThanOrEqual(4);
+  });
+
+  it("dragRouteOptions reaches the router: nudge off restores the shared midline", () => {
+    const { e1, e2 } = runsOf({ dragRouteOptions: { nudge: false } });
+    expect(e1).toEqual([180]);
+    expect(e2).toEqual([180]);
   });
 });

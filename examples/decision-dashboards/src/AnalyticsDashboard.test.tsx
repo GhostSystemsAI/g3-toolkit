@@ -4,7 +4,7 @@
  * pure functions only. Pins the CoverageMeter fold: one meter per tier,
  * width equal to the computed origin coverage.
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { stubChartDims } from "../../../tests/chart-dims";
 import {
   render,
@@ -13,7 +13,7 @@ import {
   fireEvent,
   act,
 } from "@testing-library/react";
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
 
 type CapturedMenu = {
   resolve: (t: {
@@ -33,10 +33,12 @@ const captured = vi.hoisted(() => ({
   specs: [] as Array<{ color?: string; size?: string }>,
   menus: [] as CapturedMenu[],
   hidden: [] as Array<ReadonlySet<string> | undefined>,
+  routeEdges: [] as unknown[],
+  edgeClickIsolate: [] as (boolean | undefined)[],
 }));
 
-vi.mock("@g3t/react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@g3t/react")>();
+vi.mock("@g3-toolkit/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@g3-toolkit/react")>();
   return {
     ...actual,
     // The popout internally composes the real CytoscapeCanvas via a
@@ -62,6 +64,8 @@ vi.mock("@g3t/react", async (importOriginal) => {
       ugm: UGM;
       menuManager?: CapturedMenu;
       hidden?: ReadonlySet<string>;
+      routeEdges?: unknown;
+      edgeClickIsolate?: boolean;
       encodingSpec?: {
         node: {
           color?: { driver?: string };
@@ -71,6 +75,8 @@ vi.mock("@g3t/react", async (importOriginal) => {
     }) => {
       if (props.menuManager) captured.menus.push(props.menuManager);
       captured.hidden.push(props.hidden);
+      captured.routeEdges.push(props.routeEdges);
+      captured.edgeClickIsolate.push(props.edgeClickIsolate);
       captured.specs.push({
         color: props.encodingSpec?.node.color?.driver,
         size: props.encodingSpec?.node.size?.driver,
@@ -81,12 +87,27 @@ vi.mock("@g3t/react", async (importOriginal) => {
 });
 
 import { AnalyticsDashboard } from "./AnalyticsDashboard";
-import { useEmphasisStore, useSelectionStore } from "@g3t/react";
+import { useEmphasisStore, useSelectionStore } from "@g3-toolkit/react";
 import { buildSupplyNetwork, originCoverageByTier } from "./supply-data";
 
 afterEach(cleanup);
 
 stubChartDims();
+
+// The first mount in a worker is cold (module JIT, first ECharts and
+// jsdom style setup): about 3x a warm mount alone, and on a saturated
+// host (two full runs at once) it measured 5.5 s and timed out whichever
+// test mounted first. Pay it once here under its own budget so every
+// test below keeps vitest's 5 s default and measures a warm mount.
+beforeAll(() => {
+  render(<AnalyticsDashboard />);
+  cleanup();
+  captured.specs.length = 0;
+  captured.menus.length = 0;
+  captured.hidden.length = 0;
+  captured.routeEdges.length = 0;
+  captured.edgeClickIsolate.length = 0;
+}, 30_000);
 
 describe("AnalyticsDashboard context menu (full toolkit action set)", () => {
   const nodeId = () => {
@@ -113,6 +134,8 @@ describe("AnalyticsDashboard context menu (full toolkit action set)", () => {
     useEmphasisStore.getState().clear();
     captured.menus.length = 0;
     captured.hidden.length = 0;
+    captured.routeEdges.length = 0;
+    captured.edgeClickIsolate.length = 0;
   });
 
   it("registers the full toolkit node set (registerToolkitActions)", () => {
@@ -279,5 +302,20 @@ describe("demonstrations have visible consequences (5.1/5.2)", () => {
     expect(screen.getByText("Origin coverage by tier")).toBeDefined();
     expect(screen.queryByText("Algorithm demonstrations")).toBeNull();
     expect(screen.queryByText(/Derive a property/)).toBeNull();
+  });
+});
+
+describe("AnalyticsDashboard routing wiring", () => {
+  afterEach(() => {
+    cleanup();
+    captured.routeEdges.length = 0;
+    captured.edgeClickIsolate.length = 0;
+  });
+
+  it("passes routeEdges={mode:direct} and edgeClickIsolate to the canvas", () => {
+    render(<AnalyticsDashboard />);
+    const re = captured.routeEdges.at(-1);
+    expect(re).toEqual({ mode: "direct" });
+    expect(captured.edgeClickIsolate.at(-1)).toBe(true);
   });
 });

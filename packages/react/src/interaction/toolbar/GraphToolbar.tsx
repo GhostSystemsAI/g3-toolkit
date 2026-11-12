@@ -24,22 +24,24 @@
 
 import { useCallback, useState, useRef, useEffect } from "react";
 import type { Core } from "cytoscape";
-import type { UGM } from "@g3t/core";
-import { prefersReducedMotion } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
+import { prefersReducedMotion } from "@g3-toolkit/core";
 import { Icon } from "../../icons";
 import {
   exportSubgraphTurtle,
   exportSubgraphJson,
   exportSubgraphCsv,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import { useSelectionStore } from "../../state/selection-store";
 import { SearchBar } from "../search/SearchBar";
+import { resolveCoreHandle } from "../core-handle";
 import { usePositionPinStore } from "../../state/position-pin-store";
 import {
   LAYOUTS,
   DEFAULT_LAYOUT_OPTIONS,
   type LayoutPanelOptions,
 } from "../layout-manager/LayoutManager";
+import { viewClass } from "../../theme/view-class";
 
 /** Map layout ids and options onto a Cytoscape layout config.
  *  Exported for tests. Hierarchical engines not bundled (dagre, elk)
@@ -190,8 +192,16 @@ export function runGraphLayout(
 
 export interface GraphToolbarProps {
   ugm: UGM;
-  /** From CytoscapeCanvas onReady; null until the canvas mounts. */
-  cy: Core | null;
+  /** The Cytoscape instance from CytoscapeCanvas `onReady`; null (or
+   *  omitted) until the canvas mounts, and every control no-ops until
+   *  a live handle arrives. The same prop name every handle-taking
+   *  component uses (issue #18). */
+  core?: Core | null;
+  /** @deprecated Use `core`. Accepted as an alias for one major and
+   *  removed in the next major; when both are supplied `core` wins
+   *  and this prop is ignored. Warns once per component in development
+   *  when it is the only handle given. */
+  cy?: Core | null;
   /** VR-5 (owner verification 2026-07-26): the layout the SHELL
    *  mounted the canvas with, so the dropdown reflects reality
    *  (the Hierarchy tab laid out hierarchic while the dropdown
@@ -203,10 +213,16 @@ export interface GraphToolbarProps {
 
 export function GraphToolbar({
   ugm,
-  cy: cyProp,
+  core: coreProp,
+  cy: cyAlias,
   initialLayout,
   className,
 }: GraphToolbarProps) {
+  // Issue #18: `core` is canonical, `cy` the deprecated alias
+  // (core ?? cy, see core-handle.ts). The internal name stays `cy`:
+  // it is the Cytoscape convention inside the file, and the public
+  // prop is what the ruling renamed.
+  const cyProp = resolveCoreHandle("GraphToolbar", coreProp, cyAlias);
   // 9.9: shells hand the toolbar a live-instance handle that can go
   // STALE between a canvas unmount and its successor's onReady (the
   // workbench's instances -> neighborhood swap is the reproduced
@@ -308,13 +324,12 @@ export function GraphToolbar({
 
   return (
     <div
-      className={`g3t-graph-toolbar ${className ?? ""}`}
+      className={viewClass("g3t-graph-toolbar", className)}
       ref={rootRef}
       data-testid="g3t-graph-toolbar"
     >
       <SearchBar
         ugm={ugm}
-        onSearchChange={() => undefined}
         onPick={handlePick}
         placeholder="Search nodes…"
         className="g3t-graph-toolbar-search"

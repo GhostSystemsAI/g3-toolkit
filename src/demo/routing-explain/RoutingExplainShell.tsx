@@ -24,10 +24,18 @@ import {
   CytoscapeCanvas,
   StructuralSvgView,
   useStructuralLayout,
-} from "@g3t/react";
-import type { CyStylesheet } from "@g3t/react";
-import { UGM } from "@g3t/core";
-import type { StructuralGraphInput, StructuralLayoutOptions } from "@g3t/core";
+} from "@g3-toolkit/react";
+import type { CyStylesheet } from "@g3-toolkit/react";
+import { UGM } from "@g3-toolkit/core";
+import type {
+  StructuralGeometry,
+  StructuralGraphInput,
+  StructuralLayoutOptions,
+} from "@g3-toolkit/core";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 // ── Flow-diagram input ──────────────────────────────────────────────
 
@@ -85,7 +93,7 @@ function buildFlowInput(): StructuralGraphInput {
             rows: [
               {
                 id: "r-g1",
-                text: "polylineIntersectsBoxes([sc, tc], obstacles)",
+                text: "segmentIntersectsBoxes(sc, tc, obstacles)",
               },
               {
                 id: "r-g2",
@@ -194,6 +202,17 @@ const FLOW_OPTIONS: Omit<StructuralLayoutOptions, "sketch"> = {
   nudge: true,
   layerSpacing: 60,
 };
+
+/** The flow diagram's laid-out scene, kept for the page. FLOW_INPUT and
+ *  FLOW_OPTIONS are module constants and layoutStructural is
+ *  deterministic, so once one mount has laid it out every later mount
+ *  renders it on its first frame instead of re-running the async layout
+ *  (a return to this shell redid it every visit, and the shell's test
+ *  raced that per-mount layout against a 1 s wait under parallel load).
+ *  Module scope, like ScaleSurface's POS_CACHE. */
+const FLOW_SCENE_CACHE: {
+  scene: { input: StructuralGraphInput; geometry: StructuralGeometry } | null;
+} = { scene: null };
 
 // ── Live demo UGM ───────────────────────────────────────────────────
 
@@ -383,13 +402,15 @@ function SizedFlowDiagram({
 // ── Shell ───────────────────────────────────────────────────────────
 
 export function RoutingExplainShell({ onBack }: { onBack?: () => void } = {}) {
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
 
   // Camera-hold ref across a mode change. Mode changes are
   // RESTYLE-ONLY on the same graph (same node-id set), so the canvas
@@ -412,11 +433,17 @@ export function RoutingExplainShell({ onBack }: { onBack?: () => void } = {}) {
     [],
   );
 
-  // Flow diagram layout.
-  const { structural: flowScene } = useStructuralLayout(
-    FLOW_INPUT,
+  // Flow diagram layout: the hook lays it out once per page, then the
+  // cached scene serves every later mount and the hook idles.
+  const cachedFlowScene = FLOW_SCENE_CACHE.scene;
+  const { structural: laidOutFlowScene } = useStructuralLayout(
+    cachedFlowScene ? null : FLOW_INPUT,
     FLOW_OPTIONS,
   );
+  useEffect(() => {
+    if (laidOutFlowScene) FLOW_SCENE_CACHE.scene = laidOutFlowScene;
+  }, [laidOutFlowScene]);
+  const flowScene = cachedFlowScene ?? laidOutFlowScene;
 
   const accentColor = "#a3e635";
 
@@ -468,9 +495,17 @@ export function RoutingExplainShell({ onBack }: { onBack?: () => void } = {}) {
             orthogonal detour
           </div>
         </div>
+        <span style={{ marginLeft: "auto" }}>
+          <RoutingControlStrip
+            idPrefix="rexplain"
+            routeMode={routeMode}
+            setRouteMode={setRouteMode}
+            refreshRoutes={refreshRoutes}
+            relayout={relayout}
+          />
+        </span>
         <span
           style={{
-            marginLeft: "auto",
             fontSize: 10,
             fontWeight: 600,
             letterSpacing: "0.1em",
@@ -559,42 +594,6 @@ export function RoutingExplainShell({ onBack }: { onBack?: () => void } = {}) {
         >
           <div style={LABEL_STYLE}>Panel 2 -- Live rule demo</div>
           <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              flexShrink: 0,
-            }}
-          >
-            <label
-              htmlFor="rexplain-mode"
-              style={{ fontSize: 12, color: "#94a3b8" }}
-            >
-              Mode
-            </label>
-            <select
-              id="rexplain-mode"
-              data-testid="rexplain-mode-select"
-              value={routeMode}
-              onChange={(e) =>
-                setRouteMode(e.target.value as "direct" | "orthogonal" | "off")
-              }
-              style={{
-                background: "#1e293b",
-                border: "1px solid #334155",
-                borderRadius: 4,
-                color: "#e2e8f0",
-                fontSize: 12,
-                padding: "4px 8px",
-                cursor: "pointer",
-              }}
-            >
-              <option value="direct">Direct (route crossing edges only)</option>
-              <option value="orthogonal">Orthogonal (route all edges)</option>
-              <option value="off">Off (plain bezier)</option>
-            </select>
-          </div>
-          <div
             data-testid="rexplain-canvas-host"
             style={{ ...CANVAS_CONTAINER_STYLE, flex: 1 }}
           >
@@ -604,6 +603,9 @@ export function RoutingExplainShell({ onBack }: { onBack?: () => void } = {}) {
               stylesheet={DEMO_STYLESHEET}
               animate={false}
               routeEdges={routeEdgesConfig}
+              routeRefreshSignal={routeRefreshSignal}
+              relayoutSignal={relayoutSignal}
+              edgeClickIsolate
               onReady={onCyReady}
             />
           </div>

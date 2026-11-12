@@ -42,9 +42,9 @@
  *   1  any package exceeded its budget
  *
  * Sizes recorded against Phase 5/6 baseline of g3-toolkit:
- *   @g3t/core   ≈ 96 KB
- *   @g3t/react  ≈ 165 KB
- *   @g3t/charts ≈ 5.8 KB
+ *   @g3-toolkit/core   ≈ 96 KB
+ *   @g3-toolkit/react  ≈ 165 KB
+ *   @g3-toolkit/charts ≈ 5.8 KB
  */
 
 import { readdirSync, statSync } from "node:fs";
@@ -65,7 +65,7 @@ const BUDGETS = {
   // obstacle router (B4, ~6.4 KB) landed in core, where route
   // ownership belongs (RTE-005). SECOND raise for the style/route
   // program; the standing recommendation holds: when WS-D (internal
-  // layout engine) lands, extract @g3t/layout (ARC-009), move the
+  // layout engine) lands, extract @g3-toolkit/layout (ARC-009), move the
   // router with it, and bring core back under its original envelope
   // rather than raising a third time.
   // Owner batch + directives 2026-07-28: +1.0 KB across the VR-9
@@ -76,7 +76,83 @@ const BUDGETS = {
   // oracle-pinned.
   // Round 21 (2026-08-05): +1 KB for the structural style applier
   // (R-12a), the renderer-neutral counterpart of the cytoscape one.
-  core: 209 * 1024,
+  // Brief 25 (2026-08-19): 209 -> 216 KB. Measured 214.5 KB after
+  // the seeded crossing-aware ordering restarts landed in orderLayers
+  // (mulberry32 PRNG + shuffleSeeded + refactored per-restart sweep).
+  // Baseline at branch tip measured 213.5 KB, so this window covers
+  // both the pre-existing overrun on the branch and the +1.0 KB of
+  // opt-in restart machinery; unset options keep the fast path.
+  // 216 -> 218 KB, 2026-08-20 (nudge two-pass arm separation): measured
+  // 217.2 KB, +1.2 KB. nudgeRoutes now runs a second ARMS-ONLY pass
+  // (computeRawArmOverlaps + armPairKey + the pre-existing-overlap
+  // discriminator threaded through attemptGroupRewrite) to separate the
+  // horizontal arms that the first-pass bar-spread pulls into a shared y
+  // in a K(n,n) storm. The pre-existing set is what keeps the pass from
+  // disturbing arms the router already stacked, so it is load-bearing,
+  // not removable padding. Headroom 0.8 KB, held tight; ARC-009 (extract
+  // @g3-toolkit/layout) remains the standing way back under the envelope.
+  // 218 -> 223 KB, 2026-08-21 (RF-B smart attachment): measured 222.2 KB,
+  // +5.0 KB. routeStructuralEdges now wraps its per-edge routing loop in
+  // a nested runRoutingPass() and exposes an opt-in `smartAttach` that
+  // refines attachment by within-side reorder + per-edge side flip. Every
+  // candidate is measured via countCrossings and accepted only on a
+  // strict improvement; each edge is flipped at most once. The refinement
+  // path itself + the closure hoist (out/perimeterRoutes as let, per-pass
+  // reset) account for the +5.0 KB. Default false is byte-identical to
+  // today (verified by g3t-smart-attach.test.ts determinism assertion +
+  // the existing snapshot corpus). Headroom 0.8 KB.
+  // 223 -> 224 KB, 2026-08-21 (RF-C self-intersection + corner-cost gate):
+  // measured 223.2 KB, +1.0 KB. attemptGroupRewrite gained (1) a per-edge
+  // self-intersection guard (polylineSelfCrosses over non-adjacent
+  // segments) that reverts a rewrite whose polyline doubles back — the
+  // Wide-separation loop/square Jake reported; (2) a corner-cost gate
+  // that reverts a rewrite whose net countBends went up without a real
+  // overlap being fixed (hadRealOverlap tracks any collinear stack in
+  // the group, independent of the crossing bypass whose scope is fixed
+  // by the 2026-08-20 rulings). Pulls in countBends + segmentsCross from
+  // layout-metrics. Headroom 0.8 KB.
+  // 224 -> 225 KB, 2026-10-22 (LAY-005 bend hints clear same-layer
+  // boxes, heal ec55a139): measured 224.6 KB. clearHintCross plus the
+  // per-layer cross-extent lookup in g3tLayoutStructural move a
+  // dummy-chain hint out of the real nodes in its layer; before it the
+  // hint could land on a node's centre. The rc023 channel-router
+  // per-gap tracks had already spent the prior headroom. Headroom 0.4 KB.
+  // Security fix 2026-10-13 (GHSA-mpfx-v932-r2fv; FOR OWNER
+  // RATIFICATION, revert is this one line): 169 -> 172. Measured
+  // 164.3 KB on main, 171.2 KB with the change (+6.9 KB): the
+  // DerivedPropertyEngine's own numeric expression language
+  // (advanced/expression.ts) replaces expr-eval, which has unpatched
+  // code-execution and prototype-pollution advisories. expr-eval was an
+  // external dependency, so its bytes never counted here; a consumer
+  // that bundles the engine drops about 25 KB of minified expr-eval for
+  // these 6.9 KB, a net decrease of about 18 KB, and every install
+  // sheds the dependency.
+  // Host-integration round 2026-10-13 (issues #29/#30/#31): 172 -> 176.
+  // The round measured 164.3 -> 166.1 KB on its own branch (+1.8 KB:
+  // kShortestPaths, Yen's algorithm over unit-weight BFS, with the
+  // directed and nodeFilter options and the PathGraph read interface;
+  // EdgeInput.key through addEdgeWithKey and fromJSON restoring edge
+  // ids; the optional SHACL target and constraint-id fields). Merged
+  // with the security fix above (+6.9 KB, measured on main the same
+  // day) core is 173.0 KB, so the two raises stack: 176 keeps about
+  // 3 KB of headroom, the posture both entries set.
+  // Round-2 integration (2026-10-13): 176 -> 180. The derivation
+  // registry and version-2 snapshot (#17, +2.8 KB: sidecar map, the
+  // engine's version counter, recompute and listStale, fromJSON's typed
+  // document errors) and tripleEdgeKey (#48, +0.7 KB) were measured on
+  // separate branches; merged, core measures 177.3 KB. About 2.7 KB
+  // headroom, same posture as the entries above.
+  // Plus the working-set configuration (#5, +3.1 KB on its branch: the
+  // versioned WorkingSetConfig document and validator, the manager's
+  // default/ceiling/user-override resolution): 180 -> 184, measured
+  // after the merge (see the core line's comment history).
+  // MERGE 2026-10-30 (upstream zwelz3/main 1.2.0 into the fork line):
+  // the two ledgers above were measured on different trees and stack.
+  // Fork measured 224.6 KB at 225; upstream added about +16 KB on its
+  // side (164.3 -> 180.4 measured). Provisional 245 until measured on
+  // the merged tree; tighten to measured + ~3 KB headroom.
+  // Measured on the merged tree: 242.1 KB. 245 stands (2.9 KB headroom).
+  core: 245 * 1024,
   // Core ledger:
   // - 169.0 -> 209 KB, 2026-08-17 (MERGE of ai-agent-guide into
   //   fable-updates). Measured 206.3 KB.
@@ -135,7 +211,7 @@ const BUDGETS = {
   //     Holten and van Wijk 2009). bundling/edge-bundling.ts, pure
   //     geometry, opt-in. Measured 198.3.
   //
-  //   THE @g3t/layout (ARC-009) WITHDRAWAL STANDS, and this merge
+  //   THE @g3-toolkit/layout (ARC-009) WITHDRAWAL STANDS, and this merge
   //   strengthens it. The entry below retired that recommendation on
   //   the grounds that this number is publish weight, every package
   //   declares `sideEffects: false`, and layout already costs nothing
@@ -157,13 +233,13 @@ const BUDGETS = {
   //   Headroom is 2.7 KB, held tight on purpose and in line with the
   //   entries below; the next addition of any size renegotiates here
   //   rather than riding slack.
-  // - NO RAISE, 2026-08-15 (the @g3t/layout recommendation is RETIRED,
+  // - NO RAISE, 2026-08-15 (the @g3-toolkit/layout recommendation is RETIRED,
   //   and 15 subpath exports were withdrawn). Measured 164.0 KB against
   //   the unchanged 169.0 cap, so headroom went 1.4 -> 5.0 KB. Two
   //   things happened and neither was a raise.
   //
   //   FIRST: the standing recommendation carried by the four entries
-  //   below, "extract @g3t/layout (ARC-009) and bring core back under
+  //   below, "extract @g3-toolkit/layout (ARC-009) and bring core back under
   //   its original envelope", IS WITHDRAWN. It was chasing THIS number,
   //   and this number is publish weight. Every package declares
   //   `sideEffects: false`, so a consumer downloads what it references.
@@ -202,7 +278,7 @@ const BUDGETS = {
   //   bytes would reintroduce half the problem. Headroom is 1.4 KB,
   //   held tight on purpose. FOURTH raise this session, all four
   //   hardening rather than feature work. The standing recommendation
-  //   is unchanged and is now overdue: extract @g3t/layout (ARC-009)
+  //   is unchanged and is now overdue: extract @g3-toolkit/layout (ARC-009)
   //   and bring core back under its original envelope instead of
   //   raising a fifth time.
   // - 162 -> 166 KB, 2026-08-15 (adapter request hygiene): measured
@@ -223,7 +299,7 @@ const BUDGETS = {
   //   deliberate policy, and "why 30 seconds" and "why aborts are
   //   never retried" are exactly what a future reader needs. New
   //   headroom is 1.4 KB, deliberately tight, because the standing
-  //   recommendation is still to extract @g3t/layout (ARC-009) and
+  //   recommendation is still to extract @g3-toolkit/layout (ARC-009) and
   //   bring core back under its original envelope rather than keep
   //   raising. This is the third raise this session and the third
   //   that is hardening rather than feature work.
@@ -245,7 +321,7 @@ const BUDGETS = {
   //   measured 157.1 KB. This is the raise the previous entry warned
   //   was coming; it is a security fix, not the style/route program,
   //   so it does not renegotiate that program's standing
-  //   recommendation (extract @g3t/layout, ARC-009, and bring core
+  //   recommendation (extract @g3-toolkit/layout, ARC-009, and bring core
   //   back under its original envelope). Sourcemap audit run first,
   //   as that entry requires: ZERO node_modules source bytes in
   //   core's dist, so all 1.9 KB is first-party. Most of it is the
@@ -389,14 +465,14 @@ const BUDGETS = {
   // per the ledger doctrine (same commit, with rationale) rather
   // than holding the flip hostage; flagged to the owner for a
   // one-word ratification or veto (revert is one line). D3b removes
-  // elkjs AND extracts @g3t/layout out of core, returning core far
+  // elkjs AND extracts @g3-toolkit/layout out of core, returning core far
   // under its original envelope; like the react 440, this is the
   // bridge, not the new normal.
   // React ledger, 2026-07-18 (OWNER-APPROVED raise): 420 -> 440.
   // Growth is the F1/F2/INT-001 feature surface (SVG + Canvas
   // adapters, structural SVG view, uniform pointer events), not
   // waste; the dead-code round measured the tree clean. The ARC-009
-  // extraction moves the render adapters out of @g3t/react and
+  // extraction moves the render adapters out of @g3-toolkit/react and
   // returns this budget under its original envelope; this raise is
   // the bridge, not the new normal.
   // React ledger (revival entry; older ratchets above):
@@ -427,7 +503,108 @@ const BUDGETS = {
   // Round 21 (2026-08-05): +1.5 KB for R-12 (structural node
   // styles, controlled drag offsets, the renderer-neutral editor
   // target) and R-13.3 (one legend serving both renderers).
-  react: 397 * 1024,
+  // Brief 25 (2026-08-19): 397 -> 398 KB. Measured 397.1 KB at
+  // branch tip (unrelated to this brief's changes, which touch core
+  // and demo only, not @g3-toolkit/react). Absorbing here so the gate
+  // reflects reality; the drift was already present before this brief.
+  // Issues #21/#39 (2026-10-13): 395 -> 402. Measured 392.0 -> 398.2
+  // KB (+6.2 KB), all of it TableView: the rows path (DataGridColumn
+  // columns with text/values/range header filters, the faceted row
+  // model wiring), the table-wide renderCell, host-owned and "none"
+  // selection modes, controlled pagination (the pageSize prop was
+  // inert after mount), and the fill-mode ResizeObserver page-size
+  // derivation. TableView sits in the StatsPanel chunk, so a host
+  // that never references it pays nothing. Headroom stays modest
+  // (3.8 KB) on purpose, as the previous entry set it.
+  // Integration (2026-10-13): the two entries above were measured on
+  // separate branches against the same 392.0 KB base (+6.2 KB table,
+  // +6.5 KB tree/schema) and each set 402. Merged with the other
+  // branches of the same round (theme target and dispose #33, legend
+  // edge rows #38, encoding re-apply and stylesheet restyle #13/#14/
+  // #28, overlay theme rules #32, SHACL browser #34/#35), the dist
+  // measures 411.5 KB; with wave 2 (#40 label collision +5.7 KB, #26
+  // additive updates +4.5 KB) it measures about 422 KB, so the budget
+  // is 428, a few KB of headroom as before.
+  // Issue #47 (2026-10-13): 428 -> 434. Measured 421.6 -> 429.0 KB
+  // (431,727 -> 439,321 bytes, +7.6 KB), all of it TableView and all
+  // in the StatsPanel chunk, so a host that never references the
+  // table pays nothing: the four #39 deferrals that needed no
+  // dependency ruling (CSV export with the pure `getCsv` helper and
+  // the toolbar button, the "values" filter as a checklist popover
+  // with faceted counts and All/None, menu-based column reorder over
+  // a host-controllable columnOrder, and the cross-column search
+  // whose searchable set travels with the query). Sourcemap audit as
+  // the 2026-07-03 core entry requires: ZERO node_modules source
+  // bytes across react's 15 dist maps (885,513 source bytes, all
+  // first-party), so no vendored weight. Headroom 5 KB, modest on
+  // purpose as the previous entries set it.
+  // Round-2 integration (2026-10-13): 434 -> 440. The #47 table entry
+  // above (429.0 KB) and the #20 overlay sequence (+5.6 KB: the
+  // useOverlaySequence hook, OverlayTransport and the pure rules,
+  // tree-shakeable named exports) were measured on separate branches;
+  // merged, react measures 436.4 KB. About 3.5 KB headroom, same
+  // posture as the entries above.
+  // Round-2 integration (2026-10-13), second raise: 440 -> 446. The
+  // #6 PaginationControl molecule and MatrixView paging (+4.6 KB on
+  // its branch, +1.9 KB for the #16 AriaCompanion props before it)
+  // land on the 436.4 KB merged measurement above: 441.9 KB merged.
+  // About 4 KB headroom, same posture.
+  // Issue #45 (2026-10-13): 446 -> 450. The shared view root class:
+  // every exported view and panel root composes `g3t-view` through
+  // one helper (packages/react/src/theme/view-class.ts), so the
+  // scoped typography from #24 reaches views whose root was an
+  // unclassed inline-styled element. Measured 445.6 -> 446.4 KB
+  // (457,103 bytes after; +0.8 KB), one `viewClass(...)` call per
+  // root across 48 files plus the helper, no new dependency and no
+  // vendored bytes. Headroom back to about 3.5 KB, same posture.
+  // Issue #59 (2026-10-13): 450 -> 455. TreeView adoption gaps for an
+  // ontology rail: rows keyed by PATH so a node under several parents
+  // renders under each (maintainer ruling), a filter that keeps the
+  // ancestors of matches and holds them open, a `renderLabel` slot,
+  // expand-only group rows, controlled `selected`, reveal (open the
+  // branch and scrollIntoView) on an outside selection,
+  // `initialExpanded` and `ariaLabel`. Measured 446.4 -> 450.8 KB
+  // (461,624 bytes after; +4.4 KB), all in the tree chunk
+  // (packages/react/src/views/tree/TreeView.tsx), no new dependency;
+  // sourcemap audit as the 2026-07-03 core entry requires: ZERO
+  // node_modules source bytes across react's dist maps (the one
+  // textual mention, in timeline.mjs.map, is a source comment about
+  // the vendored vis-timeline stylesheet, not a source path). Headroom
+  // about 4.2 KB, same posture.
+  // Issues #57 and #58 (2026-10-13): 450 -> 456. TableView adoption
+  // gaps for a host replacing its own TanStack table. Measured
+  // 446.3 -> 452.7 KB (457,028 -> 463,583 bytes, +6.4 KB), all of it
+  // TableView.tsx in the StatsPanel chunk, so a host that never
+  // references the table pays nothing: the native-button sort trigger
+  // with keyboard multi-sort (#57); controlled/seeded sorting, the
+  // per-column hidden/csv/align/width/title fields, the empty-state
+  // row, the toolbar slot, filter-kind inference, first/last page
+  // buttons with the rows-per-page select, unique row ids, and the
+  // column-set reconciliation that drops filters and sorts on columns
+  // that left (#58); and the every-word search semantics the
+  // maintainer ruled on (a term parser and the row-level match).
+  // Sourcemap audit as the 2026-07-03 core entry requires: ZERO
+  // node_modules source bytes across react's 16 dist maps (965,030
+  // source bytes, all first-party). Headroom about 3.3 KB, same
+  // posture as the entries above.
+  // Merge step (2026-10-13, round 3 on #53): the #59 and #57/#58
+  // raises above were each measured against the 1.2.0 base, so they
+  // do not sum; #56 (SchemaView targets, inheritance, several
+  // parents) added about 1.8 KB without a raise. Re-measured on the
+  // merged tree: 461.3 KB (+15 KB over the 1.2.0 base), so the
+  // budget is 465 KB. Headroom kept at the same posture as the
+  // entries above.
+  // MERGE 2026-10-30 (upstream 1.2.0 into the fork line): the fork ledger
+  // (399, measured 398.1) and the upstream ledger (465, +71 KB over the
+  // shared base) stack. Measured on the merged tree: 471.6 KB, so 475
+  // (3.4 KB headroom, the posture both ledgers keep).
+  react: 475 * 1024,
+  // ACT activity shapes (2026-08-20): 398 -> 399 KB. Measured 398.1 KB.
+  // First-party react growth: nodeShapeElement in structural-svg-view.tsx
+  // now draws six UML activity glyphs (diamond/ellipse/initial/final/fork
+  // + rect default) so StructuralNode.shape renders flowchart nodes. The
+  // glyph geometry is the added weight; it is a library feature (the MBSE
+  // act diagrams and the wiring-guide flowchart section both consume it).
   // React ledger:
   // - 390 -> 397 KB, 2026-08-17 (MERGE of ai-agent-guide into
   //   fable-updates). Measured 393.9 KB. Same shape as the core entry:
@@ -443,7 +620,7 @@ const BUDGETS = {
   //     for non-structural scenes), the g3t-canvas-edge-routed
   //     stylesheet rule, and a routeEdges change effect. The geometry
   //     (routeSceneEdges, polylineToCytoscapeSegments) is imported from
-  //     @g3t/core, so the react-side growth is wiring only.
+  //     @g3-toolkit/core, so the react-side growth is wiring only.
   //     Measured 389.1.
   //   - 390 -> 393: brief 12 holon boundary view.
   //     registerHolonDrillItems plus four field-scoped stylesheet rules
@@ -456,12 +633,125 @@ const BUDGETS = {
   //   react dist carries core's routing growth through its own bundle,
   //   so a core-side addition lands here too even when no react code
   //   changes. Two of the three entries above are exactly that.
+  // - 395 -> 402 KB, 2026-10-13 (issues #36 and #37, TreeView and
+  //   SchemaView): measured 398.5 KB, +6.5 KB over the 392.0 KB the
+  //   previous entry recorded. Sourcemap attribution over every
+  //   react dist map first, per the 2026-07-03 core rule: ZERO
+  //   node_modules source bytes, so all of it is first-party. Two
+  //   files carry it, read off the same attribution:
+  //   TreeView.tsx 8.55 KB generated (was ~4.8 KB by the same
+  //   generated/source ratio): the expanded set is now seeded from
+  //   initialDepth and XORed with user toggles so rows inside the seed
+  //   collapse (the #36 defect), several roots render as a forest,
+  //   the [type] prefix is optional, and the rows form a WAI-ARIA
+  //   tree with a roving tab stop and the arrow/Home/End/Enter model
+  //   handled once at the tree root over a visible-row list. The
+  //   keyboard model is the largest share and is the capability the
+  //   host had to build for itself.
+  //   SchemaView.tsx 5.72 KB generated (was ~2.7 KB): rdfs:subClassOf
+  //   nesting with cycle promotion, one badge per class over EVERY
+  //   targeting shape (count, shape count, worst validation status),
+  //   and per-shape constraint lists. Both are tree-shakeable named
+  //   exports; a host that never references them pays nothing.
+  //   TreeView.css (0.6 KB) ships in style.css, which this gate does
+  //   not sum. New headroom is 3.5 KB, set modestly as before.
+  // - +5.7 KB, 2026-10-13 (issue #40, label collision), measured on
+  //   its branch by building with and without the change's files:
+  //   views/canvas/label-collision.ts (the pure greedy resolver,
+  //   shorten strategy and priority composition; tree-shakeable
+  //   named exports, so a host with its own renderer pays only what
+  //   it imports), views/canvas/apply-label-collision.ts (measure
+  //   rendered label boxes, apply class/field decisions), and in
+  //   CytoscapeCanvas the three props, one effect, and three
+  //   stylesheet rules. The canvas-side bytes are reached by every
+  //   CytoscapeCanvas import; the DEFAULT mode ("none") registers no
+  //   listener and does no per-render work, so the cost to a host
+  //   that never opts in is bytes only. Sourcemap audit run first as
+  //   the 2026-07-03 core entry requires: ZERO node_modules source
+  //   bytes across react's 15 dist maps (808,139 source bytes, all
+  //   first-party). Budgets are unminified by policy, and roughly
+  //   half of the 5.7 KB is the docblocks that explain the overlay
+  //   mechanism and why `label` is never written. New headroom is
+  //   folded into the integration budget above.
+  // - +4.5 KB, 2026-10-13 (issue #26, additive graph updates), measured
+  //   on its branch against the head it grew from:
+  //   CytoscapeCanvas gained `graphUpdate="additive"` (planner, seed
+  //   placement, the in-place grow with one fcose pass under
+  //   fixedNodeConstraint, and the render-time init-key decision).
+  //   It lives in the canvas rather than a tree-shakeable module
+  //   because it IS the canvas's graph-change detection: an explorer
+  //   that grows a drawn graph one neighborhood at a time lost
+  //   positions and camera on every step, and the host-side
+  //   workaround (`locked` under fcose) does not work. Budgets are
+  //   unminified by policy and roughly half of the growth is the
+  //   docblocks that say why. Sourcemap audit run first as the
+  //   2026-07-03 core entry requires: ZERO node_modules source bytes
+  //   across react's dist maps (803,359 bytes, all first-party). New
+  //   headroom is folded into the integration budget above.
+  // - NO RAISE, 2026-08-28 (core stopped being external): measured
+  //   651.7 KB, 167% of the 390 KB budget in force at the time. The
+  //   261.7 KB over was not growth and the correct response was a
+  //   one-line dependency restore, not a raise. 683e40e ("Fix version
+  //   pins") reordered packages/react/package.json and dropped
+  //   `"@g3-toolkit/core": "workspace:^"` from `dependencies`. No build
+  //   file names that entry, because externals are DERIVED from the
+  //   manifest by scripts/vite-externals.mjs, so deleting the line
+  //   silently un-externalized core; the `resolve.alias` in
+  //   packages/react/vite.config.ts, which points @g3-toolkit/core at
+  //   ../core/src, then compiled the whole of core into react's dist.
+  //   Nothing else went red: the alias resolves without the workspace
+  //   link, so typecheck, tests, and the export gates stayed green
+  //   while the published package quietly carried a second copy of
+  //   core.
+  //   WHY IT REACHED A COMMIT: this check is the last step of `verify`,
+  //   and the SAME commit broke the first step by renaming pixi's
+  //   [project] table to [workspace] out from under
+  //   check-version-sync.mjs. The `&&` chain short-circuited before any
+  //   bundle was ever measured. Two independent-looking failures, one
+  //   commit.
+  //   VERIFICATION that the excess was sibling code and not vendor
+  //   weight, per the sourcemap-audit rule the 2026-07-03 core entry
+  //   set: attribution over the three largest chunks (StatsPanel
+  //   144 KB, neighbors 136 KB, ugm 84 KB) returned sources of the form
+  //   ../../core/src/**, exactly ONE node_modules source in the whole
+  //   set (graphology, reached through core/src/ugm/ugm.ts), and no
+  //   react-only growth. Restoring the dependency returned the
+  //   measurement to 388.5 KB against the then-current 390 KB budget,
+  //   consistent with the 387.7 KB recorded below.
+  //   Weight was the symptom, not the defect: a host installing
+  //   @g3-toolkit/core alongside @g3-toolkit/react would have received
+  //   two copies of the exported zustand store singletons, the same
+  //   two-instance hazard the ESM-only ruling exists to prevent. The
+  //   budget was the only gate that noticed. This entry ratified NO
+  //   growth; the 395 KB cap above comes from the separate growth entry
+  //   below, which merged into this branch after this one was written.
+  // - 390 -> 395 KB, 2026-08-27 (downstream issue triage): measured
+  //   391.8 KB, +1.8 KB over the old cap (re-measured 392.0 KB after
+  //   main merged in; the 0.2 KB is main's, not this round's, and the
+  //   cap set here absorbed it without a second raise). Four items,
+  //   none optional:
+  //   (D) overlay TONE rules, the largest share. Members carried one
+  //   class, so a SHACL violation tier and a warning tier rendered
+  //   identically; the canvas now applies a tone class and BOTH
+  //   stylesheets (static OVERLAY_RULES and the theme-derived
+  //   builder) carry six rules each. Stylesheet literals do not
+  //   tree-shake out of the canvas, so a host that never registers a
+  //   toned overlay still pays this. Accepted: a validation surface
+  //   that cannot distinguish severities is not doing its job.
+  //   (J) StatsPanel title/unit/description plus axis naming.
+  //   (C) FloatingLegend collapsible/defaultCollapsed forwarding.
+  //   (A) the muted semantic trio in the three theme presets.
+  //   Sourcemap audit run first as the 2026-07-03 core entry
+  //   requires: ZERO node_modules source bytes across react's dist
+  //   maps (765,575 bytes, all first-party), so none of this is
+  //   vendored weight. New headroom is 3.0 KB, set modestly: the next
+  //   round should measure, not assume it can spend it.
   // - NO RAISE, 2026-08-14 (timeline moved to its own subpath):
   //   387.2 -> 387.7 KB, +0.5 KB, headroom 2.8 -> 2.3 KB. TimelineView
   //   statically imports the two OPTIONAL peers, and rollup had hoisted
   //   it into a chunk the root barrel imported, so the documented
   //   install produced an unresolvable `import { CytoscapeCanvas } from
-  //   "@g3t/react"`. Splitting it to its own entry costs one 2.5 KB
+  //   "@g3-toolkit/react"`. Splitting it to its own entry costs one 2.5 KB
   //   entry file and returns most of that from the chunk it left; it
   //   still shares EmptyState and selection-store. Recorded here rather
   //   than passed over because the previous entry set this headroom
@@ -532,7 +822,7 @@ for (const [pkg, budget] of Object.entries(BUDGETS)) {
     total = dirSize(dist, [".mjs", ".js"]);
   } catch {
     console.error(
-      `  @g3t/${pkg}: dist/ missing; run pnpm run build:packages first`,
+      `  @g3-toolkit/${pkg}: dist/ missing; run pnpm run build:packages first`,
     );
     failures++;
     continue;
@@ -541,7 +831,7 @@ for (const [pkg, budget] of Object.entries(BUDGETS)) {
   const within = total <= budget;
   const symbol = within ? "✓" : "✗";
   console.log(
-    `  ${symbol} @g3t/${pkg}: ${fmt(total)} / ${fmt(budget)} (${pct}%)`,
+    `  ${symbol} @g3-toolkit/${pkg}: ${fmt(total)} / ${fmt(budget)} (${pct}%)`,
   );
   if (!within) failures++;
 }
@@ -552,7 +842,9 @@ if (failures > 0) {
   );
   console.error(
     `If the growth is justified, raise the budget in scripts/check-bundle-size.mjs\n` +
-      `in the same commit, with a comment explaining why.`,
+      `in the same commit, with a comment explaining why. Core growth also\n` +
+      `moves the core-layout/core-all scenarios in check-consumer-cost.mjs;\n` +
+      `run pnpm run verify:budgets and raise every ledger it lists.`,
   );
   process.exit(1);
 }
