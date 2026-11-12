@@ -4,10 +4,14 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { injectDesignTokens, DESIGN_TOKENS, DARK_SHADOWS } from "@g3t/core";
-import { SparqlAdapter } from "@g3t/core";
-import { CypherAdapter } from "@g3t/core";
-import type { Middleware } from "@g3t/core";
+import {
+  injectDesignTokens,
+  DESIGN_TOKENS,
+  DARK_SHADOWS,
+} from "@g3-toolkit/core";
+import { SparqlAdapter } from "@g3-toolkit/core";
+import { CypherAdapter } from "@g3-toolkit/core";
+import type { Middleware } from "@g3-toolkit/core";
 
 // ── Design Tokens (M8.5) ───────────────────────────────────────────
 
@@ -204,7 +208,11 @@ describe("Canvas selection uses .g3t-selected CSS class", () => {
 
 // ── Design-system quality floor (design-system roadmap, A-tier) ─────
 
-import { SEQUENTIAL_SCALE, DIVERGING_SCALE, scaleColor } from "@g3t/core";
+import {
+  SEQUENTIAL_SCALE,
+  DIVERGING_SCALE,
+  scaleColor,
+} from "@g3-toolkit/core";
 
 describe("data scale tokens", () => {
   it("injects sequential and diverging scale variables", () => {
@@ -222,6 +230,22 @@ describe("data scale tokens", () => {
     expect(root.getPropertyValue("--g3t-z-tooltip")).toBe("1200");
   });
 
+  // Design-token gate, 2026-08-27: ContextMenu and g3t-base.css both
+  // referenced --g3t-z-popover, which nothing emitted. It now sits
+  // between dropdown and overlay on the scale.
+  it("injects a popover z-index between dropdown and overlay", () => {
+    injectDesignTokens();
+    const root = document.documentElement.style;
+    const popover = Number(root.getPropertyValue("--g3t-z-popover"));
+    expect(popover).toBe(600);
+    expect(popover).toBeGreaterThan(
+      Number(root.getPropertyValue("--g3t-z-dropdown")),
+    );
+    expect(popover).toBeLessThan(
+      Number(root.getPropertyValue("--g3t-z-overlay")),
+    );
+  });
+
   it("scaleColor clamps and maps endpoints", () => {
     expect(scaleColor(0)).toBe(SEQUENTIAL_SCALE[0]);
     expect(scaleColor(1)).toBe(SEQUENTIAL_SCALE[8]);
@@ -233,7 +257,7 @@ describe("data scale tokens", () => {
 
 // ── A2: reduced motion reaches JS-driven animation ──────────────────
 
-import { prefersReducedMotion } from "@g3t/core";
+import { prefersReducedMotion } from "@g3-toolkit/core";
 import { deriveEChartsTheme, LIGHT_THEME } from "./ThemeManager";
 
 describe("prefersReducedMotion", () => {
@@ -287,6 +311,54 @@ describe("selection gasket halo", () => {
   });
 });
 
+// ── Theme color tokens (design-token gate, 2026-08-27) ──────────────
+
+import { useThemeStore, DARK_THEME } from "./ThemeManager";
+import type { G3tTheme } from "./ThemeManager";
+
+/** Injection is private; setCustomTheme is the public door to it. */
+const apply = (t: G3tTheme) => useThemeStore.getState().setCustomTheme(t);
+
+describe("theme color-token emission", () => {
+  it("emits the color scheme as a token, not only as root.style", () => {
+    apply(DARK_THEME);
+    const root = document.documentElement.style;
+    // ContextMenu renders `colorScheme: var(--g3t-color-scheme, light)`;
+    // reading root.style.colorScheme is not available to it.
+    expect(root.getPropertyValue("--g3t-color-scheme")).toBe("dark");
+    apply(LIGHT_THEME);
+    expect(root.getPropertyValue("--g3t-color-scheme")).toBe("light");
+  });
+
+  it("emits muted semantic companions when the theme carries them", () => {
+    apply(LIGHT_THEME);
+    const root = document.documentElement.style;
+    // CoverageMeter's ghost fills; previously fell back to fixed rgba
+    // in every theme because nothing emitted these.
+    expect(root.getPropertyValue("--g3t-success-muted")).toBe(
+      LIGHT_THEME.successMuted,
+    );
+    expect(root.getPropertyValue("--g3t-warning-muted")).toBe(
+      LIGHT_THEME.warningMuted,
+    );
+    expect(root.getPropertyValue("--g3t-error-muted")).toBe(
+      LIGHT_THEME.errorMuted,
+    );
+  });
+
+  it("skips the muted trio for a theme that omits them", () => {
+    const root = document.documentElement.style;
+    root.removeProperty("--g3t-success-muted");
+    // Optional on G3tTheme so consumer theme literals keep compiling;
+    // omitting must leave the component fallback in force rather than
+    // emitting "undefined".
+    const bare: G3tTheme = { ...LIGHT_THEME };
+    delete bare.successMuted;
+    apply(bare);
+    expect(root.getPropertyValue("--g3t-success-muted")).toBe("");
+  });
+});
+
 // ── createTheme (customization layer 1) ─────────────────────────────
 
 import { createTheme, contrastRatioOrNull } from "./ThemeManager";
@@ -324,5 +396,26 @@ describe("createTheme", () => {
       "accentPrimary/bgPrimary",
     );
     warn.mockRestore();
+  });
+});
+
+describe("overlay color token (issue #32)", () => {
+  it("emits --g3t-overlay-color from the theme's overlayColor", () => {
+    apply(DARK_THEME);
+    const root = document.documentElement.style;
+    expect(root.getPropertyValue("--g3t-overlay-color")).toBe(
+      DARK_THEME.overlayColor,
+    );
+    expect(DARK_THEME.overlayColor).toBe("#2f9e44");
+  });
+
+  it("skips the token for a theme that omits the optional field", () => {
+    const root = document.documentElement.style;
+    root.removeProperty("--g3t-overlay-color");
+    const bare: G3tTheme = { ...LIGHT_THEME };
+    delete bare.overlayColor;
+    apply(bare);
+    expect(root.getPropertyValue("--g3t-overlay-color")).toBe("");
+    apply(LIGHT_THEME);
   });
 });

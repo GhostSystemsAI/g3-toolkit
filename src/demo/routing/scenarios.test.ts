@@ -8,13 +8,29 @@
  * - no route passes through a box it neither starts nor ends at.
  * Crossings and bends are NOT pinned to exact numbers (they may shift
  * with engine tuning); only their structural floors are asserted.
+ *
+ * Every layout here runs with the engine's wall-clock budgets pinned
+ * off (GAUNTLET_BUDGETS). The defaults (layering 80 ms, ordering 60 ms,
+ * routing 80 ms) are read from Date.now and fall back to best-so-far
+ * by design (PRF-001/002), so one host deschedule longer than a budget
+ * swaps the escalated route for the documented detour/simple fallback.
+ * That is what turned fan-bus, prune-wall and storm-sandwich at L red
+ * in a merge-gate run at load avg 42 (heal d455ee76) while each test
+ * body takes a few ms. These tests pin the ALGORITHM's floor, which
+ * must not depend on how busy the machine is.
  */
-import { describe, it, expect } from "vitest";
-import { layoutStructural } from "@g3t/core";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { layoutStructural } from "@g3-toolkit/core";
 import { ROUTING_SCENARIOS, type ScenarioSize } from "./scenarios";
 import { gradeRoutes } from "./quality";
 
 const SIZES: ScenarioSize[] = ["S", "M", "L"];
+
+const GAUNTLET_BUDGETS = {
+  layeringBudgetMs: Infinity,
+  orderingBudgetMs: Infinity,
+  routingBudgetMs: Infinity,
+} as const;
 
 describe("routing scenarios: generator well-formedness", () => {
   for (const sc of ROUTING_SCENARIOS) {
@@ -47,10 +63,37 @@ describe("routing scenarios: generator well-formedness", () => {
 });
 
 describe("routing scenarios: engine survives the gauntlet", () => {
+  // Regression fence (heal d455ee76): the gauntlet must be immune to a
+  // slow clock. Date.now jumps 20 ms per read, which exhausts every
+  // default budget within a few reads exactly as a descheduled host
+  // does; at default budgets this produced violations in 13 of the 28
+  // L-size flow cases. With the budgets pinned the geometry must equal
+  // an unstubbed run, so no test below can read the host's load.
+  describe("slow-clock immunity", () => {
+    afterEach(() => vi.restoreAllMocks());
+    for (const id of ["fan-bus", "prune-wall", "storm-sandwich"]) {
+      it(`${id} (L): geometry is identical under a 20 ms/read clock`, async () => {
+        const sc = ROUTING_SCENARIOS.find((s) => s.id === id)!;
+        const input = sc.build("L");
+        const opts = { ...GAUNTLET_BUDGETS, direction: sc.direction };
+        const reference = await layoutStructural(input, opts);
+        let fake = Date.now();
+        vi.spyOn(Date, "now").mockImplementation(() => (fake += 20));
+        // A fresh build: the layout cache keys on input identity, so
+        // reusing `input` would return the reference geometry unrun.
+        const loaded = await layoutStructural(sc.build("L"), opts);
+        vi.restoreAllMocks();
+        expect(loaded).toEqual(reference);
+        expect(gradeRoutes(input, loaded).violations).toBe(0);
+      });
+    }
+  });
+
   for (const sc of ROUTING_SCENARIOS) {
     it(`${sc.id} (M): full coverage, orthogonal, no box violations`, async () => {
       const input = sc.build("M");
       const geometry = await layoutStructural(input, {
+        ...GAUNTLET_BUDGETS,
         direction: sc.direction,
       });
 
@@ -83,6 +126,7 @@ describe("routing scenarios: engine survives the gauntlet", () => {
       const sc = ROUTING_SCENARIOS.find((s) => s.id === id)!;
       const input = sc.build("L");
       const geometry = await layoutStructural(input, {
+        ...GAUNTLET_BUDGETS,
         direction: sc.direction,
       });
       const q = gradeRoutes(input, geometry);
@@ -110,7 +154,10 @@ describe("routing scenarios: engine survives the gauntlet", () => {
     for (const direction of ["DOWN", "RIGHT", "UP", "LEFT"] as const) {
       it(`${sc.id} (L, ${direction}): no box violations under any flow`, async () => {
         const input = sc.build("L");
-        const geometry = await layoutStructural(input, { direction });
+        const geometry = await layoutStructural(input, {
+          ...GAUNTLET_BUDGETS,
+          direction,
+        });
         const q = gradeRoutes(input, geometry);
         expect(q.unrouted, `${sc.id}/${direction} unrouted`).toBe(0);
         expect(q.diagonalSegments, `${sc.id}/${direction} diagonals`).toBe(0);
@@ -132,7 +179,10 @@ describe("routing scenarios: engine survives the gauntlet", () => {
   it("storm-sandwich: both gaps congest (crossings well past one storm)", async () => {
     const sc = ROUTING_SCENARIOS.find((s) => s.id === "storm-sandwich")!;
     const input = sc.build("M");
-    const geometry = await layoutStructural(input, { direction: sc.direction });
+    const geometry = await layoutStructural(input, {
+      ...GAUNTLET_BUDGETS,
+      direction: sc.direction,
+    });
     const q = gradeRoutes(input, geometry);
     // Two K(5,5) gaps plus spans: crossings must exceed a single
     // K(5,5)'s unavoidable floor by a wide margin.
@@ -142,7 +192,10 @@ describe("routing scenarios: engine survives the gauntlet", () => {
   it("crossing-storm: crossings are unavoidable and detected", async () => {
     const sc = ROUTING_SCENARIOS.find((s) => s.id === "crossing-storm")!;
     const input = sc.build("M");
-    const geometry = await layoutStructural(input, { direction: sc.direction });
+    const geometry = await layoutStructural(input, {
+      ...GAUNTLET_BUDGETS,
+      direction: sc.direction,
+    });
     const q = gradeRoutes(input, geometry);
     // K(6,6) has crossings by Turán-type counting no matter the order;
     // a zero here means the oracle went blind, not that routing won.
@@ -158,6 +211,7 @@ describe("routing scenarios: engine survives the gauntlet", () => {
       const sc = ROUTING_SCENARIOS.find((s) => s.id === "prune-wall")!;
       const input = sc.build(size);
       const geometry = await layoutStructural(input, {
+        ...GAUNTLET_BUDGETS,
         direction: sc.direction,
       });
       const boxes = input.nodes.map((n) => geometry.nodes[n.id]!);
@@ -206,6 +260,7 @@ describe("routing scenarios: engine survives the gauntlet", () => {
     const sc = ROUTING_SCENARIOS.find((s) => s.id === "prune-wall")!;
     const input = sc.build("M");
     const geometry = await layoutStructural(input, {
+      ...GAUNTLET_BUDGETS,
       direction: sc.direction,
       longEdgeNear: Infinity,
     });
@@ -253,6 +308,7 @@ describe("routing scenarios: engine survives the gauntlet", () => {
         const sc = ROUTING_SCENARIOS.find((s) => s.id === scId)!;
         const input = sc.build(size);
         const geometry = await layoutStructural(input, {
+          ...GAUNTLET_BUDGETS,
           direction: sc.direction,
         });
         const q = gradeRoutes(input, geometry);
@@ -273,6 +329,7 @@ describe("routing scenarios: engine survives the gauntlet", () => {
     const sc = ROUTING_SCENARIOS.find((s) => s.id === "fan-bus")!;
     const input = sc.build("S");
     const geometry = await layoutStructural(input, {
+      ...GAUNTLET_BUDGETS,
       direction: sc.direction,
       routeEdges: false,
     });

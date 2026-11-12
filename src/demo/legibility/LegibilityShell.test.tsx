@@ -7,7 +7,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { CyStylesheet } from "@g3t/react";
+import type { CyStylesheet } from "@g3-toolkit/react";
 
 const captured = vi.hoisted(() => ({
   panes: [] as Array<{
@@ -19,8 +19,8 @@ const captured = vi.hoisted(() => ({
   }>,
 }));
 
-vi.mock("@g3t/react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@g3t/react")>();
+vi.mock("@g3-toolkit/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@g3-toolkit/react")>();
   return {
     ...actual,
     CytoscapeCanvas: (props: {

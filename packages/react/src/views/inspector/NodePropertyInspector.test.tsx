@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
-import { UGM } from "@g3t/core";
+import { UGM } from "@g3-toolkit/core";
 import { NodePropertyInspector } from "./NodePropertyInspector";
 import type { PropertyInspectorSpec } from "./property-spec";
 import { useInspectorSectionStore } from "../../state/inspector-section-store";
@@ -140,5 +140,48 @@ describe("NodePropertyInspector", () => {
       <NodePropertyInspector ugm={ugm} selection={{ type: "node", id: "b" }} />,
     );
     expect(screen.queryByTestId("inspector-prop-name")).not.toBeInTheDocument();
+  });
+});
+
+describe("NodePropertyInspector: derived-value marker (issue #17)", () => {
+  it("shows 'derived by <definition>' on a stamped property and nothing on a source one", () => {
+    const ugm = ugmFixture();
+    ugm.updateNodeProperties("a", { tenure: 7 });
+    ugm.setDerivation("a", "tenure", {
+      definitionId: "tenureYears",
+      version: 1,
+      computedAt: "2026-10-13T00:00:00.000Z",
+    });
+    render(
+      <NodePropertyInspector ugm={ugm} selection={{ type: "node", id: "a" }} />,
+    );
+    const marker = screen.getByTestId("inspector-prop-tenure-derived");
+    expect(marker).toHaveTextContent("derived by tenureYears");
+    expect(screen.getByTestId("inspector-prop-tenure")).toHaveAttribute(
+      "data-derived",
+      "tenureYears",
+    );
+    expect(
+      screen.queryByTestId("inspector-prop-name-derived"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("inspector-prop-name")).not.toHaveAttribute(
+      "data-derived",
+    );
+  });
+
+  it("drops the marker once a source write replaces the derived value", () => {
+    const ugm = ugmFixture();
+    ugm.updateNodeProperties("a", { tenure: 7 });
+    ugm.setDerivation("a", "tenure", {
+      definitionId: "tenureYears",
+      computedAt: "2026-10-13T00:00:00.000Z",
+    });
+    ugm.updateNodeProperties("a", { tenure: 8 });
+    render(
+      <NodePropertyInspector ugm={ugm} selection={{ type: "node", id: "a" }} />,
+    );
+    expect(
+      screen.queryByTestId("inspector-prop-tenure-derived"),
+    ).not.toBeInTheDocument();
   });
 });

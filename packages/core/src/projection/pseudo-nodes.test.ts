@@ -4,8 +4,8 @@
  * Covers the headlessly-verifiable Verification items: transform
  * round-trip invert coverage, the both-endpoints-hub tie-break,
  * junction id safety, and pseudo-flag isolation through the UGM
- * consumers that live in @g3t/core (subgraph export + algorithm
- * adapter). The encoding-mapper skip guard lives in @g3t/react and is
+ * consumers that live in @g3-toolkit/core (subgraph export + algorithm
+ * adapter). The encoding-mapper skip guard lives in @g3-toolkit/react and is
  * asserted there.
  */
 

@@ -28,10 +28,10 @@ import {
   categoricalColorMap,
   registerIcon,
   FloatingLegend,
-} from "@g3t/react";
-import type { EncodingSpec } from "@g3t/react";
+} from "@g3-toolkit/react";
+import type { EncodingSpec } from "@g3-toolkit/react";
 import type { Core } from "cytoscape";
-import { ingestAlgorithmResults, findShortestPath } from "@g3t/core";
+import { ingestAlgorithmResults, findShortestPath } from "@g3-toolkit/core";
 import { buildDigitalThread } from "./model";
 import { supplyShapes } from "./shapes";
 import {
@@ -54,6 +54,10 @@ import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
 import { useHiddenSuppliersStore } from "./hidden-suppliers-store";
 import { applyConfidenceDim, type ConfidenceCoreLike } from "./confidence-dim";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 type Mode = "none" | ClusterMode;
 
@@ -270,13 +274,15 @@ export function SupplyThreadShell({ onBack }: { onBack: () => void }) {
   // control (see confidence-dim.ts for why a data patch, not a
   // bypass).
   const [confMode, setConfMode] = useState<ConfMode>("off");
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls({ smartAttach: true });
   // Renderer toggle (G3L Round 46, owner request): the SAME graph,
   // rendered through the headless SVG or Canvas adapters. The cy
   // instance stays mounted (hidden beneath) as the source of truth:
@@ -437,9 +443,17 @@ export function SupplyThreadShell({ onBack }: { onBack: () => void }) {
 
   // Harvested at render time (a pure read of the live instance; the
   // lint rule rightly rejected the setState-in-effect version).
+  // hiddenIds and confMode are NOT read in the body, and the lint rule
+  // therefore calls them unnecessary. They are re-run triggers it cannot
+  // see: harvestSceneFromCy reads MUTABLE live Cytoscape state, and both
+  // mutate that instance (hiddenIds arrives as the canvas `hidden` prop
+  // below; confMode drives the spec and a restyle effect above). Drop
+  // them and the SVG pane keeps a scene harvested before the filter or
+  // the confidence mode changed.
   const harvested = useMemo(
     () =>
       threadRenderer !== "cytoscape" && core ? harvestSceneFromCy(core) : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [threadRenderer, core, hiddenIds, confMode],
   );
   useEffect(() => {
@@ -549,6 +563,9 @@ export function SupplyThreadShell({ onBack }: { onBack: () => void }) {
             animate={!reducedMotion}
             menuManager={menuManager}
             routeEdges={ROUTE_EDGES ? routeEdgesConfig : false}
+            routeRefreshSignal={routeRefreshSignal}
+            relayoutSignal={relayoutSignal}
+            edgeClickIsolate
           />
           {hiddenIds.size > 0 && (
             <div className="sc-route-status" data-testid="hidden-suppliers">
@@ -666,31 +683,15 @@ export function SupplyThreadShell({ onBack }: { onBack: () => void }) {
                 </span>
               </span>
             </label>
-            <label
-              className="sc-src-row"
-              style={{
-                cursor: "pointer",
-                alignItems: "baseline",
-                marginTop: 6,
-              }}
-            >
-              <select
-                value={routeMode}
-                onChange={(e) =>
-                  setRouteMode(
-                    e.target.value as "direct" | "orthogonal" | "off",
-                  )
-                }
-                data-testid="sc-route-mode"
-              >
-                <option value="direct">Direct (auto-Z)</option>
-                <option value="orthogonal">Orthogonal (always)</option>
-                <option value="off">Off (bezier)</option>
-              </select>
-              <span className="sc-src-name">
-                <b>Edge routing</b>
-              </span>
-            </label>
+            <div style={{ marginTop: 6 }}>
+              <RoutingControlStrip
+                idPrefix="sc"
+                routeMode={routeMode}
+                setRouteMode={setRouteMode}
+                refreshRoutes={refreshRoutes}
+                relayout={relayout}
+              />
+            </div>
           </div>
 
           <div className="sc-panel-head">Entities per source</div>

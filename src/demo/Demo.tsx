@@ -19,9 +19,9 @@
 
 import { lazy, Suspense, useState, useEffect, useMemo } from "react";
 import { DemoLanding, type Scenario } from "./DemoLanding";
-import { useThemeStore, ViewErrorBoundary } from "@g3t/react";
-import { injectDesignTokens } from "@g3t/react";
-import "@g3t/react";
+import { useThemeStore, ViewErrorBoundary } from "@g3-toolkit/react";
+import { injectDesignTokens } from "@g3-toolkit/react";
+import "@g3-toolkit/react";
 
 type ShellLoader = () => Promise<{
   default: React.ComponentType<{ onBack: () => void }>;
@@ -32,10 +32,18 @@ type ShellLoader = () => Promise<{
  * than ready-made lazy components: React.lazy caches a rejected import
  * forever, so retrying a failed chunk fetch means building a new lazy
  * from the loader. A module-level `lazy(...)` can only ever re-throw.
+ *
+ * Exported as the AUTHORITY for which ids are routable: the landing
+ * test and scripts/build-landing.mjs check the cards against it, so
+ * adding a surface means one card plus one entry here, no id lists.
  */
-const SHELL_MAP: Record<string, ShellLoader> = {
+export const SHELL_MAP: Record<string, ShellLoader> = {
   mbse: () =>
     import("./mbse/MbseShell").then((m) => ({ default: m.MbseShell })),
+  "routing-flowcharts": () =>
+    import("./flowchart/FlowchartShell").then((m) => ({
+      default: m.FlowchartShell,
+    })),
   auditor: () =>
     import("./audit/AuditShell").then((m) => ({ default: m.AuditShell })),
   "supply-chain": () =>

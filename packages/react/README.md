@@ -1,7 +1,7 @@
-# @g3t/react
+# @g3-toolkit/react
 
 React components for graph visualization: canvas, table, inspector,
-tree, map, schema, timeline, and more. Pairs with `@g3t/core` for the
+tree, map, schema, timeline, and more. Pairs with `@g3-toolkit/core` for the
 underlying data model.
 
 Live: [playground](https://zwelz3.github.io/g3-toolkit/playground/) ·
@@ -12,13 +12,13 @@ Live: [playground](https://zwelz3.github.io/g3-toolkit/playground/) ·
 ## Install
 
 ```bash
-npm install @g3t/core @g3t/react react react-dom \
+npm install @g3-toolkit/core @g3-toolkit/react react react-dom \
   cytoscape cytoscape-fcose zustand echarts
 ```
 
 The peer dependency list is broad because each view brings its own
 runtime. Tree-shake by importing only the components you need.
-`@g3t/react` itself pulls in `@tanstack/react-table` and `fuse.js`
+`@g3-toolkit/react` itself pulls in `@tanstack/react-table` and `fuse.js`
 transitively (they're regular dependencies of the package, not peers).
 
 `vis-timeline` and `vis-data` are OPTIONAL peers. Install them only
@@ -31,15 +31,39 @@ npm install vis-timeline vis-data
 ```
 
 ```ts
-import { TimelineView } from "@g3t/react/timeline";
+import { TimelineView } from "@g3-toolkit/react/timeline";
 ```
+
+## Stylesheet
+
+The components ship their CSS as a separate file; nothing imports it
+for you (auto-injection breaks strict CSP and server rendering):
+
+```ts
+import "@g3-toolkit/react/style.css";
+```
+
+It styles `g3t-` elements only: no `body`, `html` or `*` rule and no
+font download, so a host page keeps its own typography and margins.
+The page-level reset and body typography (IBM Plex Sans at 13px,
+theme ink and background) are a second, opt-in file for applications
+that are built on the toolkit, which is what the playground and
+Storybook import:
+
+```ts
+import "@g3-toolkit/react/style.base.css";
+```
+
+Fonts are loaded by the host. The `--g3t-font` and `--g3t-font-mono`
+tokens name IBM Plex Sans and IBM Plex Mono with system fallbacks;
+self-host them, load them in your document, or override the tokens.
 
 ## Quick start
 
 ```tsx
 import { useEffect, useState } from "react";
-import { UGM, SparqlAdapter } from "@g3t/core";
-import { CytoscapeCanvas, TableView } from "@g3t/react";
+import { UGM, SparqlAdapter } from "@g3-toolkit/core";
+import { CytoscapeCanvas, TableView } from "@g3-toolkit/react";
 
 function MyGraphPage() {
   const [ugm, setUgm] = useState<UGM | null>(null);
@@ -89,14 +113,14 @@ there runs in CI at `examples/wiring/`.
 ## Subpath imports
 
 ```ts
-import { CytoscapeCanvas } from "@g3t/react/views";
-import { FilterBuilder } from "@g3t/react/controls";
-import { useSelectionStore } from "@g3t/react/state";
-import { useThemeStore } from "@g3t/react/theme";
-import { AriaCompanion } from "@g3t/react/a11y";
-import { registerIcon } from "@g3t/react/icons";
+import { CytoscapeCanvas } from "@g3-toolkit/react/views";
+import { FilterBuilder } from "@g3-toolkit/react/controls";
+import { useSelectionStore } from "@g3-toolkit/react/state";
+import { useThemeStore } from "@g3-toolkit/react/theme";
+import { AriaCompanion } from "@g3-toolkit/react/a11y";
+import { registerIcon } from "@g3-toolkit/react/icons";
 // Requires the optional peers vis-timeline and vis-data.
-import { TimelineView } from "@g3t/react/timeline";
+import { TimelineView } from "@g3-toolkit/react/timeline";
 ```
 
 ## Documentation

@@ -9,14 +9,15 @@
  * data-g3t-ops for browser assertions.
  */
 import React, { useCallback, useEffect, useRef } from "react";
-import { hitTestScene } from "@g3t/core";
-import type { SceneHit, VisualAttributes } from "@g3t/core";
+import { hitTestScene } from "@g3-toolkit/core";
+import type { SceneHit, VisualAttributes } from "@g3-toolkit/core";
 import {
   useElementPointerEvents,
   type ElementPointerHandlers,
 } from "../../interaction/element-pointer-events";
 import type { SvgSceneEdge, SvgSceneNode } from "../svg/svg-adapter";
 import { buildDisplayList, type DrawOp } from "./display-list";
+import { viewClass } from "../../theme/view-class";
 
 export interface CanvasAdapterProps extends ElementPointerHandlers<SceneHit> {
   nodes: readonly SvgSceneNode[];
@@ -241,6 +242,7 @@ export function CanvasAdapter({
     <canvas
       ref={ref}
       {...pointerProps}
+      className={viewClass()}
       style={{ width, height }}
       data-testid={testId}
       data-g3t-ops={ops.length}

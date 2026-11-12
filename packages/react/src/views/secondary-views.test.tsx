@@ -10,11 +10,17 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { UGM } from "@g3t/core";
-import { WorkingSetManager } from "@g3t/core";
+import { UGM } from "@g3-toolkit/core";
+import { WorkingSetManager } from "@g3-toolkit/core";
 import { useSelectionStore } from "../state/selection-store";
 import { MapView } from "../views/map";
 import { TreeView } from "../views/tree";
+// Static, not in-test dynamic imports: StatsPanel pulls in ECharts and
+// TimelineView vis-timeline, and a cold import inside a test body counted
+// against the 5 s test timeout (5.3 s and 6.0 s on a saturated host).
+// Collection-time imports do not.
+import { StatsPanel } from "../views/stats";
+import { TimelineView } from "../views/timeline";
 
 // vis-timeline and echarts need DOM APIs not available in jsdom;
 // their component tests focus on data extraction and empty states.
@@ -34,9 +40,7 @@ describe("TimelineView (M5.E1.T1)", () => {
   // vis-timeline requires DOM measurement APIs not in jsdom.
   // Test the empty-state path and data extraction logic.
 
-  it("shows empty state when no temporal nodes exist", async () => {
-    // Dynamic import to avoid vis-timeline initialization errors
-    const { TimelineView } = await import("../views/timeline");
+  it("shows empty state when no temporal nodes exist", () => {
     const ugm = new UGM();
     ugm.addNode("a", { types: ["X"], properties: { name: "A" } });
 
@@ -113,8 +117,7 @@ describe("MapView (M5.E2.T1)", () => {
 describe("StatsPanel (M5.E3.T1)", () => {
   // ECharts requires canvas APIs not in jsdom. Test empty state.
 
-  it("shows empty state for missing property", async () => {
-    const { StatsPanel } = await import("../views/stats");
+  it("shows empty state for missing property", () => {
     const ugm = new UGM();
     ugm.addNode("a", { types: ["X"] });
 
@@ -173,28 +176,36 @@ describe("TreeView (M5.E4.T1)", () => {
     const ugm = createTreeUGM(3, 2); // 1+2+4 = 7 nodes
     render(<TreeView ugm={ugm} initialDepth={1} />);
 
-    // Find a toggle button for a node with children
-    const toggleButtons = screen
+    // Issue #36: every toggle collapses as well as expands, including
+    // the root inside initialDepth (before the fix, the first toggle
+    // was the root's and clicking it was a no-op, which is what this
+    // test's ">=" was tolerating). Pick a toggle whose row is COLLAPSED
+    // so the click is an expand, and require the count to grow.
+    const collapsedToggle = screen
       .getAllByRole("button")
       .filter((btn) =>
         btn.getAttribute("data-testid")?.startsWith("tree-toggle-"),
+      )
+      .find(
+        (btn) =>
+          btn.closest("[aria-expanded]")?.getAttribute("aria-expanded") ===
+          "false",
       );
-    expect(toggleButtons.length).toBeGreaterThan(0);
+    expect(collapsedToggle).toBeDefined();
 
     // Count nodes before expand
     const before = screen
       .getByTestId("tree-view")
       .querySelectorAll("[data-testid^='tree-node-']").length;
 
-    // Click toggle to expand
-    fireEvent.click(toggleButtons[0]!);
+    fireEvent.click(collapsedToggle!);
 
     const after = screen
       .getByTestId("tree-view")
       .querySelectorAll("[data-testid^='tree-node-']").length;
 
-    // Should have more nodes after expanding
-    expect(after).toBeGreaterThanOrEqual(before);
+    // 1 root + 2 children before; the expanded child adds its 2.
+    expect(after).toBeGreaterThan(before);
   });
 
   it("clicking a node selects it in the store", () => {

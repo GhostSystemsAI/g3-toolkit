@@ -17,10 +17,10 @@
 
 import {
   routeOrthogonal,
-  polylineIntersectsBoxes,
   type RouteBox,
   type RouteSide,
 } from "./orthogonal-router";
+import { countCrossings } from "../metrics/layout-metrics";
 
 export interface SceneNodeBox {
   id: string;
@@ -44,13 +44,39 @@ export interface RouteSceneOptions {
   /** Minimum length of first/last route segment. Default 28. */
   minStub?: number;
   /**
+   * Grazing tolerance (px). Before the "direct-unless-crossing" decision each
+   * obstacle box is INSET by this margin on all sides, so an edge whose
+   * straight shot only clips the outer `grazeTolerance` shell of a node is
+   * treated as NOT crossing and stays bezier. Only a shot that penetrates
+   * deeper than the margin into a node body triggers a Z-route, which reduces
+   * the number of routed (cornered) edges in sparse scenes. Applies to the
+   * DECISION ONLY; the actual routeOrthogonal obstacle set keeps full box
+   * geometry, so any route that does fire still clears node bodies with full
+   * clearance. Default 0 (exact body test, no tolerance). Ignored in "always"
+   * mode (which routes everything regardless of obstacles).
+   */
+  grazeTolerance?: number;
+  /**
    * Routing mode. Default "direct-unless-crossing".
    * - "direct-unless-crossing": route orthogonally only when the straight
-   *   segment between box centers crosses another node's box; otherwise
-   *   leave the edge unrouted (bezier).
+   *   LINE between box centers actually passes through another node's box
+   *   (exact segment-vs-rectangle test); otherwise leave the edge unrouted
+   *   (bezier). Straight is strongly preferred: an edge only detours when its
+   *   direct shot genuinely crosses a node body, not merely when a node sits
+   *   inside the shot's bounding rectangle.
    * - "always": route every edge orthogonally regardless of obstacles.
    */
   mode?: "direct-unless-crossing" | "always";
+  /**
+   * RF-B (owner Jake, 2026-08-21): opt-in crossing-aware terminal-side
+   * refinement. When on, after the baseline routing pass runs, each
+   * edge's inferred `sourceSide` / `targetSide` is tried flipped to the
+   * opposite face; the flip is accepted ONLY when it strictly lowers
+   * total crossings (`countCrossings` oracle over the resulting
+   * polylines). Each edge is flipped at most once to prevent
+   * oscillation. Default false; unset is byte-identical to today.
+   */
+  smartAttach?: boolean;
 }
 
 export interface SceneRoutedEdge {
@@ -91,6 +117,72 @@ function boxCenter(b: SceneNodeBox): { x: number; y: number } {
   return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
 }
 
+/** Shrink each box inward by `margin` on all sides for the grazing-tolerance
+ *  crossing DECISION only (never for the actual route obstacle set). Boxes that
+ *  collapse to non-positive extent (smaller than 2*margin in either axis) can
+ *  only ever be grazed, so they are dropped from the decision entirely. */
+function insetBoxes(boxes: readonly RouteBox[], margin: number): RouteBox[] {
+  const out: RouteBox[] = [];
+  for (const b of boxes) {
+    const w = b.width - 2 * margin;
+    const h = b.height - 2 * margin;
+    if (w <= 0 || h <= 0) continue;
+    out.push({ x: b.x + margin, y: b.y + margin, width: w, height: h });
+  }
+  return out;
+}
+
+/** True iff the straight segment a->b actually passes through any of the
+ *  axis-aligned boxes (Liang-Barsky slab clip). Unlike
+ *  `polylineIntersectsBoxes`, which tests each segment's BOUNDING BOX (exact
+ *  only for axis-aligned segments), this is exact for a DIAGONAL center-to-
+ *  center shot: a node that merely sits inside the shot's bounding rectangle
+ *  but off the line does NOT count as a crossing. This is what makes the
+ *  "direct-unless-crossing" mode strongly prefer straight edges. Endpoints
+ *  are assumed to lie outside every box (callers exclude the edge's own
+ *  source/target from `boxes`). Exported for direct unit testing. */
+export function segmentIntersectsBoxes(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  boxes: readonly RouteBox[],
+): boolean {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  for (const box of boxes) {
+    const minX = box.x;
+    const minY = box.y;
+    const maxX = box.x + box.width;
+    const maxY = box.y + box.height;
+    let t0 = 0;
+    let t1 = 1;
+    // Clip the parametric segment a + t*(b-a), t in [0,1], against one slab.
+    // p<0: candidate entering; p>0: candidate leaving; p==0: parallel (outside
+    // iff q<0). Returns false when the segment is wholly outside this boundary.
+    const clip = (p: number, q: number): boolean => {
+      if (Math.abs(p) < 1e-12) return q >= 0;
+      const r = q / p;
+      if (p < 0) {
+        if (r > t1) return false;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return false;
+        if (r < t1) t1 = r;
+      }
+      return true;
+    };
+    if (
+      clip(-dx, a.x - minX) &&
+      clip(dx, maxX - a.x) &&
+      clip(-dy, a.y - minY) &&
+      clip(dy, maxY - a.y) &&
+      t0 <= t1
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Route every edge in the scene around every other node. Self-loops and
  *  edges with unresolved endpoints are omitted from the returned map. */
 export function routeSceneEdges(
@@ -117,13 +209,17 @@ export function routeSceneEdges(
       if (n.id === s.id || n.id === t.id) continue;
       obstacles.push({ x: n.x, y: n.y, width: n.width, height: n.height });
     }
-    // direct-unless-crossing: skip routing when the straight segment
-    // between box centers does not pass through any obstacle box. The
-    // edge stays unrouted (bezier). Only fall through to routeOrthogonal
-    // when the direct shot is blocked OR the mode is "always".
+    // direct-unless-crossing: skip routing when the straight LINE between box
+    // centers does not actually pass through any obstacle box (exact segment-
+    // vs-rectangle test, not the bounding-box overlap that over-counted every
+    // node inside the diagonal's bbox). The edge stays unrouted (bezier). Only
+    // fall through to routeOrthogonal when the direct shot genuinely crosses a
+    // node OR the mode is "always".
+    const graze = opts.grazeTolerance ?? 0;
+    const decisionBoxes = graze > 0 ? insetBoxes(obstacles, graze) : obstacles;
     if (
       mode === "direct-unless-crossing" &&
-      !polylineIntersectsBoxes([sc, tc], obstacles)
+      !segmentIntersectsBoxes(sc, tc, decisionBoxes)
     ) {
       continue;
     }
@@ -137,6 +233,70 @@ export function routeSceneEdges(
     });
     if (res && res.points.length >= 2) {
       routed.set(e.id, res.points);
+    }
+  }
+
+  if (opts.smartAttach) {
+    // RF-B (owner Jake, 2026-08-21): try flipping each routed edge's
+    // terminal-side pair to the opposite axis; accept only strict
+    // improvements measured over the full route set. Each edge is
+    // flipped at most once (single trial per edge; iteration is
+    // bounded to the edge count).
+    const perpPair = (
+      s: RouteSide,
+      t: RouteSide,
+    ): { sourceSide: RouteSide; targetSide: RouteSide } | null => {
+      if (s === "EAST" && t === "WEST")
+        return { sourceSide: "SOUTH", targetSide: "NORTH" };
+      if (s === "WEST" && t === "EAST")
+        return { sourceSide: "NORTH", targetSide: "SOUTH" };
+      if (s === "SOUTH" && t === "NORTH")
+        return { sourceSide: "EAST", targetSide: "WEST" };
+      if (s === "NORTH" && t === "SOUTH")
+        return { sourceSide: "WEST", targetSide: "EAST" };
+      return null;
+    };
+    const measure = (): number =>
+      countCrossings(
+        [...routed.entries()].map(([id, points]) => ({ id, points })),
+      );
+    let bestCross = measure();
+    const orderedIds = [...routed.keys()].sort();
+    for (const eid of orderedIds) {
+      const e = edges.find((x) => x.id === eid);
+      if (!e) continue;
+      const s = byId.get(e.source);
+      const t = byId.get(e.target);
+      if (!s || !t) continue;
+      const sc = boxCenter(s);
+      const tc = boxCenter(t);
+      const cur = inferTerminalSides(sc, tc);
+      const flip = perpPair(cur.sourceSide, cur.targetSide);
+      if (flip === null) continue;
+      const obstacles: RouteBox[] = [];
+      for (const n of nodes) {
+        if (n.id === s.id || n.id === t.id) continue;
+        obstacles.push({ x: n.x, y: n.y, width: n.width, height: n.height });
+      }
+      const alt = routeOrthogonal({
+        source: { point: sc, side: flip.sourceSide },
+        target: { point: tc, side: flip.targetSide },
+        obstacles,
+        clearance: opts.clearance,
+        bendPenalty: opts.bendPenalty,
+        minStub: opts.minStub,
+      });
+      if (!alt || alt.points.length < 2) continue;
+      const prev = routed.get(eid);
+      routed.set(eid, alt.points);
+      const cCross = measure();
+      if (cCross < bestCross) {
+        bestCross = cCross;
+      } else if (prev) {
+        routed.set(eid, prev);
+      } else {
+        routed.delete(eid);
+      }
     }
   }
 
@@ -173,9 +333,14 @@ export function polylineToCytoscapeSegments(
     const py = p.y - src.y;
     // Weight: parametric projection onto source->target vector.
     const w = (px * dx + py * dy) / lenSq;
-    // Distance: perpendicular offset (positive = left of source->target
-    // in a Y-down coordinate system; cytoscape's sign convention).
-    const d = (px * dy - py * dx) / len;
+    // Distance: perpendicular offset along cytoscape's vectorNormInverse.
+    // Cytoscape renders segpt = midpt + vectorNormInverse * d, with
+    // vectorNormInverse = (-dy/l, dx/l) (edge-control-points.mjs). Solving
+    // segpt == p for d gives (py*dx - px*dy)/len. The prior (px*dy - py*dx)
+    // negated this, mirroring every bend across the source->target chord
+    // (~2*offset error) and throwing detours back through the node they
+    // routed around. routeToSegments (structural path) uses this sign.
+    const d = (py * dx - px * dy) / len;
     weights.push(w);
     distances.push(d);
   }

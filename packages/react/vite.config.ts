@@ -1,9 +1,40 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "fs";
 import { resolve } from "path";
 import { externalsFromPackageJson } from "../../scripts/vite-externals.mjs";
 
 const external = externalsFromPackageJson(resolve(__dirname, "package.json"));
+
+/**
+ * Emit the OPT-IN page stylesheet as its own dist file.
+ *
+ * `cssCodeSplit: false` folds every stylesheet a JS entry imports into
+ * the one `style.css`, which is what the component styles want and
+ * exactly what the page reset must NOT do (issue #24: the reset and
+ * the `body` rule restyled the host page for anyone who imported the
+ * component styles). Nothing in src imports g3t-page.css, so it never
+ * reaches that bundle; this plugin copies it verbatim to
+ * `dist/style.base.css`, the target of the `./style.base.css` export.
+ * `fileName` is explicit so `assetFileNames` below (which maps every
+ * css asset onto style.css) does not fold it back in.
+ */
+const PAGE_CSS = resolve(__dirname, "src/theme/g3t-page.css");
+function emitPageStylesheet(): Plugin {
+  return {
+    name: "g3t-emit-page-stylesheet",
+    buildStart() {
+      this.addWatchFile(PAGE_CSS);
+    },
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "style.base.css",
+        source: readFileSync(PAGE_CSS, "utf8"),
+      });
+    },
+  };
+}
 
 /**
  * Multi-entry library build (P2.4).
@@ -16,13 +47,15 @@ const external = externalsFromPackageJson(resolve(__dirname, "package.json"));
  *   dist/a11y.{mjs,cjs}       ← ./a11y
  *   dist/timeline.{mjs,cjs}   ← ./timeline (opt-in; see below)
  *   dist/style.css            ← extracted CSS (from index entry)
+ *   dist/style.base.css       ← ./style.base.css (opt-in page reset;
+ *                                emitted by emitPageStylesheet below)
  *
  * `timeline` is its own entry for a packaging reason, not an
  * organisational one. TimelineView statically imports vis-timeline and
  * vis-data, which are OPTIONAL peers, and rollup will hoist a module
  * shared by two entries into a common chunk. While it was reachable from
  * both `index` and `views` it landed in a chunk both of those imported,
- * so `import "@g3t/react"` failed to resolve for anyone who took the
+ * so `import "@g3-toolkit/react"` failed to resolve for anyone who took the
  * documented install. A dedicated entry keeps the bare specifiers behind
  * a subpath nobody reaches by accident. scripts/check-optional-peers.mjs
  * fails the build if they leak back out.
@@ -36,10 +69,10 @@ export default defineConfig({
   // 425.9 -> 357.1). Sourcemaps ship, so full minify is strictly
   // better than readable identifiers; the bundle budgets were
   // REBASED to this measurement basis in the same commit (ledger).
-  plugins: [react()],
+  plugins: [react(), emitPageStylesheet()],
   resolve: {
     alias: {
-      "@g3t/core": resolve(__dirname, "../core/src"),
+      "@g3-toolkit/core": resolve(__dirname, "../core/src"),
     },
   },
   build: {
@@ -66,7 +99,7 @@ export default defineConfig({
       // while both formats ship. Typed CJS never worked anyway (one
       // ESM-flavored .d.ts per entry, so `require` from a .cts raised
       // TS1479), and no consumer, example, doc snippet or test in this
-      // repository requires a @g3t package. Dropping it also removes
+      // repository requires a @g3-toolkit package. Dropping it also removes
       // 44% of emitted runtime JS.
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.mjs`,

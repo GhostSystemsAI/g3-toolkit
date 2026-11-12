@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { UGM, G3tEventBus } from "@g3t/core";
+import { UGM, G3tEventBus } from "@g3-toolkit/core";
 import type { Core } from "cytoscape";
 import { wireCytoscapeContextActions } from "./wire-cytoscape-actions";
 
@@ -89,7 +89,7 @@ describe("wireCytoscapeContextActions", () => {
     unsub();
   });
 
-  it("sets display:none + addClass on context:hideNodes", () => {
+  it("hides through the g3t-hidden class only, never a display bypass (issue #50)", () => {
     const ugm = makeUGM();
     const cy = makeMockCy();
     const bus = new G3tEventBus();
@@ -99,8 +99,12 @@ describe("wireCytoscapeContextActions", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c = (cy as any).__elById.get("c") as MockEl;
-    expect(c.style).toHaveBeenCalledWith("display", "none");
     expect(c.addClass).toHaveBeenCalledWith("g3t-hidden");
+    // A `display` bypass outranks the stylesheet, so the `hidden` prop's
+    // class toggle could never un-hide a node hidden here. The class is
+    // the whole mechanism; the rule `.g3t-hidden { display: none }` and
+    // Cytoscape's endpoint-driven edge visibility do the rest.
+    expect(c.style).not.toHaveBeenCalled();
 
     unsub();
   });

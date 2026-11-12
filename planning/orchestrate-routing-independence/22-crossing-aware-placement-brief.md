@@ -1,7 +1,7 @@
 # Brief 22 — crossing-aware placement optimizer (@g3t/core)
 
 project: g3_toolkit
-cwd: /GSystems/src/g3-toolkit
+cwd: /GSystems/src/misc/g3-toolkit
 branch: docs/ai-agent-guide (local commit only; NO push, NO PR)
 model: opus
 part_of: orchestrate-routing-independence (advanced smart routing capability, A54)

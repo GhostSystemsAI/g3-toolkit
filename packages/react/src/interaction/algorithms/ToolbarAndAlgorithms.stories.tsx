@@ -8,7 +8,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useMemo, useState } from "react";
 import type { Core } from "cytoscape";
-import { UGM } from "@g3t/core";
+import { UGM } from "@g3-toolkit/core";
 import { GraphToolbar } from "../toolbar/GraphToolbar";
 import { AlgorithmPanel } from "../algorithms/AlgorithmPanel";
 import { CytoscapeCanvas } from "../../views/canvas/CytoscapeCanvas";
@@ -44,7 +44,7 @@ export const Toolbar: StoryObj = {
           "`GraphToolbar` composes search (camera centers on match), " +
           "layout switching with force controls (popover commits via " +
           "Run layout), Shuffle, Pin all (whole-graph position lock " +
-          "through the position-pin store), and zoom, over the cy " +
+          "through the position-pin store), and zoom, over the `core` " +
           "handle from `CytoscapeCanvas onReady`.",
       },
     },
@@ -54,7 +54,7 @@ export const Toolbar: StoryObj = {
     const [cy, setCy] = useState<Core | null>(null);
     return (
       <div style={{ height: 460 }}>
-        <GraphToolbar ugm={ugm} cy={cy} />
+        <GraphToolbar ugm={ugm} core={cy} />
         <CytoscapeCanvas ugm={ugm} onReady={setCy} />
       </div>
     );

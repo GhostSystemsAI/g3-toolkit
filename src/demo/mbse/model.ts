@@ -12,7 +12,9 @@
  * fields the four diagram projections need.
  */
 
-export type DiagramType = "bdd" | "ibd" | "par" | "req";
+import type { StructuralGraphInput } from "@g3-toolkit/core";
+
+export type DiagramType = "bdd" | "ibd" | "par" | "req" | "act";
 
 /** A value property (attribute) on a block: `name: Type [mult]`. */
 export interface ValueProperty {
@@ -117,6 +119,13 @@ export interface Diagram {
   bindings?: string[];
   /** Root requirement ids (req diagrams). */
   requirements?: string[];
+  /**
+   * Activity (act) diagrams carry a pre-built structural graph directly
+   * instead of projecting a SysML subset: the flowchart IS the authored
+   * document. projectACT returns this verbatim. Nodes use the plain-node
+   * `shape` field for UML activity glyphs (diamond decisions, terminals).
+   */
+  activityGraph?: StructuralGraphInput;
 }
 
 export interface Package {

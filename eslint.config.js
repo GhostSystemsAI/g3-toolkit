@@ -23,6 +23,14 @@ export default tseslint.config(
       "docs-out/",
       "storybook-static/",
       "coverage/",
+      ".verify-snippets/",
+      ".bio-route-probe*.mjs",
+      // Materialized conda environment: vendored code by any measure,
+      // and ~700 lint errors when present. .prettierignore already had
+      // it; this list did not, and flat config does not read
+      // .gitignore, so `pnpm run lint` was green in CI (no .pixi there)
+      // and red for anyone who had run `pixi install`.
+      ".pixi/",
     ],
   },
   js.configs.recommended,
@@ -31,6 +39,16 @@ export default tseslint.config(
     plugins: { "react-hooks": reactHooks },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // AFTER the spread, which sets this to "warn". Seven of these
+      // accumulated as warnings and two were real defects by the time
+      // anyone read them: a legend that stopped tracking its input, and
+      // a wheel handler zooming from a stale controlled view. A warning
+      // that nothing fails on is a defect with a comment on it. Genuine
+      // exceptions take an eslint-disable with the reason written out
+      // (see ThreadShell's harvest memo); reportUnusedDisableDirectives
+      // is on by default in flat config, so those surface as stale if
+      // the code they guard is ever restructured.
+      "react-hooks/exhaustive-deps": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_" },
@@ -59,6 +77,24 @@ export default tseslint.config(
     files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}"],
     rules: {
       "@typescript-eslint/no-non-null-assertion": "off",
+    },
+  },
+  {
+    // Library, demo, example and test code never writes to the process
+    // streams directly. A timing probe (`process.stderr.write("PROBE ...")`)
+    // was committed in ScaleSurface.test.tsx because nothing here objected;
+    // scripts/ and root configs are Node tooling and keep stdout/stderr.
+    files: ["{src,packages,examples,tests}/**/*.{ts,tsx,js,mjs,cjs}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.property.name='write'][callee.object.property.name=/^(stdout|stderr)$/][callee.object.object.name='process']",
+          message:
+            "No direct process.stdout/stderr writes outside scripts/ (stray debug probe). Assert on the value instead.",
+        },
+      ],
     },
   },
   prettier,

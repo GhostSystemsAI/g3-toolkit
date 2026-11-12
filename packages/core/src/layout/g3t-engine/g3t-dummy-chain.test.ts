@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   DUMMY_NODE_SIZE,
   chooseDummyParent,
+  clearHintCross,
   harvestBendHints,
   isDummyId,
   splitLongSpanEdges,
@@ -381,5 +382,62 @@ describe("perimeter policy vs bend-hint seeding", () => {
     });
     // Perimeter routed, so no intermediate seed on the emitted edge.
     expect(routed["e"]?.intermediate).toBeUndefined();
+  });
+});
+
+describe("bend hints clear same-layer real boxes (g3_toolkit ec55a139)", () => {
+  // n1 -> n3 spans two layers past n2, which shares the dummy's layer.
+  // Plain interpolation put the e13 hint at (184,0): the centre of n2.
+  const fanPast = (): StructuralGraphInput => ({
+    nodes: ["n1", "n2", "n3", "n4"].map((id) => ({
+      id,
+      width: 80,
+      height: 40,
+    })),
+    edges: [
+      { id: "e12", source: "n1", target: "n2" },
+      { id: "e23", source: "n2", target: "n3" },
+      { id: "e14", source: "n1", target: "n4" },
+      { id: "e13", source: "n1", target: "n3" },
+    ],
+  });
+
+  for (const direction of ["RIGHT", "DOWN", "LEFT", "UP"] as const) {
+    it(`${direction}: no intermediate hint lies inside any node box`, () => {
+      const g = g3tLayoutStructural(fanPast(), { direction });
+      const inter = (g.edges ?? {})["e13"]?.intermediate ?? [];
+      expect(inter.length).toBe(1);
+      for (const p of inter) {
+        for (const [id, b] of Object.entries(g.nodes)) {
+          const inside =
+            p.x > b.x &&
+            p.x < b.x + b.width &&
+            p.y > b.y &&
+            p.y < b.y + b.height;
+          expect(inside, `hint (${p.x},${p.y}) inside ${id}`).toBe(false);
+        }
+      }
+    });
+  }
+
+  it("clearHintCross: leaves a clear coordinate, exits to the nearer end", () => {
+    expect(clearHintCross(60, [[0, 40]], 12)).toBe(60);
+    expect(clearHintCross(10, [[0, 40]], 12)).toBe(-12);
+    expect(clearHintCross(35, [[0, 40]], 12)).toBe(52);
+    // Tie resolves to the lower end.
+    expect(clearHintCross(20, [[0, 40]], 12)).toBe(-12);
+  });
+
+  it("clearHintCross: a 2*clearance gap yields its midline; tighter gaps merge", () => {
+    const touching: [number, number][] = [
+      [0, 40],
+      [64, 104],
+    ];
+    expect(clearHintCross(45, touching, 12)).toBe(52);
+    const tight: [number, number][] = [
+      [0, 40],
+      [50, 90],
+    ];
+    expect(clearHintCross(45, tight, 12)).toBe(-12);
   });
 });

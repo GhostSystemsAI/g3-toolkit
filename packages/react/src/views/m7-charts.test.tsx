@@ -9,9 +9,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { stubChartDims } from "../../../../tests/chart-dims";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { UGM } from "@g3t/core";
+import { UGM } from "@g3-toolkit/core";
 import { useSelectionStore } from "../state/selection-store";
 import { MatrixView } from "../views/matrix";
+import { SankeyView } from "../views/sankey";
 
 beforeEach(() => {
   useSelectionStore.setState({
@@ -40,7 +41,6 @@ stubChartDims();
 
 describe("SankeyView (M7.E1.T1, T2)", () => {
   it("shows empty state for graph with no edges", async () => {
-    const { SankeyView } = await import("../views/sankey");
     const ugm = new UGM();
     ugm.addNode("a", { types: ["X"] });
 
@@ -49,7 +49,6 @@ describe("SankeyView (M7.E1.T1, T2)", () => {
   });
 
   it("renders sankey container and mode buttons for graph with edges", async () => {
-    const { SankeyView } = await import("../views/sankey");
     const ugm = createFlowGraph();
 
     // ECharts may fail to init canvas in jsdom; verify component renders

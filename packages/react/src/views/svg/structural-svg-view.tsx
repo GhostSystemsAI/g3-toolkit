@@ -19,14 +19,14 @@
  * cannot drift apart on relationship semantics.
  */
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { routeStructuralEdges, hitTestStructural } from "@g3t/core";
+import { routeStructuralEdges, hitTestStructural } from "@g3-toolkit/core";
 import type {
   StructuralGeometry,
   StructuralGraphInput,
   StructuralHit,
   GlyphSlot,
   StructuralNodeStyle,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import {
   useElementPointerEvents,
   type ElementPointerHandlers,
@@ -37,6 +37,7 @@ import {
   shortenPolyline,
   type UmlEdgeKind,
 } from "../canvas/structural-edge-overlay";
+import { viewClass } from "../../theme/view-class";
 
 export interface StructuralSvgTheme {
   background: string;
@@ -165,6 +166,99 @@ function glyphBox(
   }
 }
 
+/** Activity-diagram node shapes (flowchart support, R-13). "rect" is
+ *  the default rounded box; the rest are UML activity glyphs.
+ *  initial/final/fork carry no text label. */
+type NodeShape = "rect" | "diamond" | "ellipse" | "initial" | "final" | "fork";
+
+const LABELLESS_SHAPES: ReadonlySet<NodeShape> = new Set<NodeShape>([
+  "initial",
+  "final",
+  "fork",
+]);
+
+interface ShapeStyle {
+  fill: string;
+  stroke: string;
+  opacity?: number;
+  strokeWidth: number;
+}
+
+/** Draw a plain node's body as its declared activity shape. Every
+ *  shape is inscribed in the SAME bounding box the layout produced, so
+ *  the bounding-box hit test and the box-avoiding router are unchanged:
+ *  a diamond is grabbed and routed-around exactly as its rect would be. */
+function nodeShapeElement(
+  shape: NodeShape,
+  g: { x: number; y: number; width: number; height: number },
+  s: ShapeStyle,
+): React.JSX.Element {
+  const { x, y, width: w, height: h } = g;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const box = {
+    fill: s.fill,
+    stroke: s.stroke,
+    opacity: s.opacity,
+    strokeWidth: s.strokeWidth,
+  };
+  switch (shape) {
+    case "diamond":
+      return (
+        <path
+          d={`M${cx} ${y} L${x + w} ${cy} L${cx} ${y + h} L${x} ${cy} Z`}
+          {...box}
+        />
+      );
+    case "ellipse":
+      return <ellipse cx={cx} cy={cy} rx={w / 2} ry={h / 2} {...box} />;
+    case "initial": {
+      const r = Math.min(w, h) / 2;
+      return (
+        <circle cx={cx} cy={cy} r={r} fill={s.stroke} opacity={s.opacity} />
+      );
+    }
+    case "final": {
+      const r = Math.min(w, h) / 2;
+      return (
+        <>
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke={s.stroke}
+            strokeWidth={s.strokeWidth}
+            opacity={s.opacity}
+          />
+          <circle
+            cx={cx}
+            cy={cy}
+            r={Math.max(1, r - 3.5)}
+            fill={s.stroke}
+            opacity={s.opacity}
+          />
+        </>
+      );
+    }
+    case "fork":
+      return (
+        <rect
+          x={x}
+          y={cy - 3}
+          width={w}
+          height={6}
+          rx={1}
+          fill={s.stroke}
+          opacity={s.opacity}
+        />
+      );
+    case "rect":
+    default:
+      return <rect x={x} y={y} width={w} height={h} rx={6} {...box} />;
+  }
+}
+
 export interface StructuralSvgViewProps extends ElementPointerHandlers<StructuralHit> {
   /** R-2 (round 17): per-node affordance drawn as a bordered box in
    *  the header strip, with its own hit zone ("glyph") so consumers
@@ -232,6 +326,19 @@ export interface StructuralSvgViewProps extends ElementPointerHandlers<Structura
   /** Flow direction of the layout that produced `geometry`; the
    *  live drag re-router anchors against it (RTE-011). */
   direction?: "RIGHT" | "LEFT" | "DOWN" | "UP";
+  /** Routing options for the live drag re-route (RTE-011). Pass the
+   *  same routing knobs the layout that produced `geometry` used
+   *  (nudge, trackGap, anchorPitch, smartAttach, ...) so a drag
+   *  re-routes the way the layout did. Defaults: `nudge: true` and
+   *  `longEdgeNear: 12` (the layout pipeline's default). Nudge is on
+   *  by default here because a drag packs boxes the layout never
+   *  reserved corridors for; without the separation pass every
+   *  moved edge's jog targets the same corridor midline and the
+   *  runs draw on top of each other. `direction` above wins. */
+  dragRouteOptions?: Omit<
+    NonNullable<Parameters<typeof routeStructuralEdges>[2]>,
+    "direction"
+  >;
   /** LR-46 (owner review 2026-07-22): SHACL-style decorations so
    *  the shapes surface can ride this view. Row ids map to their
    *  worst validation severity (text tint); closed containers get
@@ -263,6 +370,7 @@ export function StructuralSvgView({
   input,
   geometry,
   direction = "RIGHT",
+  dragRouteOptions,
   rowSeverities,
   closedContainers,
   width,
@@ -415,11 +523,16 @@ export function StructuralSvgView({
   const liveRoutes = useMemo(() => {
     if (Object.keys(dragOffsets).length === 0) return null;
     try {
-      return routeStructuralEdges(input, effectiveGeometry, { direction });
+      return routeStructuralEdges(input, effectiveGeometry, {
+        nudge: true,
+        longEdgeNear: 12,
+        ...dragRouteOptions,
+        direction,
+      });
     } catch {
       return null; // last-resort fallback below stays honest
     }
-  }, [dragOffsets, input, effectiveGeometry, direction]);
+  }, [dragOffsets, input, effectiveGeometry, direction, dragRouteOptions]);
 
   const draggedEdgeFallback = useMemo(() => {
     const moved = new Set(Object.keys(dragOffsets));
@@ -500,6 +613,19 @@ export function StructuralSvgView({
   // stands inside it: event-derived values are captured before the
   // deferred state updater runs.
   const svgRef = useRef<SVGSVGElement | null>(null);
+  // setView is useCallback([viewProp]), so in CONTROLLED mode its
+  // identity changes whenever the host supplies a new view. The native
+  // listener below binds once (deps [], deliberately: a non-passive
+  // listener must not be torn down and re-added on every controlled
+  // view change, which is what listing setView as a dependency would
+  // do), so it would otherwise hold the FIRST render's closure and
+  // resolve `const base = viewProp ?? prev` against a stale viewProp:
+  // wheel-zoom composing from a view the host had already replaced.
+  // Same ref indirection the drag handlers below use.
+  const setViewRef = useRef(setView);
+  React.useEffect(() => {
+    setViewRef.current = setView;
+  }, [setView]);
   React.useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
@@ -515,7 +641,7 @@ export function StructuralSvgView({
       const factor =
         e.deltaY < 0 ? Math.pow(1.1, magnitude) : Math.pow(1 / 1.1, magnitude);
       const rect = el.getBoundingClientRect();
-      setView((v) =>
+      setViewRef.current((v) =>
         zoomAbout(v, factor, e.clientX - rect.left, e.clientY - rect.top),
       );
     };
@@ -671,6 +797,7 @@ export function StructuralSvgView({
 
   return (
     <svg
+      className={viewClass()}
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
@@ -939,7 +1066,9 @@ export function StructuralSvgView({
           // features apply here too; a plain node has no header
           // strip, so the glyph sits inside the box's own corner and
           // the two-line form splits the label.
-          const header = input.nodes.find((n) => n.id === id)?.header;
+          const inputNode = input.nodes.find((n) => n.id === id);
+          const header = inputNode?.header;
+          const shape: NodeShape = inputNode?.shape ?? "rect";
           const twoLine =
             headerLines === 2 &&
             header?.stereotype !== undefined &&
@@ -947,54 +1076,55 @@ export function StructuralSvgView({
           const glyph = glyphs?.get(id);
           const label = g.text ?? header?.name ?? id;
           return (
-            <g key={id} data-ssv-node={id} data-ssv-kind="node">
-              <rect
-                x={g.x}
-                y={g.y}
-                width={g.width}
-                height={g.height}
-                rx={6}
-                fill={nodeStyles?.get(id)?.fill ?? theme.nodeFill}
-                stroke={nodeStyles?.get(id)?.stroke ?? theme.containerStroke}
-                opacity={nodeStyles?.get(id)?.opacity}
-                strokeWidth={nodeStyles?.get(id)?.strokeWidth ?? 1.2}
-              />
-              {twoLine && header ? (
-                <>
+            <g
+              key={id}
+              data-ssv-node={id}
+              data-ssv-kind="node"
+              data-ssv-shape={shape}
+            >
+              {nodeShapeElement(shape, g, {
+                fill: nodeStyles?.get(id)?.fill ?? theme.nodeFill,
+                stroke: nodeStyles?.get(id)?.stroke ?? theme.containerStroke,
+                opacity: nodeStyles?.get(id)?.opacity,
+                strokeWidth: nodeStyles?.get(id)?.strokeWidth ?? 1.2,
+              })}
+              {!LABELLESS_SHAPES.has(shape) &&
+                (twoLine && header ? (
+                  <>
+                    <text
+                      x={g.x + g.width / 2}
+                      y={g.y + g.height / 2 - 3}
+                      textAnchor="middle"
+                      fontSize={9.5}
+                      fontWeight={500}
+                      fill={theme.nodeText}
+                      data-ssv-label-stereotype={id}
+                    >
+                      {`\u00ab${header.stereotype ?? ""}\u00bb`}
+                    </text>
+                    <text
+                      x={g.x + g.width / 2}
+                      y={g.y + g.height / 2 + 10}
+                      textAnchor="middle"
+                      fontSize={11}
+                      fill={theme.nodeText}
+                      data-ssv-label={id}
+                    >
+                      {header.name}
+                    </text>
+                  </>
+                ) : (
                   <text
                     x={g.x + g.width / 2}
-                    y={g.y + g.height / 2 - 3}
-                    textAnchor="middle"
-                    fontSize={9.5}
-                    fontWeight={500}
-                    fill={theme.nodeText}
-                    data-ssv-label-stereotype={id}
-                  >
-                    {`\u00ab${header.stereotype ?? ""}\u00bb`}
-                  </text>
-                  <text
-                    x={g.x + g.width / 2}
-                    y={g.y + g.height / 2 + 10}
+                    y={g.y + g.height / 2 + 4}
                     textAnchor="middle"
                     fontSize={11}
                     fill={theme.nodeText}
                     data-ssv-label={id}
                   >
-                    {header.name}
+                    {label}
                   </text>
-                </>
-              ) : (
-                <text
-                  x={g.x + g.width / 2}
-                  y={g.y + g.height / 2 + 4}
-                  textAnchor="middle"
-                  fontSize={11}
-                  fill={theme.nodeText}
-                  data-ssv-label={id}
-                >
-                  {label}
-                </text>
-              )}
+                ))}
               {glyph !== undefined && (
                 <g
                   className="g3t-ssv-glyph"

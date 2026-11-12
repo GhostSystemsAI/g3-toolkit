@@ -14,7 +14,7 @@
  * copy.
  *
  * Pure stages (generation, collapse, drill) are budget-tested in
- * @g3t/core (collapse-by-cluster.test.ts); this surface's contract
+ * @g3-toolkit/core (collapse-by-cluster.test.ts); this surface's contract
  * tests pin the wiring with the canvas stubbed. Rendering performance
  * at this scale remains browser-verified.
  */
@@ -25,7 +25,7 @@ import {
   GraphToolbar,
   useSelectionStore,
   type EncodingSpec,
-} from "@g3t/react";
+} from "@g3-toolkit/react";
 import type { Core } from "cytoscape";
 import {
   bundleEdges,
@@ -34,12 +34,16 @@ import {
   buildSubgraph,
   clusterBadgeText,
   UGM,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 import { SurfaceFrame } from "../surfaces/DashboardSurfaces";
 import { CapabilityBubble } from "../components/CapabilityCallout";
 import { usePrefersReducedMotion } from "../components/usePrefersReducedMotion";
 import { publishCanvas } from "../testing/e2e-hooks";
 import { generateScaleGraph, SCALE_SEED } from "./generate";
+import {
+  useRoutingControls,
+  RoutingControlStrip,
+} from "../components/routing-controls";
 
 /** Color driver switches between the type channel (uniform in the
  *  clusters view: every supernode is a Cluster) and the dominant
@@ -107,6 +111,17 @@ function buildModel(): Model {
     attrs.properties._badge = clusterBadgeText(attrs.properties);
   });
   return { full, clustered, members, genMs, collapseMs, edgeCount };
+}
+
+/** The seeded model is deterministic and never mutated, so it is built
+ *  once per page, not once per mount: useMemo alone re-ran the 8,000-node
+ *  generation plus Louvain on every return to the surface (and on every
+ *  test render, which timed the suite out under parallel load). The
+ *  "measured live" timings are the first build's, which is what they
+ *  always claimed to measure. Module scope, like POS_CACHE. */
+let MODEL: Model | null = null;
+function getModel(): Model {
+  return (MODEL ??= buildModel());
 }
 
 type View = { kind: "clusters" } | { kind: "drill"; superId: string };
@@ -263,7 +278,7 @@ function markReady(label: string) {
 }
 
 export function ScaleSurface({ onBack }: { onBack: () => void }) {
-  const model = useMemo(() => buildModel(), []);
+  const model = getModel();
 
   const reducedMotion = usePrefersReducedMotion();
   // Live instance for the GraphToolbar (review 4.1; also the 5.14
@@ -286,15 +301,15 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
   // Well below the maxEdges=2000 cap in every layout; scoped to the
   // clusters view (the raw drill graph exceeds it and would bypass).
   const [bundleOn, setBundleOn] = useState(false);
-  const [routeMode, setRouteMode] = useState<"direct" | "orthogonal" | "off">(
-    "direct",
-  );
-  const [routeRefreshSignal, setRouteRefreshSignal] = useState(0);
-  const [relayoutSignal, setRelayoutSignal] = useState(0);
-  const routeEdgesConfig =
-    routeMode === "off"
-      ? (false as const)
-      : ({ mode: routeMode } as { mode: "direct" | "orthogonal" });
+  const {
+    routeMode,
+    setRouteMode,
+    routeEdgesConfig,
+    routeRefreshSignal,
+    refreshRoutes,
+    relayoutSignal,
+    relayout,
+  } = useRoutingControls();
   const spec = useMemo(
     () =>
       makeSpec(
@@ -478,6 +493,15 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
             Clusters are Louvain communities detected in-browser; each is named
             by its dominant member type and its most-connected member.
           </div>
+          <div style={{ padding: "6px 12px 0" }}>
+            <RoutingControlStrip
+              idPrefix="scale"
+              routeMode={routeMode}
+              setRouteMode={setRouteMode}
+              refreshRoutes={refreshRoutes}
+              relayout={relayout}
+            />
+          </div>
           {view.kind === "clusters" && (
             <div style={{ padding: "6px 12px 0" }}>
               <button
@@ -552,67 +576,6 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
               >
                 {edgeLabels ? "Hide edge labels" : "Show edge labels"}
               </button>
-              <label
-                style={{
-                  fontSize: 11,
-                  display: "flex",
-                  gap: 4,
-                  alignItems: "center",
-                  marginTop: 6,
-                }}
-              >
-                Routes
-                <select
-                  data-testid="scale-route-mode"
-                  value={routeMode}
-                  onChange={(e) =>
-                    setRouteMode(
-                      e.target.value as "direct" | "orthogonal" | "off",
-                    )
-                  }
-                  style={{ fontSize: 11 }}
-                >
-                  <option value="direct">Direct (auto-Z)</option>
-                  <option value="orthogonal">Orthogonal (always)</option>
-                  <option value="off">Off (bezier)</option>
-                </select>
-              </label>
-              <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                <button
-                  type="button"
-                  data-testid="scale-refresh-routes"
-                  onClick={() => setRouteRefreshSignal((n) => n + 1)}
-                  style={{
-                    font: "inherit",
-                    fontSize: 11,
-                    padding: "3px 10px",
-                    border: "1px solid #7ee081",
-                    borderRadius: 4,
-                    background: "transparent",
-                    color: "inherit",
-                    cursor: "pointer",
-                  }}
-                >
-                  Refresh routes
-                </button>
-                <button
-                  type="button"
-                  data-testid="scale-relayout"
-                  onClick={() => setRelayoutSignal((n) => n + 1)}
-                  style={{
-                    font: "inherit",
-                    fontSize: 11,
-                    padding: "3px 10px",
-                    border: "1px solid #7ee081",
-                    borderRadius: 4,
-                    background: "transparent",
-                    color: "inherit",
-                    cursor: "pointer",
-                  }}
-                >
-                  Re-layout
-                </button>
-              </div>
             </div>
           )}
           <div style={{ marginTop: 10 }}>
@@ -682,7 +645,7 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
               zIndex: 5,
             }}
           >
-            <GraphToolbar ugm={canvasUgm} cy={core} />
+            <GraphToolbar ugm={canvasUgm} core={core} />
           </div>
           <CytoscapeCanvas
             ugm={canvasUgm}
@@ -714,10 +677,7 @@ export function ScaleSurface({ onBack }: { onBack: () => void }) {
             ]}
             layoutOptions={layoutOptions}
             layout={cachedPositions ? "preset" : undefined}
-            // D3: route only in the collapsed clusters view; the raw
-            // 8k-node drill view exceeds the 600-edge cap and would
-            // skip anyway. Explicit here so the intent is legible.
-            routeEdges={view.kind === "clusters" ? routeEdgesConfig : false}
+            routeEdges={routeEdgesConfig}
             routeRefreshSignal={routeRefreshSignal}
             relayoutSignal={relayoutSignal}
             edgeClickIsolate

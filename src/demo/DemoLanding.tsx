@@ -53,6 +53,17 @@ function surfaceVisibleHere(id: string): boolean {
 
 export const CAPABILITY_SURFACES: Scenario[] = [
   {
+    id: "routing-flowcharts",
+    title: "Routing Flowcharts",
+    subtitle: "The edge routers charted as drillable activity diagrams",
+    description:
+      "The library's own two edge routers documented as UML activity flowcharts, rendered by the same structural engine they drive. An interaction overview shows how a scene is routed by the structural (layered) router or the direct-unless-crossing scene router; drill a router to its pipeline, and drill the structural router's escalation ladder to its per-attempt internals. Built from StructuralNode.shape glyphs (diamond decisions, initial/final terminals) plus a node-to-diagram drill map: the reusable recipe for authoring your own flowcharts.",
+    accent: "#34d399",
+    accentGlow: "rgba(52, 211, 153, 0.15)",
+    icon: "⤳",
+    tags: ["activity shapes", "drill-down", "layoutStructural"],
+  },
+  {
     id: "analytics-dashboard",
     title: "Analytics Dashboard",
     subtitle: "Charts, stats, algorithms, derived properties, coverage",
@@ -148,11 +159,11 @@ export const SCENARIOS: Scenario[] = [
     title: "Provenance Auditor",
     subtitle: "PROV-O audit trail with SHACL",
     description:
-      "Audit a PROV-O trail of artifacts, activities, and agents. SHACL flags provenance defects as violations and warnings and projects them onto the graph; a timeline lists every generation, start, and end; and a dual-range slider filters both the timeline and the graph to a time window.",
+      "Audit a PROV-O trail of artifacts, activities, and agents. SHACL flags provenance defects as violations and warnings and projects them onto the graph; a timeline lists every generation, start, and end; and a dual-range slider filters both the timeline and the graph to a time window. The canvas is narrated for screen readers: selection, lineage step, SHACL standing, and the time window.",
     accent: "#2dd4bf",
     accentGlow: "rgba(45, 212, 191, 0.15)",
     icon: "◈",
-    tags: ["PROV-O", "SHACL", "timeline slider"],
+    tags: ["PROV-O", "SHACL", "timeline slider", "screen reader"],
   },
   {
     id: "mbse",
@@ -181,7 +192,7 @@ export const SCENARIOS: Scenario[] = [
     title: "Biomedical Knowledge Graph",
     subtitle: "RDF ontology with in-browser SPARQL",
     description:
-      "Query an RDF gene / protein / disease / drug / pathway graph with a curated in-browser SPARQL executor. Browse the class ontology and its object and data properties, run the default queries or edit your own, and see numeric results in a linked bar or scatter panel whose bars select the matching node.",
+      "Query an RDF gene / protein / disease / drug / pathway graph with a curated in-browser SPARQL executor. Browse the class ontology and its object and data properties, run the default queries or edit your own, and see numeric results in a linked bar or scatter panel whose bars select the matching node. The canvas compares label-collision modes on one scene, and its Explore view grows the drawn graph one neighborhood at a time without re-laying it out.",
     accent: "#b17ef0",
     accentGlow: "rgba(177, 126, 240, 0.15)",
     icon: "◉",
@@ -445,6 +456,18 @@ export function DemoLanding({
               {label}
             </a>
           ))}
+        </div>
+        <div
+          data-testid="landing-version"
+          style={{
+            marginTop: 18,
+            fontFamily: "var(--g3t-font-mono, monospace)",
+            fontSize: 11,
+            color: "#334155",
+            letterSpacing: "0.04em",
+          }}
+        >
+          V{__APP_VERSION__}
         </div>
       </div>
     </div>

@@ -11,7 +11,8 @@
 // SHACL validation and relationship creation via drag are not yet
 // wired; R2.12 is tracked as in-progress in specs/02.
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { UGM } from "@g3t/core";
+import type { UGM } from "@g3-toolkit/core";
+import { viewClass } from "../../theme/view-class";
 
 export interface PropertyEditCallback {
   onPropertyChange(
@@ -127,7 +128,7 @@ export function PropertyEditor({
 
   return (
     <div
-      className={className}
+      className={viewClass(className)}
       data-testid="property-editor"
       style={{ fontSize: 12 }}
     >
@@ -169,7 +170,7 @@ export function PropertyEditor({
                 fontSize: 12,
                 fontFamily: "inherit",
                 padding: "2px 4px",
-                border: "1px solid var(--g3t-accent, #2563eb)",
+                border: "1px solid var(--g3t-accent-primary, #2563eb)",
                 borderRadius: 3,
                 outline: "none",
                 background: "var(--g3t-bg-primary)",

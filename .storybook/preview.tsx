@@ -1,19 +1,23 @@
 import type { Decorator, Preview } from "@storybook/react-vite";
 import { useEffect } from "react";
 // Use package-level imports rather than reaching into source. After the
-// Phase-2 workspace split the theme modules live in @g3t/react (for
-// useThemeStore) and @g3t/core (for injectDesignTokens). Reaching into
+// Phase-2 workspace split the theme modules live in @g3-toolkit/react (for
+// useThemeStore) and @g3-toolkit/core (for injectDesignTokens). Reaching into
 // the source tree (../src/theme/...) targeted the pre-split layout and
 // no longer resolves; importing from the packages also matches how
 // consumers use the toolkit, which is what stories should demonstrate.
-import { useThemeStore } from "@g3t/react";
-import { injectDesignTokens } from "@g3t/core";
+import { useThemeStore } from "@g3-toolkit/react";
+import { injectDesignTokens } from "@g3-toolkit/core";
 // Storybook serves from source, so reach into the package's CSS source
 // file directly. The published packages export this same file as the
-// './style.css' subpath ('@g3t/react/style.css'), but that resolves to
+// './style.css' subpath ('@g3-toolkit/react/style.css'), but that resolves to
 // dist/style.css which only exists after build. For dev mode this
 // works against the live source file.
 import "../packages/react/src/theme/g3t-base.css";
+// The page reset and body typography are a separate OPT-IN file
+// (issue #24: the component stylesheet must not restyle a host page).
+// Storybook is our own page, so it opts in, as the playground does.
+import "../packages/react/src/theme/g3t-page.css";
 
 // Capitalised because Storybook RENDERS a decorator as a component, and
 // this one calls hooks. Lowercase `withTheme` read to react-hooks as a

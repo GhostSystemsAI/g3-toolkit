@@ -1,5 +1,5 @@
 /**
- * @g3t/react/controls subpath barrel.
+ * @g3-toolkit/react/controls subpath barrel.
  *
  * Interactive controls: encoding panels, filtering, search, toolbar,
  * context menus, tag/group managers, layout switching, etc.
@@ -32,12 +32,15 @@ export * from "./layout-manager";
 export * from "./temporal";
 export * from "./property-editor";
 export * from "./annotations";
+// Overlay sequencing (issue #20): a layer over the overlay store that
+// walks owned ids in order and never touches foreign ones.
+export * from "./overlay";
 
-// path-analysis is D6 (per its own header) and was moved to @g3t/core
+// path-analysis is D6 (per its own header) and was moved to @g3-toolkit/core
 // in P3.x. Re-exported here for backwards compatibility. Prefer importing
-// directly from @g3t/core in new code.
-export { findShortestPath } from "@g3t/core";
-export type { PathResult, PathOptions } from "@g3t/core";
+// directly from @g3-toolkit/core in new code.
+export { findShortestPath } from "@g3-toolkit/core";
+export type { PathResult, PathOptions } from "@g3-toolkit/core";
 
 // Type-only re-exports so this subpath is self-sufficient: both name a
 // prop type of a component this barrel already exports, and both were
@@ -54,6 +57,7 @@ export type { ExpandResult } from "./neighbors";
 //  remaining-tickets.tsx in P3.5. Symbols flow in via the earlier
 //  `export * from` lines for ./context-menu, ./temporal, ./property-editor.)
 export * from "./feedback";
+export * from "./pagination";
 export {
   GraphToolbar,
   runGraphLayout,

@@ -8,8 +8,10 @@
  *    the select changes
  *  - DEV-only: the "DEV only" badge renders (not a gate test, just
  *    confirms the label is present for reviewers)
+ *  - page-scoped flow layout: once laid out, a remount renders the
+ *    flow diagram on its first frame (no per-mount async re-layout)
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -17,8 +19,11 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import type { CyStylesheet } from "@g3t/react";
-import type { StructuralGraphInput, StructuralGeometry } from "@g3t/core";
+import type { CyStylesheet } from "@g3-toolkit/react";
+import type {
+  StructuralGraphInput,
+  StructuralGeometry,
+} from "@g3-toolkit/core";
 
 const captured = vi.hoisted(() => ({
   canvasCalls: [] as Array<{
@@ -31,8 +36,8 @@ const captured = vi.hoisted(() => ({
   }>,
 }));
 
-vi.mock("@g3t/react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@g3t/react")>();
+vi.mock("@g3-toolkit/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@g3-toolkit/react")>();
   return {
     ...actual,
     CytoscapeCanvas: (props: {
@@ -66,6 +71,23 @@ afterEach(() => {
 });
 
 describe("RoutingExplainShell", () => {
+  // The flow diagram is laid out once per page. Pay that one-time async
+  // layout here under its own budget: on a saturated host (two full
+  // vitest runs at once) it alone outran waitFor's 1 s default and
+  // landed on whichever test waited for it.
+  beforeAll(async () => {
+    render(<RoutingExplainShell />);
+    await waitFor(
+      () => {
+        expect(captured.svgCalls.length).toBeGreaterThan(0);
+      },
+      { timeout: 15_000 },
+    );
+    cleanup();
+    captured.canvasCalls.length = 0;
+    captured.svgCalls.length = 0;
+  }, 30_000);
+
   it("mounts and renders the flow diagram host and canvas host", async () => {
     render(<RoutingExplainShell />);
     expect(screen.getByTestId("rexplain-flow-host")).toBeTruthy();
@@ -82,30 +104,33 @@ describe("RoutingExplainShell", () => {
   it("mode select defaults to direct and routes the canvas prop correctly", async () => {
     render(<RoutingExplainShell />);
     const select = screen.getByTestId(
-      "rexplain-mode-select",
+      "rexplain-route-mode",
     ) as HTMLSelectElement;
     expect(select.value).toBe("direct");
     await waitFor(() => {
       const last = captured.canvasCalls.at(-1);
       expect(last).toBeTruthy();
-      expect(last!.routeEdges).toEqual({ mode: "direct" });
+      expect(last!.routeEdges).toEqual({ mode: "direct", smartAttach: true });
     });
   });
 
   it("switching to orthogonal delivers mode=orthogonal to the canvas", async () => {
     render(<RoutingExplainShell />);
-    fireEvent.change(screen.getByTestId("rexplain-mode-select"), {
+    fireEvent.change(screen.getByTestId("rexplain-route-mode"), {
       target: { value: "orthogonal" },
     });
     await waitFor(() => {
       const last = captured.canvasCalls.at(-1);
-      expect(last!.routeEdges).toEqual({ mode: "orthogonal" });
+      expect(last!.routeEdges).toEqual({
+        mode: "orthogonal",
+        smartAttach: true,
+      });
     });
   });
 
   it("switching to off delivers routeEdges=false to the canvas", async () => {
     render(<RoutingExplainShell />);
-    fireEvent.change(screen.getByTestId("rexplain-mode-select"), {
+    fireEvent.change(screen.getByTestId("rexplain-route-mode"), {
       target: { value: "off" },
     });
     await waitFor(() => {
@@ -125,6 +150,14 @@ describe("RoutingExplainShell", () => {
     expect(nodeIds).toContain("n-mode");
     expect(nodeIds).toContain("n-route");
     expect(nodeIds).toContain("n-structural");
+  });
+
+  it("a remount renders the laid-out flow diagram on its first frame", () => {
+    // Regression fence: the flow layout used to re-run per mount, so a
+    // fresh mount showed the placeholder until an async layout landed.
+    render(<RoutingExplainShell />);
+    expect(screen.getByTestId("svg-stub")).toBeTruthy();
+    expect(captured.svgCalls.length).toBeGreaterThan(0);
   });
 
   it("DEV-only badge is visible", () => {

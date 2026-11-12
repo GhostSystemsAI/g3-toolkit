@@ -18,8 +18,10 @@
  * graph: the caller supplies the chain (see a builder such as the
  * host's chain builder) and decides what a hop means. Tokens follow
  * the inline-style + CSS-custom-property convention used across
- * @g3t/react.
+ * @g3-toolkit/react.
  */
+
+import { viewClass } from "../../theme/view-class";
 
 /** One node in a provenance trail. */
 export interface ProvenanceHop {
@@ -80,7 +82,7 @@ export function ProvenanceTrace({
   return (
     <div
       data-testid={testId ?? "g3t-provenance-trace"}
-      className={className}
+      className={viewClass(className)}
       role="tree"
       aria-label={title}
       style={{

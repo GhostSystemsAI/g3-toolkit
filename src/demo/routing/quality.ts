@@ -6,12 +6,12 @@
  * pairwise crossings, interior direction changes) without widening the
  * public API for a demo surface.
  */
-import { isChainEdgeId, polylineIntersectsBoxes } from "@g3t/core";
+import { isChainEdgeId, polylineIntersectsBoxes } from "@g3-toolkit/core";
 import type {
   RouteBox,
   StructuralGeometry,
   StructuralGraphInput,
-} from "@g3t/core";
+} from "@g3-toolkit/core";
 
 export interface RouteQuality {
   /** Edges the geometry carries a routed polyline for. */

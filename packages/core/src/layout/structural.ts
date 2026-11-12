@@ -121,6 +121,22 @@ export interface StructuralNode {
   /** Plain nodes (no compartments) may fix their own size. */
   width?: number;
   height?: number;
+  /**
+   * Optional glyph shape for flowchart / activity-diagram nodes.
+   * Meaningful only on PLAIN nodes (no compartments): the SVG renderer
+   * switches the drawn primitive from the default rounded rectangle to
+   * a UML activity shape. Containers ignore it (they are always the
+   * compartmented box). Hit-testing stays bounding-box for every shape,
+   * so a diamond, ellipse, or terminal is grabbed by its box exactly as
+   * a rect is.
+   * - "rect" (default): rounded rectangle, unchanged.
+   * - "diamond": decision node (rhombus inscribed in the box).
+   * - "ellipse": rounded action / state.
+   * - "initial": filled start dot (label suppressed).
+   * - "final": ringed final dot (label suppressed).
+   * - "fork": solid synchronization bar (label suppressed).
+   */
+  shape?: "rect" | "diamond" | "ellipse" | "initial" | "final" | "fork";
 }
 
 /** An edge between structural nodes, optionally attaching to ports. */
@@ -238,6 +254,22 @@ export interface StructuralLayoutOptions extends G3tEngineTuning {
    * affected snapshot/geometry test.
    */
   nudge?: boolean;
+  /**
+   * RF-B (owner Jake, 2026-08-21): opt-in crossing-aware attachment
+   * refinement passed through to `routeStructuralEdges`. When on,
+   * after fan assignment the router refines attachments by within-side
+   * reorder and per-edge side flip, accepting each candidate only on
+   * a strict crossing improvement (`countCrossings` oracle). Default
+   * false; unset is byte-identical to today.
+   */
+  smartAttach?: boolean;
+  /**
+   * A* bend penalty forwarded to `routeStructuralEdges` → `routeOrthogonal`.
+   * Higher values produce straighter (fewer-corner) initial routes. Default 30
+   * (the A* router default). 80-120 gives noticeably straighter results on
+   * sparse scenes; very high values may force long detours around obstacles.
+   */
+  bendPenalty?: number;
   /**
    * Prior TOP-LEVEL positions: a layout sketch (G3L:LAY-017; the
    * ruled 12.20 experiment graduated). When present and non-empty,
@@ -758,12 +790,18 @@ function layoutOptionsKey(options?: StructuralLayoutOptions): string {
     layerSpacing: options?.layerSpacing ?? (options?.spacing ?? 60) + 20,
     routeEdges: options?.routeEdges ?? true,
     nudge: options?.nudge ?? false,
+    smartAttach: options?.smartAttach ?? false,
     g3t: {
       layering: options?.layering ?? "network-simplex",
       layerWidth: options?.layerWidth ?? 8,
       placement: options?.placement ?? "brandes-koepf",
       layeringBudgetMs: options?.layeringBudgetMs ?? 80,
       orderingBudgetMs: options?.orderingBudgetMs ?? 60,
+      // Seeded crossing-aware restarts (opt-in). null keeps the
+      // serialized key stable when unset, so the default single-pass
+      // behavior shares its cache entry with previously-run inputs.
+      orderSeed: options?.orderSeed ?? null,
+      orderRestarts: options?.orderRestarts ?? null,
       routingBudgetMs: options?.routingBudgetMs ?? 80,
       longEdgeNear: options?.longEdgeNear ?? 12,
       // Participates in the key: changing the pitch changes the
@@ -774,6 +812,7 @@ function layoutOptionsKey(options?: StructuralLayoutOptions): string {
       // Both change geometry, so both must key the cache.
       trackGap: options?.trackGap ?? null,
       corridorMaxGapFactor: options?.corridorMaxGapFactor ?? null,
+      bendPenalty: options?.bendPenalty ?? null,
     },
     // Sketch participates in the memo key: a sketched re-layout of the
     // same input+options is a DIFFERENT computation from the
